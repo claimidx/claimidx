@@ -51,6 +51,9 @@ def similarity(query: Claim | dict, cand: Claim) -> float:
     err = _err_sim(qerr, cand.err)
     if err < _ERR_FLOOR:
         return 0.0
+    # Both sides named deps and they share none: different environment, not prior art.
+    if qdep and cand.dep and _jaccard(qdep, cand.dep) == 0.0:
+        return 0.0
     s = 0.0
     s += 0.45 * err
     s += 0.20 * (1.0 if qcls and qcls == cand.cls else 0.0)

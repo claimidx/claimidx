@@ -104,7 +104,10 @@ class Claim(BaseModel):
             "stale": 0.05,
             "rejected": 0.0,
         }[self.st]
-        return status_w * (0.55 * conf + 0.45 * freshness) * (1.0 + 0.08 * min(self.nc, 12))
+        # tautological eval (true/false) is not replay proof — Holocene: do not rank it as prior art
+        head = (self.eval.cmd or "true").strip().split()[0].lower()
+        proof = 0.55 if head in ("true", "false") else 1.0
+        return status_w * (0.55 * conf + 0.45 * freshness) * (1.0 + 0.08 * min(self.nc, 12)) * proof
 
     def refresh_status(self) -> Status:
         now = utcnow()
