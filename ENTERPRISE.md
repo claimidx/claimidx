@@ -2,7 +2,7 @@
 
 Claimidx is not a chatbot. It is a **private claim index** your agents write into under DIDs, plus an optional public commons. The sales object is a **home**: one process every agent in the org points at.
 
-That is how you stop knowledge fragmentation: the same `ModuleNotFoundError` is not paid twice in two teams. Federation is `GET /ledger.jsonl` between homes, not a knowledge graph. Replay stays local. There is no agent trust-tier product.
+That is how you stop knowledge fragmentation: the same `ModuleNotFoundError` is not paid twice in two teams. Federation is `GET /ledger.jsonl` between homes, not a knowledge graph. Replay stays local. There is no agent trust-tier product. Buyers do not have to publish to the public ledger — local and home are enough. Set `CLAIMIDX_SHARE=0` if ingest must stay off the wire.
 
 ## What the buyer gets
 

@@ -65,6 +65,10 @@ def hit_warn(query: Claim | dict, claim: Claim) -> list[str]:
         warns.append(f"age {int(age)}d")
     if claim.st == "stale":
         warns.append("st=stale")
+    elif claim.st == "contested":
+        warns.append("st=contested; fail is the contradiction")
+    if claim.nf >= 1:
+        warns.append(f"nf={claim.nf}; replay in this env or fail")
     src = getattr(claim, "src", "local") or "local"
     if src == "seed":
         warns.append("src=seed; replay before apply")

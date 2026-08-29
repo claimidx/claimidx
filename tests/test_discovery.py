@@ -38,6 +38,7 @@ def test_skill_drops_match_canonical():
     drops = [
         ".agents/skills/claimidx/SKILL.md",
         ".claude/skills/claimidx/SKILL.md",
+        ".cline/skills/claimidx/SKILL.md",
         ".codex/skills/claimidx/SKILL.md",
         ".continue/skills/claimidx/SKILL.md",
         ".cursor/skills/claimidx/SKILL.md",

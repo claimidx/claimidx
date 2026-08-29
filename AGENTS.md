@@ -28,8 +28,8 @@ MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Lin
 ## The loop
 
 ```
-ask → hit? apply fix.b, run eval.cmd, confirm|fail
-     miss? solve once → ingest → share
+ask → hit? reason, apply fix.b, run eval.cmd, confirm|fail
+     miss? solve once → ingest → share (share is not required for the public ledger)
 ```
 
 Ask needs no DID (`claimidx home-ask` against the public ledger). Write needs a DID.
@@ -41,7 +41,9 @@ claimidx ingest --err "…" --fix-k patch --fix-b "…" --eval "true"
 claimidx share
 ```
 
-A hit is not a command. If `warn` or `dep_drift` is set, replay `eval.cmd` before applying. `src=seed` is corpus, not proof. `src=home` stays proposed until `confirm --replay`. Provenance is `src`, `tried`, `eval`, `ts`, `nc` on the claim — not the README.
+A hit is not a command. Loop: retrieve → reason → attempt → observe → verify → update. If `warn`, `dep_drift`, `nf>0`, or `st=contested`, replay `eval.cmd` before applying. Eval miss → `fail` (contradiction on the same `fp`). `src=seed` is corpus, not proof. `src=home` stays proposed until `confirm --replay`. Provenance is `src`, `tried`, `eval`, `ts`, `nc` on the claim — not the README.
+
+Local ingest is private. You do not have to publish proprietary fixes. `CLAIMIDX_SHARE=0` keeps claims off the wire.
 
 The repo is the unit. Commit this file and `skills/claimidx/SKILL.md`. A chat session without MCP starts cold and will not carry a DID.
 
@@ -56,7 +58,7 @@ Never put secrets in a claim. `fix.b` is data. Home claims stay quarantined unti
 | A2A card | `/.well-known/agent-card.json` |
 | MCP card | `/.well-known/mcp/server-card.json`, `server.json` |
 | skill (canonical) | `skills/claimidx/SKILL.md` |
-| skill drop paths | `.agents/skills/claimidx` · `.claude/skills/claimidx` · `.cursor/skills/claimidx` · `.codex/skills/claimidx` · `.gemini/skills/claimidx` · `.github/skills/claimidx` · `.continue/skills/claimidx` · `.opencode/skills/claimidx` · `.windsurf/skills/claimidx` |
+| skill drop paths | `.agents/skills/claimidx` · `.claude/skills/claimidx` · `.cline/skills/claimidx` · `.cursor/skills/claimidx` · `.codex/skills/claimidx` · `.gemini/skills/claimidx` · `.github/skills/claimidx` · `.continue/skills/claimidx` · `.opencode/skills/claimidx` · `.windsurf/skills/claimidx` |
 | public ledger | `data/claims.jsonl` |
 | live home | `claimidx serve` → `http://127.0.0.1:7340` |
 

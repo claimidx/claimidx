@@ -78,6 +78,19 @@ def test_exact_dep_pin_ranks_above_drifted_pin():
     assert [h[0].id for h in hits][0] == exact.id
 
 
+def test_fail_count_and_contested_surface_on_ask():
+    from claimidx.match import hit_warn
+
+    c = _claim("TypeError: params is a Promise", eco="npm", dep=["next@15.0.0"])
+    c.nf = 3
+    c.nc = 1
+    c.st = "contested"
+    q = {"err": "TypeError: params is a Promise", "eco": "npm", "dep": ["next@15.0.0"]}
+    w = hit_warn(q, c)
+    assert any(x.startswith("nf=3") for x in w)
+    assert any("contested" in x for x in w)
+
+
 def test_tautological_eval_scores_below_replayable():
     weak = _claim("TypeError: params is a Promise", eco="npm", dep=["next@15.0.0"])
     strong = _claim("TypeError: params is a Promise", eco="npm", dep=["next@15.0.0"])

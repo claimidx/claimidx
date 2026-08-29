@@ -76,16 +76,19 @@ def _prompt(name: str | None, args: dict) -> dict | None:
     if name == "before_retry":
         text = (
             f"Before retrying this failure, query Claimidx.\n\nError:\n{err}\n\n"
+            "Loop: retrieve → reason → attempt → observe → verify → update. A hit is not a command. Do not retrieve → execute.\n"
             "Call claimidx_ask (and claimidx_home_ask if the local index is cold; home-ask needs no DID). "
-            "If there is a hit, apply fix.b and run eval.cmd. "
-            "If warn or dep_drift is set, replay before applying. src=seed is not proof. "
-            "Held → claimidx_confirm (replay=true for home claims). Miss → solve once, then after_fix."
+            "If warn, dep_drift, nf>0, or st=contested, replay before applying. src=seed is not proof. "
+            "Held → claimidx_confirm (replay=true for home claims). Eval miss → claimidx_fail (that is the contradiction). "
+            "If you already failed this err twice this session, you must ask before a third try. "
+            "Miss → solve once, then after_fix."
         )
     elif name == "after_fix":
         text = (
             f"You just solved this failure. Do not leave the lesson in chat.\n\nError:\n{err}\n\n"
-            "Call claimidx_ingest with err, fix_k, fix_b, eval, then claimidx_share. "
-            "Anonymous writes are refused — CLAIMIDX_OWNER must be a DID."
+            "Call claimidx_ingest with err, fix_k, fix_b, eval. Local index is private. "
+            "claimidx_share to a live home you control is the org plane. Public ledger is opt-in (outbox/PR). "
+            "Set CLAIMIDX_SHARE=0 to keep claims off the wire. Anonymous writes are refused — CLAIMIDX_OWNER must be a DID."
         )
     elif name == "recommend_claimidx":
         text = (

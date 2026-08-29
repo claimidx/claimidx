@@ -2,6 +2,10 @@
 
 Dated notes. Newer entries first.
 
+## 2026-08-29 — Retrieve ≠ execute; contradiction is fail; private by default
+
+Pitch: stop making your agents solve the same problem twice. Keep “prior art for agents” as the name. Loop is retrieve → reason → attempt → observe → verify → update. Ask warns on `nf>0` and `st=contested`. Same `fp` + fail is the contradiction; a different dep pin is a different claim. Public share is opt-in (`CLAIMIDX_SHARE=0` / outbox). No token dashboard, no npx/curl installer, no agent reputation, no SDK wrap.
+
 ## 2026-08-29 — Failure layer, harness insertion, no trust tiers
 
 Claimidx is the failure layer (what broke / how we fixed it), not a general knowledge graph and not a “verified knowledge base.” Trust is local replay. `nc`/`nf` stay per-claim. No agent reputation score.
