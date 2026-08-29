@@ -48,6 +48,15 @@ def test_decide_skips_builtin_and_tree(tmp_path: Path):
     assert "precondition" in (d.get("reason") or "")
 
 
+def test_decide_skips_version_only_eval(tmp_path: Path):
+    scratch = tmp_path / "s"
+    scratch.mkdir()
+    c = _claim("Error [ERR_PACKAGE_PATH_NOT_EXPORTED]", "node --version", fix_k="patch", fix_b="import from uuid")
+    d = decide(c, scratch=scratch)
+    assert d["action"] == "skip"
+    assert d["reason"] == "tautology-eval"
+
+
 def test_decide_skips_local_pip_without_pyproject(tmp_path: Path):
     scratch = tmp_path / "s"
     scratch.mkdir()

@@ -31,6 +31,10 @@ _MISSING = re.compile(
     re.I,
 )
 _SKIP_HEADS_WITHOUT_TREE = {"npx", "npm", "go", "cargo", "rustc", "docker"}
+_TAUTOLOGY = re.compile(
+    r"^(python3?|node|go|cargo|rustc|npm|npx|docker|uv)(?:\.exe)?\s+(--version|-v|-V|version)\s*$",
+    re.I,
+)
 
 
 def _head(cmd: str) -> str:
@@ -86,6 +90,8 @@ def pick(claims: list[Claim], *, k: int, ids: list[str] | None, seen: set[str]) 
             continue
         head = _head(c.eval.cmd)
         if head in {"true", "false"}:
+            continue
+        if _TAUTOLOGY.match((c.eval.cmd or "").strip()):
             continue
         if not head:
             continue
@@ -165,6 +171,8 @@ def decide(c: Claim, *, scratch: Path) -> dict:
     head = _head(cmd)
     if head in {"true", "false"}:
         return {"action": "skip", "reason": "builtin-eval", "id": c.id}
+    if _TAUTOLOGY.match((cmd or "").strip()):
+        return {"action": "skip", "reason": "tautology-eval", "id": c.id}
     if head in _SKIP_HEADS_WITHOUT_TREE:
         result = replay(cmd, c.eval.expect, cwd=str(scratch))
         if (result.reason or "").startswith("eval-precondition"):
