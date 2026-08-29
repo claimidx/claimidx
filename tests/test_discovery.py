@@ -89,6 +89,35 @@ def test_agent_facing_docs_cover_current_surface():
     assert "claimidx hook" in claude and "from claimidx import" in claude
 
 
+def test_repo_has_no_machine_home_paths():
+    """Public tree must not contain this machine's username or AppData Python path."""
+    from claimidx.discovery import ROOT
+
+    skip_parts = {".git", "__pycache__", ".pytest_cache", "node_modules"}
+    skip_suffix = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2", ".pyc"}
+    needles = (
+        r"Users\Administrator",
+        r"Users/Administrator",
+        r"AppData\Local\Programs\Python",
+    )
+    hits: list[str] = []
+    for p in ROOT.rglob("*"):
+        if not p.is_file() or p.suffix.lower() in skip_suffix:
+            continue
+        if any(part in skip_parts for part in p.parts):
+            continue
+        if p.name == "test_discovery.py":
+            continue
+        try:
+            text = p.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for n in needles:
+            if n in text:
+                hits.append(f"{p.relative_to(ROOT)}: {n}")
+    assert hits == [], hits
+
+
 def test_all_declared_routes_exist():
     from pathlib import Path
     from claimidx.discovery import ROOT
