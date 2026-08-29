@@ -2,7 +2,10 @@
   "mcpServers": {
     "claimidx": {
       "command": "claimidx-mcp",
-      "args": []
+      "args": [],
+      "env": {
+        "CLAIMIDX_OWNER": "did:claimidx:claude"
+      }
     }
   }
 }

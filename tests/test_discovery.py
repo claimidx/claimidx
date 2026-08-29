@@ -30,6 +30,41 @@ def test_live_home_serves_agent_discovery_docs(tmp_path):
     assert "/.well-known/agent-card.json" in client.get("/health").headers["link"]
 
 
+def test_skill_drops_match_canonical():
+    from pathlib import Path
+    from claimidx.discovery import ROOT
+
+    canon = (ROOT / "skills" / "claimidx" / "SKILL.md").read_bytes()
+    drops = [
+        ".agents/skills/claimidx/SKILL.md",
+        ".claude/skills/claimidx/SKILL.md",
+        ".codex/skills/claimidx/SKILL.md",
+        ".continue/skills/claimidx/SKILL.md",
+        ".cursor/skills/claimidx/SKILL.md",
+        ".gemini/skills/claimidx/SKILL.md",
+        ".github/skills/claimidx/SKILL.md",
+        ".opencode/skills/claimidx/SKILL.md",
+        ".windsurf/skills/claimidx/SKILL.md",
+        "docs/skills/claimidx/SKILL.md",
+    ]
+    missing = [d for d in drops if not (ROOT / d).is_file()]
+    stale = [d for d in drops if (ROOT / d).is_file() and (ROOT / d).read_bytes() != canon]
+    assert missing == [], missing
+    assert stale == [], stale
+
+
+def test_harness_mcp_snippets_set_owner():
+    import json
+    from claimidx.discovery import ROOT
+
+    claude = json.loads((ROOT / "examples" / "claude_mcp.json").read_text(encoding="utf-8"))
+    assert claude["mcpServers"]["claimidx"]["env"]["CLAIMIDX_OWNER"].startswith("did:claimidx:")
+    oc = json.loads((ROOT / "examples" / "mcp-opencode.json").read_text(encoding="utf-8"))
+    assert oc["mcp"]["claimidx"]["type"] == "local"
+    assert oc["mcp"]["claimidx"]["command"] == ["claimidx-mcp"]
+    assert oc["mcp"]["claimidx"]["environment"]["CLAIMIDX_OWNER"].startswith("did:claimidx:")
+
+
 def test_all_declared_routes_exist():
     from pathlib import Path
     from claimidx.discovery import ROOT

@@ -2,6 +2,12 @@
 
 Dated notes. Newer entries first.
 
+## 2026-08-29 — Failure layer, harness insertion, no trust tiers
+
+Claimidx is the failure layer (what broke / how we fixed it), not a general knowledge graph and not a “verified knowledge base.” Trust is local replay. `nc`/`nf` stay per-claim. No agent reputation score.
+
+Distribution is harness operators: skill drops under `.claude` / `.opencode` / `.cursor` / … plus MCP snippets (`examples/claude_mcp.json`, `examples/mcp-opencode.json`). Chat sessions without MCP start cold. Do not integrate OAK / DKG / Vault-LD — those are other products. Federation for orgs is `GET /ledger.jsonl` between homes.
+
 ## 2026-08-29 — Freshness on ask, provenance in the record
 
 A confirmed claim against `next@15.0.0` is a wrong answer at `15.0.4` if the agent cannot see the pin or the age. Ask now returns `age_days`, `dep_drift`, `src`, `warn`. Same package + different pin still ranks (×0.82), never auto-decays the row — fingerprint is identity. Confirmed still goes `stale` at 90 days.

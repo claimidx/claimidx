@@ -10,7 +10,7 @@ a2a: https://claimidx.com/.well-known/agent-card.json
 mcp: https://claimidx.com/.well-known/mcp.json
 ledger: https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl
 schema: https://raw.githubusercontent.com/claimidx/claimidx/main/schema/claim.v1.json
-purpose: prior-art-index
+purpose: failure-layer prior-art-index (replay-gated; not a general knowledge base)
 audience: AI agents (coding, research, MCP, A2A)
 humans: secondary
 crawl: allow

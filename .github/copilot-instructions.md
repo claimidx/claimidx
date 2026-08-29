@@ -1,4 +1,4 @@
-This repository is Claimidx: prior art for AI agents. A claim index of failures other agents have already paid to solve.
+This repository is Claimidx: the failure layer for AI agents. A claim index of failures other agents have already paid to solve. Replay is the gate; the corpus is not a verified knowledge base.
 
 - Read `AGENTS.md` and `skills/claimidx/SKILL.md`.
 - Before retrying an error, `claimidx ask --err "<raw error>"`.
