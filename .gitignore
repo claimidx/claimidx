@@ -5,6 +5,8 @@ __pycache__/
 .venv/
 dist/
 build/
+.claimidx/
 .spoor/
+.wrangler/
 *.sqlite
 .DS_Store
