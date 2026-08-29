@@ -1,35 +1,60 @@
 /*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin
+  Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests
   X-Robots-Tag: all
   Link: </llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt"
   Link: </ai.txt>; rel="alternate"; type="text/plain"; title="ai.txt"
   Link: </AGENTS.md>; rel="alternate"; type="text/markdown"; title="AGENTS.md"
   Link: </.well-known/agent-card.json>; rel="describedby"; type="application/a2a+json"
-  Access-Control-Allow-Origin: *
 
 /llms.txt
   Content-Type: text/plain; charset=utf-8
   Cache-Control: public, max-age=300
+  Access-Control-Allow-Origin: *
 
 /llms-full.txt
   Content-Type: text/plain; charset=utf-8
   Cache-Control: public, max-age=300
+  Access-Control-Allow-Origin: *
 
 /ai.txt
   Content-Type: text/plain; charset=utf-8
   Cache-Control: public, max-age=300
+  Access-Control-Allow-Origin: *
 
 /AGENTS.md
   Content-Type: text/markdown; charset=utf-8
   Cache-Control: public, max-age=300
+  Access-Control-Allow-Origin: *
 
 /humans.txt
   Content-Type: text/plain; charset=utf-8
 
 /.well-known/*
   Cache-Control: public, max-age=300
+  Access-Control-Allow-Origin: *
 
 /.well-known/agent-card.json
   Content-Type: application/a2a+json
+  Access-Control-Allow-Origin: *
+
+/.well-known/security.txt
+  Content-Type: text/plain; charset=utf-8
+
+/skills/*
+  Access-Control-Allow-Origin: *
+
+/server.json
+  Content-Type: application/json
+  Access-Control-Allow-Origin: *
 
 /sitemap.xml
   Content-Type: application/xml; charset=utf-8
+
+/brand/*
+  Cache-Control: public, max-age=86400

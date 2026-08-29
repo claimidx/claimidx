@@ -19,7 +19,7 @@ html {
 
 body {
   margin: 0;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
   font-weight: 400;
   line-height: 1.55;
   letter-spacing: -0.01em;
@@ -50,12 +50,21 @@ a:hover { color: var(--oxide); }
 }
 
 .mark {
-  font-family: Newsreader, Georgia, serif;
-  font-optical-sizing: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: Georgia, "Iowan Old Style", Palatino, serif;
   font-size: 1.35rem;
   font-weight: 500;
   letter-spacing: -0.03em;
   text-decoration: none;
+}
+
+.mark img {
+  width: 1.15rem;
+  height: 1.15rem;
+  display: block;
+  flex: none;
 }
 
 nav {
@@ -78,8 +87,7 @@ nav {
 
 h1 {
   margin: 0 0 1.15rem;
-  font-family: Newsreader, Georgia, serif;
-  font-optical-sizing: auto;
+  font-family: Georgia, "Iowan Old Style", Palatino, serif;
   font-size: clamp(2.6rem, 7.2vw, 4.4rem);
   font-weight: 500;
   line-height: 0.92;
@@ -115,7 +123,7 @@ pre {
 }
 
 code {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
   font-size: 0.78rem;
   line-height: 1.48;
   font-weight: 400;
@@ -144,7 +152,7 @@ code {
 
 .loop strong {
   display: block;
-  font-family: Newsreader, Georgia, serif;
+  font-family: Georgia, "Iowan Old Style", Palatino, serif;
   font-size: 1.28rem;
   font-weight: 500;
   letter-spacing: -0.03em;
@@ -164,7 +172,7 @@ code {
   border: 0;
   border-left: 2px solid var(--rule);
   color: var(--paper);
-  font-family: Newsreader, Georgia, serif;
+  font-family: Georgia, "Iowan Old Style", Palatino, serif;
   font-size: 1.22rem;
   font-weight: 400;
   font-style: italic;
@@ -179,7 +187,7 @@ code {
 
 h2 {
   margin: 0 0 0.8rem;
-  font-family: Newsreader, Georgia, serif;
+  font-family: Georgia, "Iowan Old Style", Palatino, serif;
   font-size: 1.35rem;
   font-weight: 500;
   letter-spacing: -0.03em;
