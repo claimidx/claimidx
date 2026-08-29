@@ -13,10 +13,22 @@ def _jaccard(a: list[str], b: list[str]) -> float:
     return len(sa & sb) / len(sa | sb)
 
 
+_ERR_BOILER = {
+    "modulenotfounderror", "importerror", "error", "no", "module", "named",
+    "cannot", "find", "or", "its", "corresponding", "type", "declarations",
+    "the", "a", "an", "from", "is", "not", "defined", "import", "name",
+}
+
+
 def _err_sim(a: str, b: str) -> float:
     ta, tb = set(normalize_error(a).lower().split()), set(normalize_error(b).lower().split())
     if not ta or not tb:
         return 0.0
+    da, db = ta - _ERR_BOILER, tb - _ERR_BOILER
+    if da or db:
+        if not da or not db:
+            return 0.0
+        return len(da & db) / len(da | db)
     return len(ta & tb) / len(ta | tb)
 
 
