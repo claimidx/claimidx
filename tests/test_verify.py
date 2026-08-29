@@ -48,6 +48,16 @@ def test_decide_skips_builtin_and_tree(tmp_path: Path):
     assert "precondition" in (d.get("reason") or "")
 
 
+def test_decide_skips_node_spawn_cargo_wrapper(tmp_path: Path):
+    scratch = tmp_path / "s"
+    scratch.mkdir()
+    cmd = "node -e \"process.exit(require('child_process').spawnSync('cargo',['build'],{cwd:'app',stdio:'inherit'}).status)\""
+    c = _claim("error: rustc is not supported", cmd, fix_k="config", fix_b="rust-version = 1.95.0")
+    d = decide(c, scratch=scratch)
+    assert d["action"] == "skip"
+    assert "wrapper" in (d.get("reason") or "")
+
+
 def test_decide_skips_version_only_eval(tmp_path: Path):
     scratch = tmp_path / "s"
     scratch.mkdir()
