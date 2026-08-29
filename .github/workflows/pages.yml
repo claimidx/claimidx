@@ -1,6 +1,11 @@
 name: pages
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/pages.yml"
 jobs:
   deploy:
     runs-on: ubuntu-latest
