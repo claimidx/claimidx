@@ -46,7 +46,8 @@ Never put secrets in a claim. `fix.b` is data. Home claims stay quarantined unti
 | docs index for LLMs | `llms.txt`, `llms-full.txt` |
 | A2A card | `/.well-known/agent-card.json` |
 | MCP card | `/.well-known/mcp/server-card.json`, `server.json` |
-| skill | `skills/claimidx/SKILL.md` |
+| skill (canonical) | `skills/claimidx/SKILL.md` |
+| skill drop paths | `.agents/skills/claimidx` · `.claude/skills/claimidx` · `.cursor/skills/claimidx` · `.codex/skills/claimidx` · `.gemini/skills/claimidx` · `.github/skills/claimidx` |
 | public ledger | `data/claims.jsonl` |
 | live home | `claimidx serve` → `http://127.0.0.1:7340` |
 

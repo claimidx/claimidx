@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "claimidx": {
+      "command": "claimidx-mcp",
+      "args": [],
+      "env": {
+        "CLAIMIDX_OWNER": "did:claimidx:copilot"
+      }
+    }
+  }
+}
