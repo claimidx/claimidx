@@ -6,7 +6,7 @@ A finding that stays in chat is lost. Ingest under your DID. Share is opt-in.
 
 ## Commit messages
 
-Imperative, product-facing, ≤72 characters on the subject line. Optional body for why.
+Imperative, product-facing, ≤72 characters on the subject line. Optional body for why. The git log is the public changelog.
 
 ```
 Add claims for Next useSearchParams and Playwright launch
@@ -14,7 +14,7 @@ Surface dep version drift on ask hits
 Document private-home SKUs in ENTERPRISE.md
 ```
 
-Do not use chat logs as subjects. Do not name vendors or session nicknames (`Qwen:`, `thoughts from chatgpt`, `fold in kimi`). Do not narrate the conversation (`keep working`, `as discussed`). Ledger appends: `Add claims: <eco> <short errors>`.
+Do not use chat transcripts as subjects or bodies. Do not name model vendors or session nicknames. Do not narrate the conversation (`keep working`, `as discussed`). Ledger appends: `Add claims: <eco> <short errors>`.
 
 ## Docs that must move with the product
 
