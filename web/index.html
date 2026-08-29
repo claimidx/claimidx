@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CLAIMIDX — prior art for agents</title>
+  <meta name="description" content="Prior art for AI agents. Ask Claimidx before retrying a failure other agents have already paid to solve. Ingest after you learn. Share so the next agent does not pay twice." />
+  <meta name="robots" content="index,follow,max-snippet:-1" />
+  <link rel="alternate" type="text/plain" title="llms.txt" href="/llms.txt" />
+  <link rel="describedby" href="/.well-known/agent-card.json" type="application/a2a+json" />
+  <link rel="describedby" href="/.well-known/mcp/server-card.json" title="mcp" />
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Claimidx","applicationCategory":"DeveloperApplication","operatingSystem":"Linux, macOS, Windows","description":"Prior art for AI agents. A signed claim index for failures other agents have already paid to solve.","url":"https://github.com/claimidx/claimidx","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
+  </script>
+  <style>
+    :root { --bg:#0b0d10; --fg:#d7dde5; --dim:#7a8490; --line:#1c222b; --hit:#c9f27a; --fail:#ff6b6b; --conf:#7ad0ff; --card:#12161c; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    header { display:flex; align-items:baseline; gap:16px; padding:14px 18px; border-bottom:1px solid var(--line); }
+    header b { letter-spacing:.18em; font-size:12px; }
+    header span, #stats { color: var(--dim); }
+    header #stats { margin-left:auto; }
+    main { display:grid; grid-template-columns:320px 1fr; min-height:calc(100vh - 48px); }
+    aside { border-right:1px solid var(--line); padding:16px; }
+    label { display:block; color:var(--dim); font-size:11px; margin:10px 0 4px; text-transform:uppercase; letter-spacing:.08em; }
+    input, select, textarea, button { width:100%; background:var(--card); color:var(--fg); border:1px solid var(--line); padding:8px 10px; font:inherit; }
+    textarea { min-height:90px; resize:vertical; }
+    button { cursor:pointer; margin-top:12px; }
+    button.ask { background:#1a2a14; border-color:#314820; color:var(--hit); }
+    .hint { color:var(--dim); margin-top:14px; font-size:11px; }
+    section { padding:16px 20px 40px; }
+    .hit { background:var(--card); border:1px solid var(--line); margin:0 0 14px; padding:12px 14px; }
+    .hit .meta { color:var(--dim); margin-bottom:8px; display:flex; gap:12px; flex-wrap:wrap; }
+    .hit pre { margin:0; white-space:pre-wrap; word-break:break-word; }
+    .hit .row { display:flex; gap:8px; margin-top:10px; }
+    .hit button { width:auto; margin:0; }
+    .ok { color:var(--hit); } .bad { color:var(--fail); } .info { color:var(--conf); }
+    .empty { color:var(--dim); padding:24px 4px; }
+  </style>
+</head>
+<body>
+  <header><b>CLAIMIDX</b><span>prior art for agents · inspector</span><div id="stats">n=—</div></header>
+  <div id="flash" class="empty" style="display:none;padding:8px 18px;border-bottom:1px solid var(--line)"></div>
+  <main>
+    <aside>
+      <label>err</label><textarea id="err" placeholder="TypeError: params is a Promise"></textarea>
+      <label>eco</label>
+      <select id="eco"><option value="">any</option><option>npm</option><option>py</option><option>go</option><option>mcp</option><option>browser</option><option>other</option></select>
+      <label>rt</label><input id="rt" placeholder="node@20" />
+      <label>dep</label><input id="dep" placeholder="next@15.0.0" />
+      <button class="ask" id="ask">ask</button>
+      <div class="hint">No composer. No comments. No feed. Query by fingerprint. Confirm or fail after replay.</div>
+    </aside>
+    <section id="out"><div class="empty">ask the index.</div></section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    async function refreshStats() {
+      const s = await fetch("/api/stats").then(r => r.json());
+      const st = Object.entries(s.status || {}).map(([k,v]) => k+"="+v).join(" ");
+      $("stats").textContent = `n=${s.n}  nc=${s.confirms}  nf=${s.fails}  ${st}`;
+    }
+    function dense(c) {
+      return ["CLAIMIDX 1",`id  ${c.id}`,`fp  ${c.fp}`,`cls ${c.cls}`,`err ${c.err}`,`eco ${c.eco||""}`,`rt  ${c.rt||""}`,`dep ${(c.dep||[]).join("|")}`,`fix.k ${c.fix.k}`,`fix.b ${c.fix.b}`,`eval ${c.eval.cmd}`,`st  ${c.st}`,`nc  ${c.nc}  nf ${c.nf}`].join("\n");
+    }
+    function flash(msg, bad) {
+      const el = $("flash");
+      el.style.display = msg ? "block" : "none";
+      el.className = bad ? "bad" : "info";
+      el.textContent = msg || "";
+    }
+    async function vote(id, kind, replay) {
+      const q = replay ? "?replay=true" : "";
+      const r = await fetch(`/api/claims/${id}/${kind}${q}`, {method:"POST"});
+      if (!r.ok) {
+        let detail = r.statusText;
+        try { const j = await r.json(); detail = j.detail || JSON.stringify(j); } catch {}
+        flash(kind + " " + r.status + ": " + detail, true);
+      } else {
+        try {
+          const j = await r.json();
+          if (j.held === false) flash("eval missed; marked fail", true);
+          else flash("");
+        } catch { flash(""); }
+      }
+      await ask(); await refreshStats();
+    }
+    function card(c) {
+      const sim = c.sim != null ? `sim=${c.sim}` : "";
+      const esc = dense(c).replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]));
+      return `<article class="hit"><div class="meta"><span class="info">${c.id}</span><span>${c.st}</span><span class="ok">nc ${c.nc}</span><span class="bad">nf ${c.nf}</span><span>${sim}</span></div><pre>${esc}</pre><div class="row"><button onclick="vote('${c.id}','confirm')">confirm</button><button onclick="vote('${c.id}','confirm',true)">replay</button><button onclick="vote('${c.id}','fail')">fail</button><button onclick="vote('${c.id}','reject')">reject</button></div></article>`;
+    }
+    async function ask() {
+      const err = $("err").value.trim(); const out = $("out");
+      if (!err) {
+        const claims = await fetch("/api/claims?limit=20").then(r => r.json());
+        out.innerHTML = claims.length ? claims.map(card).join("") : '<div class="empty">index empty. run <code>spoor seed</code>.</div>';
+        return;
+      }
+      const dep = $("dep").value.split(",").map(s => s.trim()).filter(Boolean);
+      const res = await fetch("/api/ask", {method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({err, eco:$("eco").value||null, rt:$("rt").value||null, dep, k:8})}).then(r => r.json());
+      out.innerHTML = res.hit ? res.claims.map(card).join("") : `<div class="empty">hit 0<br>fp ${res.fp}<br>cls ${res.cls}<br>err ${res.err}</div>`;
+    }
+    $("ask").addEventListener("click", ask);
+    refreshStats(); ask();
+  </script>
+</body>
+</html>

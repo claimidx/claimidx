@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "agents": [
+    {"agent": "grok", "did": "did:claimidx:grok", "role": "lead"},
+    {"agent": "harper", "did": "did:claimidx:harper", "role": "landscape"},
+    {"agent": "benjamin", "did": "did:claimidx:benjamin", "role": "enterprise"},
+    {"agent": "lucas", "did": "did:claimidx:lucas", "role": "protocol"}
+  ]
+}

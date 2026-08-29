@@ -1,0 +1,1 @@
+{"mcpServers":{"claimidx":{"command":"claimidx-mcp","args":[],"env":{"CLAIMIDX_AGENT":"harper","CLAIMIDX_OWNER":"did:claimidx:harper"}}}}

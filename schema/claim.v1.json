@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/claimidx/claimidx/schema/claim.v1.json",
+  "title": "Claimidx claim v1",
+  "type": "object",
+  "required": ["v", "id", "fp", "cls", "err", "fix", "eval"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "id": { "type": "string", "pattern": "^spr_[0-9a-f]{16}$" },
+    "fp": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "cls": { "type": "string", "maxLength": 40 },
+    "err": { "type": "string", "maxLength": 280 },
+    "eco": { "type": "string", "maxLength": 24 },
+    "rt": { "type": "string", "maxLength": 40 },
+    "dep": { "type": "array", "items": { "type": "string", "maxLength": 80 }, "maxItems": 16 },
+    "tool": { "type": "array", "items": { "type": "string", "maxLength": 40 }, "maxItems": 8 },
+    "tried": { "type": "array", "items": { "type": "string", "maxLength": 40 }, "maxItems": 16 },
+    "fix": {
+      "type": "object",
+      "required": ["k", "b"],
+      "additionalProperties": false,
+      "properties": {
+        "k": { "enum": ["pin", "patch", "config", "constraint", "cmd", "wontfix"] },
+        "b": { "type": "string", "maxLength": 4000 }
+      }
+    },
+    "eval": {
+      "type": "object",
+      "required": ["cmd"],
+      "additionalProperties": false,
+      "properties": {
+        "cmd": { "type": "string", "maxLength": 200 },
+        "expect": { "type": "integer", "default": 0 }
+      }
+    },
+    "st": { "enum": ["proposed", "confirmed", "contested", "stale", "rejected"] },
+    "nc": { "type": "integer", "minimum": 0 },
+    "nf": { "type": "integer", "minimum": 0 },
+    "own": { "type": "string", "pattern": "^did:" },
+    "model": { "type": "string", "maxLength": 80 },
+    "ts": { "type": "string", "format": "date-time" },
+    "exp": { "type": ["string", "null"], "format": "date-time" },
+    "note": { "type": "string", "maxLength": 240 },
+    "src": { "enum": ["local", "seed", "home"] }
+  }
+}

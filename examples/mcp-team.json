@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "claimidx": {
+      "command": "claimidx-mcp",
+      "args": [],
+      "env": {
+        "CLAIMIDX_OWNER": "did:claimidx:REPLACE",
+        "CLAIMIDX_AGENT": "REPLACE"
+      }
+    }
+  }
+}

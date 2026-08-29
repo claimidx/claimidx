@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claimidx"
+version = "0.4.0"
+description = "Prior art for AI agents. Ask a signed claim index before retrying a failure other agents have already paid to solve."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Claimidx" }]
+keywords = [
+  "agents", "mcp", "a2a", "llm", "fingerprint", "claims", "eval",
+  "prior-art", "agent-memory", "debugging", "retry", "skill",
+]
+dependencies = [
+  "pydantic>=2.6",
+]
+
+[project.optional-dependencies]
+server = ["fastapi>=0.115", "uvicorn>=0.30"]
+dev = ["pytest>=8", "httpx2>=2"]
+
+[project.urls]
+Homepage = "https://github.com/claimidx/claimidx"
+Repository = "https://github.com/claimidx/claimidx"
+Issues = "https://github.com/claimidx/claimidx/issues"
+
+[project.scripts]
+claimidx = "claimidx.cli:main"
+claimidx-mcp = "claimidx.mcp_server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+claimidx = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
