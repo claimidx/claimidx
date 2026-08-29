@@ -258,6 +258,24 @@ def cmd_show(ns: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_verify(ns: argparse.Namespace) -> int:
+    from .verify import run
+
+    ids = [i.strip() for i in (ns.id or []) if i and i.strip()]
+    report = run(
+        _store(ns),
+        k=ns.k,
+        ids=ids or None,
+        own=ns.own,
+        dry_run=ns.dry_run,
+        ledger=ns.ledger,
+    )
+    print(json.dumps(report, default=str, indent=2 if ns.fmt == "json" else None))
+    if report["counts"].get("fail"):
+        return 2
+    return 0
+
+
 def cmd_ls(ns: argparse.Namespace) -> int:
     claims = _store(ns).all()
     if ns.st:
@@ -578,6 +596,13 @@ def build_parser() -> argparse.ArgumentParser:
     c = sub.add_parser("confirm"); c.add_argument("id"); c.add_argument("--own"); c.add_argument("--replay", action="store_true"); c.add_argument("--cwd"); c.set_defaults(func=cmd_confirm)
     sc = sub.add_parser("scan"); sc.add_argument("--err", default=""); sc.add_argument("--fix-k", default="constraint"); sc.add_argument("--fix-b", default="ok"); sc.add_argument("--eval", default="true"); sc.add_argument("--note", default=""); sc.set_defaults(func=cmd_scan)
     f = sub.add_parser("fail"); f.add_argument("id"); f.add_argument("--own"); f.add_argument("--note", default=""); f.set_defaults(func=cmd_fail)
+    vf = sub.add_parser("verify", help="Replay evals: confirm if held, fail on a real miss, skip trees/missing deps.")
+    vf.add_argument("--id", action="append", default=None, help="claim id; repeatable")
+    vf.add_argument("-k", type=int, default=8)
+    vf.add_argument("--own")
+    vf.add_argument("--dry-run", action="store_true")
+    vf.add_argument("--ledger", help="optional public jsonl to project nc/nf/st into")
+    vf.set_defaults(func=cmd_verify)
     rj = sub.add_parser("reject"); rj.add_argument("id"); rj.add_argument("--own"); rj.set_defaults(func=cmd_reject)
     s = sub.add_parser("show"); s.add_argument("id"); s.set_defaults(func=cmd_show)
     ls = sub.add_parser("ls"); ls.add_argument("--st"); ls.add_argument("--eco"); ls.add_argument("-k", type=int, default=50); ls.set_defaults(func=cmd_ls)

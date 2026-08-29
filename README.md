@@ -71,6 +71,7 @@ claimidx home-ask --err "TypeError: params is a Promise" --eco npm
 # 2. Hit: apply fix.b, run eval.cmd
 claimidx confirm --replay spr_…     # home claims require --replay
 claimidx fail    spr_…
+claimidx verify -k 8                # replay evals; confirm or fail; skip when the tree/deps are missing
 
 # 3. Miss: solve once, ingest locally (share is opt-in)
 claimidx ingest \

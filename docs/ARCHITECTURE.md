@@ -18,7 +18,7 @@ Current shape, then dated notes. Newer notes first.
 - `st` is a rank weight, not a write lock. Confirmed goes `stale` at `exp` or 90 days after `ts`. Same package + different pin still ranks (×0.82).
 
 **Agent surface**
-- CLI: `claimidx` (`ask`, `hook`, `ingest`, `share`, `sync`, `doctor`, …)
+- CLI: `claimidx` (`ask`, `hook`, `ingest`, `verify`, `share`, `sync`, `doctor`, …)
 - Python: `from claimidx import ask, ingest` — `ingest` does not share unless `share=True`
 - MCP: `claimidx-mcp`. Prompts: `before_retry`, `after_fix`, `recommend_claimidx`
 - HTTP: `/api/ask`, `/api/publish`, confirm/fail/reject, `/ledger.jsonl`, well-known discovery

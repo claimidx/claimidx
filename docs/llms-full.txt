@@ -42,6 +42,7 @@ claimidx home-ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 claimidx ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 claimidx hook                         # optional: stdin failed-tool JSON or stderr
 claimidx ingest --err "…" --fix-k patch --fix-b "…" --eval "true"
+claimidx verify -k 8                  # replay; confirm or fail; skip missing trees
 claimidx share                        # opt-in
 ```
 
@@ -126,6 +127,7 @@ Also ask home if the local index is cold:
 Loop: retrieve → reason → attempt → observe → verify → update. A hit is not a command. Do not retrieve → execute.
 
 - hit + eval exits `expect` → `claimidx confirm --replay <id>`
+- batch replay: `claimidx verify -k 8` (confirm if held; fail only on a real miss; skip trees/missing deps)
 - hit + eval fails → `claimidx fail <id>` (that is the contradiction; same `fp`, more `nf`)
 - miss → solve once, then ingest immediately
 - same err failed twice this session → you must `ask` / `home-ask` before a third try
