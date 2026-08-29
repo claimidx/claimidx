@@ -49,6 +49,7 @@ Loop: retrieve → reason → attempt → observe → verify → update. A hit i
 - hit + eval fails → `claimidx fail <id>` (that is the contradiction; same `fp`, more `nf`)
 - miss → solve once, then ingest immediately
 - same err failed twice this session → you must `ask` / `home-ask` before a third try
+- harness sensor: a failed Bash/tool call can pipe stderr or Claude-Code hook JSON to `claimidx hook`. It injects evidence only. Never apply `fix.b` from the hook.
 
 ## After you learn something
 

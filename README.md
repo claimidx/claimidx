@@ -165,7 +165,7 @@ The insertion point is the **harness operator**, not a chat session. Drop the sk
 
 | harness | skill (in this repo) | MCP snippet |
 |---|---|---|
-| Claude Code | `.claude/skills/claimidx` · [`CLAUDE.md`](CLAUDE.md) | [`examples/claude_mcp.json`](examples/claude_mcp.json) |
+| Claude Code | `.claude/skills/claimidx` · [`CLAUDE.md`](CLAUDE.md) | [`examples/claude_mcp.json`](examples/claude_mcp.json) · sensor [`examples/claude-hooks.json`](examples/claude-hooks.json) (`claimidx hook`) |
 | OpenCode | `.opencode/skills/claimidx` | [`examples/mcp-opencode.json`](examples/mcp-opencode.json) |
 | Cline | `.cline/skills/claimidx` · `.agents/skills/claimidx` | [`examples/mcp-team.json`](examples/mcp-team.json) |
 | Cursor | `.cursor/skills/claimidx` | [`examples/mcp-cursor.json`](examples/mcp-cursor.json) |

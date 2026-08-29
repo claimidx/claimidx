@@ -36,18 +36,20 @@ def encode_miss(out: dict) -> str:
     return f"CLAIMIDX 1\nhit 0\nfp {out['fp']}\ncls {out['cls']}\nerr {out['err']}\nn 0\n"
 
 
-def cmd_ask(ns: argparse.Namespace) -> int:
-    store = _store(ns)
-    err = ns.err
-    q = {"err": err, "cls": ns.cls or classify(err), "eco": ns.eco or "", "rt": ns.rt or "", "dep": ns.dep or []}
+def _ask_hits(store: Store, ns: argparse.Namespace, err: str):
+    q = {"err": err, "cls": getattr(ns, "cls", None) or classify(err), "eco": ns.eco or "", "rt": ns.rt or "", "dep": ns.dep or []}
     q["fp"] = fingerprint(err=q["err"], cls=q["cls"], eco=q["eco"], rt=q["rt"], dep=q["dep"])
-    hits = rank(q, store.all(), k=ns.k)
+    hits = rank(q, store.all(), k=getattr(ns, "k", 5) or 5)
     store.log("ask", resolve_owner(getattr(ns, "own", None)), hits[0][0].id if hits else "")
+    return q, hits
+
+
+def _print_ask(q: dict, hits, fmt: str) -> int:
     if not hits:
-        out = {"hit": False, "fp": q["fp"], "cls": q["cls"], "err": normalize_error(err), "n": 0}
-        print(json.dumps(out) if ns.fmt == "json" else encode_miss(out))
+        out = {"hit": False, "fp": q["fp"], "cls": q["cls"], "err": normalize_error(q["err"]), "n": 0}
+        print(json.dumps(out) if fmt == "json" else encode_miss(out))
         return 2
-    if ns.fmt == "json":
+    if fmt == "json":
         print(json.dumps({
             "hit": True, "fp": q["fp"], "n": len(hits),
             "claims": [hit_row(q, c, s) for c, s in hits],
@@ -61,6 +63,37 @@ def cmd_ask(ns: argparse.Namespace) -> int:
                 print("# warn " + "; ".join(meta["warn"]))
             print(encode(c))
     return 0
+
+
+def cmd_ask(ns: argparse.Namespace) -> int:
+    q, hits = _ask_hits(_store(ns), ns, ns.err)
+    return _print_ask(q, hits, ns.fmt)
+
+
+def cmd_hook(ns: argparse.Namespace) -> int:
+    """Harness sensor. Reads Claude-Code hook JSON or raw stderr. Never applies fix.b."""
+    from .hook import claude_context, extract_hook_err
+
+    raw = (getattr(ns, "err", None) or "").strip() or sys.stdin.read()
+    err, event = extract_hook_err(raw)
+    if not err:
+        return 0
+    q, hits = _ask_hits(_store(ns), ns, err)
+    if not hits:
+        return 0
+    if event:
+        c, s = hits[0]
+        meta = annotate(q, c, s)
+        dense = (
+            f"CLAIMIDX hit {c.id} sim={s:.3f} st={c.st} nf={c.nf}\n"
+            f"err {c.err}\nfix.k {c.fix.k}\nfix.b {c.fix.b[:400]}\n"
+            f"eval {c.eval.cmd}\n"
+            f"warn {'; '.join(meta['warn']) if meta['warn'] else ''}\n"
+            "A hit is evidence. retrieve → reason → attempt → observe → verify. Do not execute fix.b from this hook."
+        )
+        print(claude_context(event, dense))
+        return 0
+    return _print_ask(q, hits, ns.fmt)
 
 
 def cmd_publish(ns: argparse.Namespace) -> int:
@@ -495,6 +528,14 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     a = sub.add_parser("ask"); a.add_argument("--err", required=True); a.add_argument("--cls"); a.add_argument("--eco"); a.add_argument("--rt"); a.add_argument("--dep", type=_csv); a.add_argument("-k", type=int, default=5); a.set_defaults(func=cmd_ask)
+    hk = sub.add_parser("hook", help="Harness sensor: stdin failed-tool JSON or stderr → ask. Never applies fix.b.")
+    hk.add_argument("--err")
+    hk.add_argument("--cls")
+    hk.add_argument("--eco")
+    hk.add_argument("--rt")
+    hk.add_argument("--dep", type=_csv)
+    hk.add_argument("-k", type=int, default=5)
+    hk.set_defaults(func=cmd_hook)
     pub = sub.add_parser("publish"); pub.add_argument("--err", required=True); pub.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"]); pub.add_argument("--fix-b", required=True); pub.add_argument("--eval", required=True); pub.add_argument("--expect", type=int, default=0); pub.add_argument("--cls"); pub.add_argument("--eco"); pub.add_argument("--rt"); pub.add_argument("--dep", type=_csv); pub.add_argument("--tool", type=_csv); pub.add_argument("--tried", type=_csv); pub.add_argument("--own"); pub.add_argument("--model"); pub.add_argument("--note"); pub.add_argument("--force", action="store_true"); pub.set_defaults(func=cmd_publish)
     c = sub.add_parser("confirm"); c.add_argument("id"); c.add_argument("--own"); c.add_argument("--replay", action="store_true"); c.set_defaults(func=cmd_confirm)
     sc = sub.add_parser("scan"); sc.add_argument("--err", default=""); sc.add_argument("--fix-k", default="constraint"); sc.add_argument("--fix-b", default="ok"); sc.add_argument("--eval", default="true"); sc.add_argument("--note", default=""); sc.set_defaults(func=cmd_scan)

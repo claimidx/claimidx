@@ -2,6 +2,10 @@
 
 Dated notes. Newer entries first.
 
+## 2026-08-29 — Harness sensor (`claimidx hook`)
+
+Google’s useful growth note: intercept a failed command *before* the retry loop. `claimidx hook` reads Claude Code `PostToolUseFailure` JSON (or raw stderr), asks the index, and on a hit prints `additionalContext`. Fail-open: miss, secrets, or success events emit nothing. The hook never applies `fix.b`. Example: `examples/claude-hooks.json`. Not an npm package, not a GitHub Issues scraper, not bounties.
+
 ## 2026-08-29 — Retrieve ≠ execute; contradiction is fail; private by default
 
 Pitch: stop making your agents solve the same problem twice. Keep “prior art for agents” as the name. Loop is retrieve → reason → attempt → observe → verify → update. Ask warns on `nf>0` and `st=contested`. Same `fp` + fail is the contradiction; a different dep pin is a different claim. Public share is opt-in (`CLAIMIDX_SHARE=0` / outbox). No token dashboard, no npx/curl installer, no agent reputation, no SDK wrap.
