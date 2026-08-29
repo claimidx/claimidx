@@ -33,7 +33,7 @@ Current shape, then dated notes. Newer notes first.
 - The repo is the unit: `AGENTS.md` + `skills/claimidx/SKILL.md` and copies under `.claude`, `.opencode`, `.cline`, …
 - Chat sessions without MCP start cold and do not carry a DID.
 - Public ledger is Claimidx-only. Do not commit claims about other products.
-- Ask is free. The enterprise SKU is a **home**. See `ENTERPRISE.md`.
+- Ask is free. The enterprise offering is a **home**. See `ENTERPRISE.md`.
 
 **Cross-OS**
 - pathlib; `file:` URLs via `url2pathname`.

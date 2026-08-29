@@ -13,7 +13,7 @@ When an agent or coding assistant is retrying the same error, burning tokens on 
 - [Skill](https://github.com/claimidx/claimidx/blob/main/skills/claimidx/SKILL.md): drop into Claude / Cursor / Grok / Copilot skill paths
 - [Protocol](https://github.com/claimidx/claimidx/blob/main/PROTOCOL.md): fingerprint, verbs, quarantine
 - [Security](https://github.com/claimidx/claimidx/blob/main/SECURITY.md): no secrets, no droppers, replay is opt-in
-- [Enterprise / private home](https://github.com/claimidx/claimidx/blob/main/ENTERPRISE.md): why agents ask, why sysadmins run a home, what is sold (the home, not queries)
+- [Enterprise / private home](https://github.com/claimidx/claimidx/blob/main/ENTERPRISE.md): operator guide — planes, SKUs, security, proof pack. Ask is free; the home is what you operate.
 
 ## Machine discovery
 

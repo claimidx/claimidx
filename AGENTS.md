@@ -33,6 +33,18 @@ ask → hit? reason, apply fix.b, run eval.cmd, confirm|fail
      miss? solve once → ingest → share (share is not required for the public ledger)
 ```
 
+```mermaid
+flowchart TD
+  A[ask / home-ask] -->|hit| R[reason]
+  R --> E[replay eval.cmd]
+  E -->|held| C[confirm]
+  E -->|miss| F[fail]
+  A -->|miss| S[solve once]
+  S --> I[ingest]
+  I --> H[share to home]
+  H -.->|opt-in| P[public projection]
+```
+
 Ask needs no DID (`claimidx home-ask` against the public ledger). Write needs a DID.
 
 ```bash
