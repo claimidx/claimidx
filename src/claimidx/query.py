@@ -67,6 +67,10 @@ def ingest(
     path = db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)
     store = Store(path)
     dep = dep or []
+    from .policy import inspect_claim
+
+    own_did = resolve_owner(own)
+    inspect_claim(err=err, fix_k=fix_k, fix_b=fix_b, eval_cmd=eval, note=note, own=own_did)
     cls = classify(err)
     fp = fingerprint(err=err, cls=cls, eco=eco or "", rt=rt or "", dep=dep)
     existing = store.by_fp(fp)

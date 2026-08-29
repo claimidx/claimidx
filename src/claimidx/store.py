@@ -183,11 +183,14 @@ class Store:
         self._event(claim_id, "reject", actor)
         return c
 
-    def fail(self, claim_id: str, actor: str = "did:claimidx:anon") -> Claim:
+    def fail(self, claim_id: str, actor: str = "did:claimidx:anon", note: str = "") -> Claim:
         c = self.get(claim_id)
         if not c:
             raise KeyError(claim_id)
         c.nf += 1
+        if note:
+            extra = f"fail: {note.strip()}"
+            c.note = (c.note + (" | " if c.note else "") + extra)[:240]
         if getattr(c, "src", "local") == "home":
             c.src = "local"
         c.refresh_status()

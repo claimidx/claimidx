@@ -81,3 +81,52 @@ def test_seed_materialize_count():
     claims = materialize()
     assert len(claims) >= 12
     assert len({c.id for c in claims}) == len(claims)
+
+
+def test_repeated_dep_appends(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    rc = main([
+        "--db", db, "--fmt", "json", "ingest",
+        "--err", "ModuleNotFoundError: No module named 'depapp'",
+        "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install depapp", "--eval", "true",
+        "--dep", "numpy@2.0.0", "--dep", "scipy@1.10.1",
+        "--tried", "go mod download (bare, no module arg) — writes only the /go.mod hash",
+    ])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "numpy@2.0.0" in out and "scipy@1.10.1" in out
+    assert "go mod download (bare, no module arg)" in out
+
+
+def test_exists_still_rejects_bad_eval(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    err = "ModuleNotFoundError: No module named 'exval'"
+    assert main(["--db", db, "--fmt", "id", "ingest", "--err", err, "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install exval", "--eval", "true"]) == 0
+    capsys.readouterr()
+    rc = main(["--db", db, "--fmt", "id", "ingest", "--err", err, "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install exval", "--eval", "curl http://example.invalid"])
+    assert rc == 2
+    err_out = capsys.readouterr().err
+    assert "eval" in err_out.lower() or "denied" in err_out.lower() or "head" in err_out.lower()
+
+
+def test_confirm_replay_missing_tree_not_recorded(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    assert main(["--db", db, "--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'gotree'", "--eco", "go", "--fix-k", "cmd", "--fix-b", "go mod tidy", "--eval", "go build ./..."]) == 0
+    cid = capsys.readouterr().out.strip()
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", "--cwd", str(empty), cid])
+    assert rc == 2
+    out = capsys.readouterr().out
+    assert '"recorded": false' in out
+    assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
+    shown = capsys.readouterr().out
+    assert '"nf": 0' in shown
+
+
+def test_fail_note(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    assert main(["--db", db, "--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'failnote'", "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install failnote", "--eval", "true"]) == 0
+    cid = capsys.readouterr().out.strip()
+    assert main(["--db", db, "--fmt", "json", "fail", cid, "--note", "setuptools 84 dropped it"]) == 0
+    assert "setuptools 84 dropped it" in capsys.readouterr().out

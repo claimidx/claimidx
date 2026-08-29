@@ -1,9 +1,15 @@
 from claimidx.fingerprint import classify, fingerprint, normalize_error
 
 
-def test_quoted_strings_become_str_token():
-    assert "<STR>" in normalize_error('TypeError: Cannot read property "foo" of undefined')
-    assert "foo" not in normalize_error('TypeError: Cannot read property "foo" of undefined')
+def test_quoted_strings_keep_identifiers():
+    s = normalize_error('TypeError: Cannot read property "foo" of undefined')
+    assert "foo" in s
+    a = normalize_error("AttributeError: module 'pkgutil' has no attribute 'find_loader'")
+    b = normalize_error("AttributeError: module 'numpy' has no attribute 'float_'")
+    assert "pkgutil" in a and "find_loader" in a
+    assert fingerprint(err=a, eco="py") != fingerprint(err=b, eco="py")
+    prose = normalize_error('TypeError: Cannot read property "a long prose phrase here" of undefined')
+    assert "<STR>" in prose
 
 
 def test_paths_and_urls_and_numbers():

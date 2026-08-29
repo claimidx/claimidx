@@ -32,16 +32,12 @@ _CLASS_RULES: list[tuple[str, re.Pattern[str]]] = [
 ]
 
 
-_MODULE_NAME = re.compile(r"^[A-Za-z0-9_@./-]+$")
-_MISSING_MOD = re.compile(
-    r"no module named|cannot find module|modulenotfounderror|cannot import name",
-    re.I,
-)
+_MODULE_NAME = re.compile(r"^[A-Za-z0-9_@./=-]+$")
 
 
-def _quote_token(m: re.Match[str], *, keep_modules: bool) -> str:
+def _quote_token(m: re.Match[str]) -> str:
     inner = m.group(2)
-    if keep_modules and _MODULE_NAME.fullmatch(inner) and len(inner) < 80:
+    if _MODULE_NAME.fullmatch(inner) and len(inner) < 80:
         return inner
     return "<STR>"
 
@@ -50,8 +46,7 @@ def normalize_error(raw: str) -> str:
     s = raw.strip()
     s = _URL.sub("<URL>", s)
     s = _PATH.sub("<PATH>", s)
-    keep = bool(_MISSING_MOD.search(s))
-    s = _QUOTED.sub(lambda m: _quote_token(m, keep_modules=keep), s)
+    s = _QUOTED.sub(_quote_token, s)
     s = _HEX.sub("<HEX>", s)
     s = _NUM.sub("<N>", s)
     s = _WS.sub(" ", s)

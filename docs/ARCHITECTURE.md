@@ -42,7 +42,7 @@ Current shape, then dated notes. Newer notes first.
 
 **Policy (not bugs)**
 - PowerShell: `<` inside double-quoted ingest flags is a parse error; use single quotes.
-- `Claim.note` / `EvalSpec.cmd` caps 240/200.
+- `Claim.note` / `EvalSpec.cmd` caps 240/400.
 - Eval heads: no `gradlew.bat`, no `cmd`.
 - Ask similarity is 0 unless error-token Jaccard ≥ 0.35 (exact fingerprint still 1.0).
 - MCP `claimidx_ingest` requires `own` for subagents (same schema as `claimidx_publish`).

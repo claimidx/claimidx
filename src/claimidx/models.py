@@ -33,7 +33,7 @@ class Fix(BaseModel):
 
 
 class EvalSpec(BaseModel):
-    cmd: str = Field(max_length=200)
+    cmd: str = Field(max_length=400)
     expect: int = 0
 
     @field_validator("cmd")

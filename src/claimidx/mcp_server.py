@@ -157,6 +157,8 @@ def handle(msg: dict, store: Store) -> dict:
         args = params.get("arguments") or {}
         try:
             return _ok(mid, _text(_call(name, args, store)))
+        except KeyError as e:
+            return _err(mid, -32602, f"Invalid params: missing {e}")
         except Exception as e:
             return _ok(mid, {"content": [{"type": "text", "text": f"error: {e}"}], "isError": True})
     if method == "ping":
@@ -178,10 +180,16 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         cls = classify(err)
         dep = args.get("dep") or []
         fp = fingerprint(err=err, cls=cls, eco=args.get("eco") or "", rt=args.get("rt") or "", dep=dep)
+        from .policy import inspect_claim
+
+        own = resolve_owner(args.get("own"))
+        inspect_claim(
+            err=err, fix_k=args["fix_k"], fix_b=args["fix_b"], eval_cmd=args["eval"],
+            note=args.get("note") or "", own=own,
+        )
         existing = store.by_fp(fp)
         if existing and not args.get("force"):
             return {"exists": True, "id": existing[0].id, "st": existing[0].st}
-        own = resolve_owner(args.get("own"))
         extra = {"id": existing[0].id} if existing else {}
         c = Claim(fp=fp, cls=cls, err=normalize_error(err), eco=args.get("eco") or "other", rt=args.get("rt") or "", dep=dep, tried=args.get("tried") or [], fix=Fix(k=args["fix_k"], b=args["fix_b"]), eval=EvalSpec(cmd=args["eval"]), own=own, note=args.get("note") or "", **extra)
         store.put(c)
@@ -202,8 +210,10 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         if args.get("replay"):
             from .sandbox import replay
 
-            result = replay(existing.eval.cmd, existing.eval.expect)
+            result = replay(existing.eval.cmd, existing.eval.expect, cwd=args.get("cwd"))
             if not result.held:
+                if (result.reason or "").startswith("eval-precondition"):
+                    return {"id": existing.id, "st": existing.st, "held": False, "recorded": False, "replay": result.as_dict()}
                 c = store.fail(args["id"], resolve_owner(args.get("own")))
                 return {"id": c.id, "st": c.st, "nc": c.nc, "nf": c.nf, "replay": result.as_dict(), "held": False}
         c = store.confirm(args["id"], resolve_owner(args.get("own")))
@@ -215,7 +225,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             out["share"] = shared
         return out
     if name == "claimidx_fail":
-        c = store.fail(args["id"], resolve_owner(args.get("own")))
+        c = store.fail(args["id"], resolve_owner(args.get("own")), note=args.get("note") or "")
         return {"id": c.id, "st": c.st, "nc": c.nc, "nf": c.nf, "own": resolve_owner(args.get("own"))}
     if name == "claimidx_reject":
         c = store.reject(args["id"], resolve_owner(args.get("own")))

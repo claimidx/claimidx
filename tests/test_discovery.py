@@ -153,6 +153,22 @@ def test_mcp_content_length_is_bytes():
     assert framed and parsed["result"]["text"] == "café"
 
 
+def test_mcp_ask_missing_err_is_invalid_params(tmp_path):
+    store = Store(tmp_path / "ix.sqlite")
+    rec = handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {"name": "claimidx_ask", "arguments": {}},
+        },
+        store,
+    )
+    err = rec.get("error") or {}
+    assert err.get("code") == -32602
+    assert "err" in (err.get("message") or "").lower() or "missing" in (err.get("message") or "").lower()
+
+
 def test_mcp_ingest_schema_exposes_own():
     ingest = next(t for t in TOOLS if t["name"] == "claimidx_ingest")
     pub = next(t for t in TOOLS if t["name"] == "claimidx_publish")

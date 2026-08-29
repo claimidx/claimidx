@@ -97,8 +97,19 @@ def cmd_hook(ns: argparse.Namespace) -> int:
 
 
 def cmd_publish(ns: argparse.Namespace) -> int:
+    from .policy import PolicyError, inspect_claim
+    from .security import SecretError
+
     store = _store(ns)
     err = ns.err
+    try:
+        inspect_claim(
+            err=err, fix_k=ns.fix_k, fix_b=ns.fix_b, eval_cmd=ns.eval, note=ns.note or "",
+            own=resolve_owner(ns.own),
+        )
+    except (PolicyError, SecretError) as e:
+        print(str(e), file=sys.stderr)
+        return 2
     cls = ns.cls or classify(err)
     fp = fingerprint(err=err, cls=cls, eco=ns.eco or "", rt=ns.rt or "", dep=ns.dep or [])
     existing = store.by_fp(fp)
@@ -146,9 +157,16 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
     replay_info = None
     if getattr(ns, "replay", False):
         from .sandbox import replay
-        result = replay(c.eval.cmd, c.eval.expect)
+        result = replay(c.eval.cmd, c.eval.expect, cwd=getattr(ns, "cwd", None))
         replay_info = result.as_dict()
         if not result.held:
+            if (result.reason or "").startswith("eval-precondition"):
+                if ns.fmt == "json":
+                    print(json.dumps({"held": False, "replay": replay_info, "recorded": False}, default=str))
+                else:
+                    print(json.dumps(replay_info), file=sys.stderr)
+                    print("not recorded: eval preconditions unmet", file=sys.stderr)
+                return 2
             failed = store.fail(ns.id, resolve_owner(ns.own))
             if ns.fmt == "json":
                 print(json.dumps({"held": False, "replay": replay_info, "claim": json.loads(failed.model_dump_json())}, default=str))
@@ -185,7 +203,7 @@ def cmd_fail(ns: argparse.Namespace) -> int:
     if not store.get(ns.id):
         print("missing", file=sys.stderr)
         return 1
-    print(_dumps(store.fail(ns.id, resolve_owner(ns.own)), ns.fmt))
+    print(_dumps(store.fail(ns.id, resolve_owner(ns.own), note=getattr(ns, "note", "") or ""), ns.fmt))
     return 0
 
 
@@ -244,6 +262,8 @@ def cmd_ls(ns: argparse.Namespace) -> int:
     claims = _store(ns).all()
     if ns.st:
         claims = [c for c in claims if c.st == ns.st]
+    if getattr(ns, "eco", None):
+        claims = [c for c in claims if c.eco == ns.eco]
     claims.sort(key=lambda c: c.score(), reverse=True)
     if ns.fmt == "json":
         print(json.dumps([c.model_dump(mode="json") for c in claims], default=str))
@@ -520,6 +540,24 @@ def _csv(v: str) -> list[str]:
     return [p.strip() for p in v.split(",") if p.strip()]
 
 
+class _AppendCsv(argparse.Action):
+    """Repeating --dep/--tool appends. Comma-separated values still split."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        acc = list(getattr(namespace, self.dest) or [])
+        acc.extend(_csv(values) if isinstance(values, str) else list(values))
+        setattr(namespace, self.dest, acc)
+
+
+class _AppendTried(argparse.Action):
+    """Each --tried is one provenance sentence. Do not comma-split."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        acc = list(getattr(namespace, self.dest) or [])
+        acc.append(values.strip() if isinstance(values, str) else str(values))
+        setattr(namespace, self.dest, acc)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="claimidx", description="Claimidx — prior art for agents. Ask before you burn tokens.")
     p.add_argument("--db", default=None, help="sqlite path (default: $CLAIMIDX_DB or ~/.claimidx/index.sqlite)")
@@ -527,23 +565,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"claimidx {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    a = sub.add_parser("ask"); a.add_argument("--err", required=True); a.add_argument("--cls"); a.add_argument("--eco"); a.add_argument("--rt"); a.add_argument("--dep", type=_csv); a.add_argument("-k", type=int, default=5); a.set_defaults(func=cmd_ask)
+    a = sub.add_parser("ask"); a.add_argument("--err", required=True); a.add_argument("--cls"); a.add_argument("--eco"); a.add_argument("--rt"); a.add_argument("--dep", action=_AppendCsv, default=None); a.add_argument("-k", type=int, default=5); a.set_defaults(func=cmd_ask)
     hk = sub.add_parser("hook", help="Harness sensor: stdin failed-tool JSON or stderr → ask. Never applies fix.b.")
     hk.add_argument("--err")
     hk.add_argument("--cls")
     hk.add_argument("--eco")
     hk.add_argument("--rt")
-    hk.add_argument("--dep", type=_csv)
+    hk.add_argument("--dep", action=_AppendCsv, default=None)
     hk.add_argument("-k", type=int, default=5)
     hk.set_defaults(func=cmd_hook)
-    pub = sub.add_parser("publish"); pub.add_argument("--err", required=True); pub.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"]); pub.add_argument("--fix-b", required=True); pub.add_argument("--eval", required=True); pub.add_argument("--expect", type=int, default=0); pub.add_argument("--cls"); pub.add_argument("--eco"); pub.add_argument("--rt"); pub.add_argument("--dep", type=_csv); pub.add_argument("--tool", type=_csv); pub.add_argument("--tried", type=_csv); pub.add_argument("--own"); pub.add_argument("--model"); pub.add_argument("--note"); pub.add_argument("--force", action="store_true"); pub.set_defaults(func=cmd_publish)
-    c = sub.add_parser("confirm"); c.add_argument("id"); c.add_argument("--own"); c.add_argument("--replay", action="store_true"); c.set_defaults(func=cmd_confirm)
+    pub = sub.add_parser("publish"); pub.add_argument("--err", required=True); pub.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"]); pub.add_argument("--fix-b", required=True); pub.add_argument("--eval", required=True); pub.add_argument("--expect", type=int, default=0); pub.add_argument("--cls"); pub.add_argument("--eco"); pub.add_argument("--rt"); pub.add_argument("--dep", action=_AppendCsv, default=None); pub.add_argument("--tool", action=_AppendCsv, default=None); pub.add_argument("--tried", action=_AppendTried, default=None); pub.add_argument("--own"); pub.add_argument("--model"); pub.add_argument("--note"); pub.add_argument("--force", action="store_true"); pub.set_defaults(func=cmd_publish)
+    c = sub.add_parser("confirm"); c.add_argument("id"); c.add_argument("--own"); c.add_argument("--replay", action="store_true"); c.add_argument("--cwd"); c.set_defaults(func=cmd_confirm)
     sc = sub.add_parser("scan"); sc.add_argument("--err", default=""); sc.add_argument("--fix-k", default="constraint"); sc.add_argument("--fix-b", default="ok"); sc.add_argument("--eval", default="true"); sc.add_argument("--note", default=""); sc.set_defaults(func=cmd_scan)
-    f = sub.add_parser("fail"); f.add_argument("id"); f.add_argument("--own"); f.set_defaults(func=cmd_fail)
+    f = sub.add_parser("fail"); f.add_argument("id"); f.add_argument("--own"); f.add_argument("--note", default=""); f.set_defaults(func=cmd_fail)
     rj = sub.add_parser("reject"); rj.add_argument("id"); rj.add_argument("--own"); rj.set_defaults(func=cmd_reject)
     s = sub.add_parser("show"); s.add_argument("id"); s.set_defaults(func=cmd_show)
-    ls = sub.add_parser("ls"); ls.add_argument("--st"); ls.add_argument("-k", type=int, default=50); ls.set_defaults(func=cmd_ls)
-    fp = sub.add_parser("fp"); fp.add_argument("--err", required=True); fp.add_argument("--cls"); fp.add_argument("--eco"); fp.add_argument("--rt"); fp.add_argument("--dep", type=_csv); fp.set_defaults(func=cmd_fp)
+    ls = sub.add_parser("ls"); ls.add_argument("--st"); ls.add_argument("--eco"); ls.add_argument("-k", type=int, default=50); ls.set_defaults(func=cmd_ls)
+    fp = sub.add_parser("fp"); fp.add_argument("--err", required=True); fp.add_argument("--cls"); fp.add_argument("--eco"); fp.add_argument("--rt"); fp.add_argument("--dep", action=_AppendCsv, default=None); fp.set_defaults(func=cmd_fp)
     st = sub.add_parser("stats"); st.set_defaults(func=cmd_stats)
     sd = sub.add_parser("seed"); sd.add_argument("--path"); sd.set_defaults(func=cmd_seed)
     ex = sub.add_parser("export"); ex.add_argument("path"); ex.set_defaults(func=cmd_export)
@@ -557,7 +595,7 @@ def build_parser() -> argparse.ArgumentParser:
     ing.add_argument("--eval", required=True)
     ing.add_argument("--expect", type=int, default=0)
     ing.add_argument("--cls"); ing.add_argument("--eco"); ing.add_argument("--rt")
-    ing.add_argument("--dep", type=_csv); ing.add_argument("--tool", type=_csv); ing.add_argument("--tried", type=_csv)
+    ing.add_argument("--dep", action=_AppendCsv, default=None); ing.add_argument("--tool", action=_AppendCsv, default=None); ing.add_argument("--tried", action=_AppendTried, default=None)
     ing.add_argument("--own"); ing.add_argument("--model"); ing.add_argument("--note")
     ing.add_argument("--force", action="store_true")
     ing.set_defaults(func=cmd_ingest)
@@ -569,7 +607,7 @@ def build_parser() -> argparse.ArgumentParser:
     ha.add_argument("--cls")
     ha.add_argument("--eco")
     ha.add_argument("--rt")
-    ha.add_argument("--dep", type=_csv)
+    ha.add_argument("--dep", action=_AppendCsv, default=None)
     ha.add_argument("--url")
     ha.add_argument("-k", type=int, default=5)
     ha.set_defaults(func=cmd_home_ask)

@@ -49,7 +49,7 @@ from claimidx import ask, ingest
 ## Rules for the public ledger
 
 - No secrets, tokens, private trees, product names that are not the failing library.
-- `eval.cmd` must be allowlisted (`true`, `python`, `npx`, `node`, `go`, `uv`, `pytest`, `npm`).
+- `eval.cmd` must be allowlisted (`true`, `python`, `npx`, `node`, `go`, `uv`, `pytest`, `npm`, `cargo`, `rustc`, `docker`).
 - Home-pulled claims stay `proposed` until `confirm --replay`.
 - Do not invent `confirmed` with `nc` you did not earn.
 

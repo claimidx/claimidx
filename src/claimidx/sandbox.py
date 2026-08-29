@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import os
-import shlex
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 
-from .policy import eval_allowed, _norm_head, _prep_eval
+from .policy import eval_allowed, split_eval, _norm_head
 
 
 def resolve_argv(parts: list[str]) -> list[str]:
@@ -68,19 +67,44 @@ class ReplayResult:
         }
 
 
-def replay(cmd: str, expect: int = 0, timeout: float = 45.0) -> ReplayResult:
+_TREE_MARKERS = {
+    "npx": ("package.json", "tsconfig.json"),
+    "npm": ("package.json",),
+    "go": ("go.mod", "go.work"),
+    "cargo": ("Cargo.toml",),
+    "rustc": ("Cargo.toml",),
+    "docker": ("Dockerfile", "docker-compose.yml", "compose.yml"),
+}
+
+
+def _precondition(head: str, cwd: str | None) -> str | None:
+    markers = _TREE_MARKERS.get(head)
+    if not markers:
+        return None
+    root = cwd or os.getcwd()
+    if any(os.path.exists(os.path.join(root, name)) for name in markers):
+        return None
+    return f"eval-precondition: no {'/'.join(markers)} in cwd"
+
+
+def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = None) -> ReplayResult:
     ok, reason = eval_allowed(cmd)
     if not ok:
         return ReplayResult(False, False, None, expect, False, reason)
     try:
-        parts = shlex.split(_prep_eval(cmd))
+        extra_env, parts = split_eval(cmd)
     except ValueError as e:
         return ReplayResult(False, False, None, expect, False, f"unparseable eval: {e}")
     if parts and _norm_head(parts[0]) in ("true", "false"):
         rc = 0 if _norm_head(parts[0]) == "true" else 1
         held = rc == expect
         return ReplayResult(True, True, rc, expect, held, "builtin")
+    missing = _precondition(_norm_head(parts[0]), cwd)
+    if missing:
+        return ReplayResult(True, False, None, expect, False, missing)
     argv = resolve_argv(parts)
+    env = os.environ.copy()
+    env.update(extra_env)
     try:
         proc = subprocess.run(
             argv,
@@ -89,6 +113,8 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0) -> ReplayResult:
             timeout=timeout,
             check=False,
             stdin=subprocess.DEVNULL,
+            cwd=cwd or None,
+            env=env,
         )
     except subprocess.TimeoutExpired:
         return ReplayResult(True, True, 124, expect, False, "timeout")

@@ -82,7 +82,7 @@ Owner is `CLAIMIDX_OWNER` when `own` is omitted. **Subagents must pass `own`** o
 
 PowerShell: wrap `--err` / `--fix-b` / `--eval` in **single quotes**. A `<` inside double quotes is a parse error.
 
-`eval.cmd` heads: `true` `false` `test` `python` `python3` `pytest` `npx` `npm` `node` `go` `uv`. Not `gradlew.bat`, not `cmd`.
+`eval.cmd` heads: `true` `false` `test` `python` `python3` `pytest` `npx` `npm` `node` `go` `uv` `cargo` `rustc` `docker`. Not `gradlew.bat`, not `cmd`. Env assigns (`GOTOOLCHAIN=local go build`) peel off before the head check. Replay may take `--cwd`; a tree-scoped eval with no `package.json`/`go.mod`/`Cargo.toml`/`Dockerfile` is not recorded as a fail.
 
 Ask hits with no shared error tokens are noise — do not apply them. Class + eco is not enough.
 

@@ -17,7 +17,7 @@ class PolicyError(ValueError):
 
 # Size caps — binaries and packed scripts do not fit, and should not.
 MAX_FIX = 4000
-MAX_EVAL = 200
+MAX_EVAL = 400
 MAX_NOTE = 240
 MAX_ERR = 280
 MAX_BASE64_RUN = 80
@@ -45,7 +45,7 @@ _LONG_B64 = re.compile(r"[A-Za-z0-9+/]{%d,}={0,2}" % MAX_BASE64_RUN)
 
 ALLOWED_EVAL_HEADS = {
     "true", "false", "test", "python", "python3", "pytest",
-    "npx", "npm", "node", "go", "uv",
+    "npx", "npm", "node", "go", "uv", "cargo", "rustc", "docker",
 }
 
 DENIED_EVAL_HEADS = {
@@ -94,6 +94,20 @@ def _norm_head(token: str) -> str:
     return name.lower()
 
 
+_ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.")
+
+
+def split_eval(cmd: str) -> tuple[dict[str, str], list[str]]:
+    """Peel KEY=val prefixes so GOTOOLCHAIN=local go build is a go eval."""
+    parts = shlex.split(_prep_eval(cmd))
+    env: dict[str, str] = {}
+    while parts and _ENV_ASSIGN.match(parts[0]):
+        key, _, val = parts[0].partition("=")
+        env[key] = val
+        parts = parts[1:]
+    return env, parts
+
+
 def eval_allowed(cmd: str) -> tuple[bool, str]:
     raw = (cmd or "").strip()
     if not raw:
@@ -103,7 +117,7 @@ def eval_allowed(cmd: str) -> tuple[bool, str]:
     if any(ch in raw for ch in [";", "|", "&", ">", "<", "`", "\n", "$(", "&&", "||"]):
         return False, "shell metacharacter denied"
     try:
-        parts = shlex.split(_prep_eval(raw))
+        _env, parts = split_eval(raw)
     except ValueError as e:
         return False, f"unparseable eval: {e}"
     if not parts:
@@ -119,7 +133,10 @@ def eval_allowed(cmd: str) -> tuple[bool, str]:
     if lower & DENIED_EVAL_TOKENS:
         return False, "eval token denied"
     joined = " ".join(parts).lower()
-    if any(tok in joined for tok in ("os.system", "subprocess", "urllib", "socket", "__import__")):
+    for tok in ("os.system", "subprocess", "urllib", "__import__"):
+        if tok in joined:
+            return False, "eval imports a dangerous module"
+    if any(p.lower() == "socket" for p in parts):
         return False, "eval imports a dangerous module"
     return True, "ok"
 
@@ -160,7 +177,7 @@ def inspect_claim(*, err: str, fix_k: str, fix_b: str, eval_cmd: str, note: str 
         if not ok:
             # allow a few well-known installer recipes already in the seed corpus
             if not _seed_cmd_ok(fix_b):
-                raise PolicyError(f"cmd fix denied: {reason}")
+                raise PolicyError(f"cmd fix denied: {reason.replace('eval head', 'cmd head', 1)}")
     reject_eval(eval_cmd)
 
 
