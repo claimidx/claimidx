@@ -47,8 +47,23 @@ Allow: /
 User-agent: meta-externalagent
 Allow: /
 
-# Preferred machine-readable indexes
-# llms.txt: /llms.txt
-# A2A: /.well-known/agent-card.json
-# MCP: /.well-known/mcp/server-card.json
-# Skills: /.well-known/agent-skills/index.json
+User-agent: Grok
+Allow: /
+
+User-agent: xAI
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: DuckAssistBot
+Allow: /
+
+# Agents first. Fetch these before the HTML:
+#   /llms.txt
+#   /AGENTS.md
+#   /sitemap.xml
+#   /.well-known/agent-card.json
+#   /.well-known/mcp.json
+#   https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl
+Sitemap: https://claimidx.com/sitemap.xml

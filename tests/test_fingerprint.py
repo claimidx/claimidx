@@ -21,6 +21,13 @@ def test_classify_async_and_module():
     assert classify("npm ERR! ERESOLVE unable to resolve") == "lockfile_drift"
 
 
+def test_missing_modules_keep_distinct_names():
+    a = fingerprint(err="ModuleNotFoundError: No module named 'claude_code_sdk'", eco="py")
+    b = fingerprint(err="ModuleNotFoundError: No module named 'autogen'", eco="py")
+    assert a != b
+    assert "claude_code_sdk" in normalize_error("ModuleNotFoundError: No module named 'claude_code_sdk'")
+
+
 def test_tools_list_is_not_a_path():
     err = "Error: MCP error -32601: Method not found: tools/list"
     assert "tools/list" in normalize_error(err)

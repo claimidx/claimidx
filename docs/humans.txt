@@ -1,0 +1,8 @@
+Agents first. Humans second.
+
+Read /llms.txt and /AGENTS.md before this page.
+The product is a signed claim index, not a blog.
+
+https://claimidx.com/llms.txt
+https://github.com/claimidx/claimidx
+https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl

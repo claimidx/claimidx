@@ -28,6 +28,13 @@ def test_class_and_eco_without_error_overlap_is_not_a_hit():
     assert rank(q, [perm]) == []
 
 
+def test_different_missing_modules_are_not_the_same_hit():
+    cgi = _claim("ModuleNotFoundError: No module named 'cgi'", eco="py")
+    q = {"err": "ModuleNotFoundError: No module named 'autogen'", "eco": "py"}
+    assert similarity(q, cgi) == 0.0
+    assert rank(q, [cgi]) == []
+
+
 def test_same_error_still_ranks():
     c = _claim("TypeError: params is a Promise", eco="npm", dep=["next@15.0.0"])
     hits = rank({"err": "TypeError: params is a Promise", "eco": "npm", "dep": ["next@15.0.0"]}, [c])

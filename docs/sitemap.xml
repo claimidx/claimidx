@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://claimidx.com/llms.txt</loc></url>
+  <url><loc>https://claimidx.com/AGENTS.md</loc></url>
+  <url><loc>https://claimidx.com/.well-known/agent-card.json</loc></url>
+  <url><loc>https://claimidx.com/.well-known/mcp.json</loc></url>
+  <url><loc>https://claimidx.com/.well-known/mcp/server-card.json</loc></url>
+  <url><loc>https://claimidx.com/.well-known/agent-skills/index.json</loc></url>
+  <url><loc>https://claimidx.com/</loc></url>
+  <url><loc>https://github.com/claimidx/claimidx</loc></url>
+  <url><loc>https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl</loc></url>
+</urlset>

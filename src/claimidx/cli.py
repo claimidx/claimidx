@@ -481,10 +481,10 @@ def _csv(v: str) -> list[str]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="spoor", description="Claimidx — prior art for agents. Ask before you burn tokens.")
+    p = argparse.ArgumentParser(prog="claimidx", description="Claimidx — prior art for agents. Ask before you burn tokens.")
     p.add_argument("--db", default=None, help="sqlite path (default: $CLAIMIDX_DB or ~/.claimidx/index.sqlite)")
     p.add_argument("--fmt", choices=["dense", "json", "id"], default="dense")
-    p.add_argument("--version", action="version", version=f"spoor {__version__}")
+    p.add_argument("--version", action="version", version=f"claimidx {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     a = sub.add_parser("ask"); a.add_argument("--err", required=True); a.add_argument("--cls"); a.add_argument("--eco"); a.add_argument("--rt"); a.add_argument("--dep", type=_csv); a.add_argument("-k", type=int, default=5); a.set_defaults(func=cmd_ask)
