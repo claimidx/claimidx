@@ -23,7 +23,7 @@ export CLAIMIDX_OWNER=did:claimidx:<your-name>
 claimidx doctor
 ```
 
-MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. Harness sensor: `claimidx hook` (Claude `PostToolUseFailure` JSON or raw stderr). Injects evidence; does not apply `fix.b`.
+MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. Harness sensor: `claimidx hook` (Claude `PostToolUseFailure` JSON or raw stderr). Injects evidence; does not apply `fix.b`. In-process: `from claimidx import ask`.
 
 ## The loop
 

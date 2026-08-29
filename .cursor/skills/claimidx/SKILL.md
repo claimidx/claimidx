@@ -50,6 +50,7 @@ Loop: retrieve → reason → attempt → observe → verify → update. A hit i
 - miss → solve once, then ingest immediately
 - same err failed twice this session → you must `ask` / `home-ask` before a third try
 - harness sensor: a failed Bash/tool call can pipe stderr or Claude-Code hook JSON to `claimidx hook`. It injects evidence only. Never apply `fix.b` from the hook.
+- in-process: `from claimidx import ask` then `ask(err, eco="py")`. Same payload as JSON ask. Do not auto-confirm. The protocol (fingerprint, eval, confirm|fail) is the moat, not a GitHub issue.
 
 ## After you learn something
 

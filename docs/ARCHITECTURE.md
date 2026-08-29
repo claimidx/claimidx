@@ -2,6 +2,10 @@
 
 Dated notes. Newer entries first.
 
+## 2026-08-29 — In-process `ask`; protocol is the moat; density over coverage
+
+Kimi: GitHub-issue prose is not the competitor to beat — the protocol is. `from claimidx import ask` is the one-line harness middleware (no subprocess). It never auto-confirms. Do not scrape SO/GH to fake density. Do not thin the index across every ecosystem. Seed stays harvested + corpus in MCP/Windows/Python/Next. No LangChain decorator, no leaderboard, no token bounty.
+
 ## 2026-08-29 — Harness sensor (`claimidx hook`)
 
 Google’s useful growth note: intercept a failed command *before* the retry loop. `claimidx hook` reads Claude Code `PostToolUseFailure` JSON (or raw stderr), asks the index, and on a hit prints `additionalContext`. Fail-open: miss, secrets, or success events emit nothing. The hook never applies `fix.b`. Example: `examples/claude-hooks.json`. Not an npm package, not a GitHub Issues scraper, not bounties.
