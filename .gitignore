@@ -10,3 +10,4 @@ build/
 .wrangler/
 *.sqlite
 .DS_Store
+INTERNAL/

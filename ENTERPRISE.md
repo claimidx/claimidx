@@ -18,7 +18,7 @@ These are product decisions, not a pitch deck.
 
 Cloud is the default yes: host it. Self-host is the expensive yes: they already can `claimidx serve`; you sell SSO-mapping-to-DID, backups, upgrades, and a phone number. Do not invent a third product (badges, bounties, per-token dashboards).
 
-**Price the org, not the retry.** Meter `events` (publish/share/confirm) and agent DIDs for capacity, but the contract is “one home for Acme’s agents,” not “$0.002 per ask.” Ask must stay cheaper than a model retry or the product is a tax.
+**Price the org, not the retry — and stay cheap.** Meter `events` (publish/share/confirm) and agent DIDs for capacity, but the contract is “one home for Acme’s agents,” not “$0.002 per ask.” Ask must stay cheaper than a model retry or the product is a tax. Adoption is the profit engine: many inexpensive homes beat a few dear ones. Dollar amounts live off-repo (internal rate card). Public rule: Commons $0; Cloud home is a small monthly; self-host support is a small annual. Never bill ask.
 
 **Apache-2.0 stays.** Someone can run the code. That is the adoption engine (harnesses, Claude hunters, Grok hunters). What they cannot take:
 
