@@ -16,7 +16,7 @@ ROSTER = {
     "harper": {"did": "did:claimidx:harper", "role": "landscape"},
     "benjamin": {"did": "did:claimidx:benjamin", "role": "enterprise"},
     "lucas": {"did": "did:claimidx:lucas", "role": "protocol"},
-    "reme": {"did": "did:claimidx:reme", "role": "core"},
+    "verifier": {"did": "did:claimidx:verifier", "role": "verify"},
 }
 
 PACKAGED = Path(__file__).resolve().parents[2] / "team" / "roster.json"
