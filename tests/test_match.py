@@ -41,7 +41,7 @@ def test_same_error_still_ranks():
     assert hits and hits[0][0].id == c.id and hits[0][1] >= 0.5
 
 
-def test_disjoint_dep_versions_are_not_a_hit():
+def test_disjoint_dep_packages_are_not_a_hit():
     c = _claim(
         "ModuleNotFoundError: No module named 'pydantic_core'",
         eco="py",
@@ -50,10 +50,16 @@ def test_disjoint_dep_versions_are_not_a_hit():
     q = {
         "err": "ModuleNotFoundError: No module named 'pydantic_core'",
         "eco": "py",
-        "dep": ["pydantic@1.10.0"],
+        "dep": ["django@5.0.0"],
     }
     assert similarity(q, c) == 0.0
     assert rank(q, [c]) == []
+
+
+def test_same_package_different_patch_still_ranks():
+    c = _claim("TypeError: params is a Promise", eco="npm", dep=["next@15.0.0"])
+    hits = rank({"err": "TypeError: params is a Promise", "eco": "npm", "dep": ["next@15.2.0"]}, [c])
+    assert hits and hits[0][0].id == c.id
 
 
 def test_tautological_eval_scores_below_replayable():

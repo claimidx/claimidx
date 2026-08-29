@@ -13,6 +13,22 @@ def _jaccard(a: list[str], b: list[str]) -> float:
     return len(sa & sb) / len(sa | sb)
 
 
+def _dep_names(items: list[str] | None) -> set[str]:
+    """Package names only. next@15.0 and next@15.2 are the same prior-art env."""
+    out: set[str] = set()
+    for raw in items or []:
+        s = raw.strip().lower()
+        if not s:
+            continue
+        if s.startswith("@") and s.count("@") >= 2:
+            s = s.rsplit("@", 1)[0]
+        elif "@" in s:
+            s = s.split("@", 1)[0]
+        if s:
+            out.add(s)
+    return out
+
+
 _ERR_BOILER = {
     "modulenotfounderror", "importerror", "error", "no", "module", "named",
     "cannot", "find", "or", "its", "corresponding", "type", "declarations",
@@ -51,8 +67,8 @@ def similarity(query: Claim | dict, cand: Claim) -> float:
     err = _err_sim(qerr, cand.err)
     if err < _ERR_FLOOR:
         return 0.0
-    # Both sides named deps and they share none: different environment, not prior art.
-    if qdep and cand.dep and _jaccard(qdep, cand.dep) == 0.0:
+    qn, cn = _dep_names(qdep), _dep_names(cand.dep)
+    if qn and cn and qn.isdisjoint(cn):
         return 0.0
     s = 0.0
     s += 0.45 * err
