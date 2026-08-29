@@ -48,6 +48,25 @@ def test_decide_skips_builtin_and_tree(tmp_path: Path):
     assert "precondition" in (d.get("reason") or "")
 
 
+def test_decide_skips_pytest_without_tree(tmp_path: Path):
+    scratch = tmp_path / "s"
+    scratch.mkdir()
+    p = _claim("TypeError: x", "python3 -m pytest -q", fix_k="patch", fix_b="assert x")
+    d = decide(p, scratch=scratch)
+    assert d["action"] == "skip"
+    assert "precondition" in (d.get("reason") or "") or "missing" in (d.get("reason") or "")
+
+
+def test_decide_skips_node_spawn_composer_wrapper(tmp_path: Path):
+    scratch = tmp_path / "s"
+    scratch.mkdir()
+    cmd = "node -e \"process.exit(require('child_process').spawnSync('composer',['install'],{stdio:'inherit'}).status)\""
+    c = _claim("Your requirements could not be resolved", cmd, fix_k="pin", fix_b="phpunit/phpunit")
+    d = decide(c, scratch=scratch)
+    assert d["action"] == "skip"
+    assert "wrapper" in (d.get("reason") or "")
+
+
 def test_decide_skips_node_spawn_cargo_wrapper(tmp_path: Path):
     scratch = tmp_path / "s"
     scratch.mkdir()

@@ -27,16 +27,21 @@ _MISSING = re.compile(
     r"modulenotfounderror|no module named|cannot find module|not found|"
     r"errno 2|the system cannot find|is not recognized|command not found|"
     r"no such file|goproxy|cannot find package|"
-    r"neither setup\.py nor pyproject\.toml|file 'setup\.py'|pyproject\.toml",
+    r"neither setup\.py nor pyproject\.toml|file 'setup\.py'|pyproject\.toml|"
+    r"no tests ran|no makefile|makefile:|composer|could not find gem|gem: |"
+    r"bundler|mvn:|gradle",
     re.I,
 )
-_SKIP_HEADS_WITHOUT_TREE = {"npx", "npm", "go", "cargo", "rustc", "docker"}
+_SKIP_HEADS_WITHOUT_TREE = {
+    "npx", "npm", "go", "cargo", "rustc", "docker", "pytest",
+    "mvn", "gradle", "composer", "bundle", "bundler", "gem", "php", "make",
+}
 _TAUTOLOGY = re.compile(
-    r"^(python3?|node|go|cargo|rustc|npm|npx|docker|uv)(?:\.exe)?\s+(--version|-v|-V|version)\s*$",
+    r"^(python3?|node|go|cargo|rustc|npm|npx|docker|uv|php|ruby|java)(?:\.exe)?\s+(--version|-v|-V|version)\s*$",
     re.I,
 )
 _WRAPPER = re.compile(
-    r"node\s+-e.*spawnSync\(\s*['\"](cargo|rustc|go|docker|npx|npm)['\"]",
+    r"node\s+-e.*spawnSync\(\s*['\"](cargo|rustc|go|docker|npx|npm|composer|gem|bundle|bundler|mvn|gradle|make|php|ruby|pip)['\"]",
     re.I | re.S,
 )
 

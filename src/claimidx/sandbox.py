@@ -75,14 +75,28 @@ _TREE_MARKERS = {
     "cargo": ("Cargo.toml",),
     "rustc": ("Cargo.toml",),
     "docker": ("Dockerfile", "docker-compose.yml", "compose.yml"),
+    "pytest": ("pytest.ini", "pyproject.toml", "setup.cfg", "tests", "test", "conftest.py"),
+    "mvn": ("pom.xml",),
+    "gradle": ("build.gradle", "build.gradle.kts"),
+    "composer": ("composer.json",),
+    "bundle": ("Gemfile",),
+    "bundler": ("Gemfile",),
+    "gem": ("Gemfile",),
+    "php": ("composer.json",),
+    "make": ("Makefile", "makefile"),
 }
 _LOCAL_PIP = re.compile(r"\bpip\b.+\binstall\b.*(\s-e\s|\s\.(?:\s|$))", re.I)
 
 
 def _precondition(head: str, cwd: str | None, cmd: str = "") -> str | None:
     markers = _TREE_MARKERS.get(head)
-    if head in {"python", "python3"} and _LOCAL_PIP.search(cmd or ""):
+    blob = cmd or ""
+    if head in {"python", "python3"} and _LOCAL_PIP.search(blob):
         markers = ("pyproject.toml", "setup.py", "setup.cfg")
+    elif head in {"python", "python3"} and re.search(r"\bpytest\b", blob):
+        markers = _TREE_MARKERS["pytest"]
+    elif re.search(r"\bmake\b", blob) and head in {"python", "python3", "node", "test", "make"}:
+        markers = _TREE_MARKERS["make"]
     if not markers:
         return None
     root = cwd or os.getcwd()
