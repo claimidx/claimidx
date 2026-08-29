@@ -26,7 +26,8 @@ _PIN = re.compile(r"^[A-Za-z0-9_.-]+(?:[<>=!~]=?[^ \n]+)?$")
 _MISSING = re.compile(
     r"modulenotfounderror|no module named|cannot find module|not found|"
     r"errno 2|the system cannot find|is not recognized|command not found|"
-    r"no such file|goproxy|cannot find package",
+    r"no such file|goproxy|cannot find package|"
+    r"neither setup\.py nor pyproject\.toml|file 'setup\.py'|pyproject\.toml",
     re.I,
 )
 _SKIP_HEADS_WITHOUT_TREE = {"npx", "npm", "go", "cargo", "rustc", "docker"}

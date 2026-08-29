@@ -48,6 +48,20 @@ def test_decide_skips_builtin_and_tree(tmp_path: Path):
     assert "precondition" in (d.get("reason") or "")
 
 
+def test_decide_skips_local_pip_without_pyproject(tmp_path: Path):
+    scratch = tmp_path / "s"
+    scratch.mkdir()
+    c = _claim(
+        "error: Multiple top-level packages discovered in a flat-layout",
+        "python -m pip install --no-build-isolation -e .",
+        fix_k="config",
+        fix_b="[tool.setuptools.packages.find]",
+    )
+    d = decide(c, scratch=scratch)
+    assert d["action"] == "skip"
+    assert "precondition" in (d.get("reason") or "") or "missing" in (d.get("reason") or "")
+
+
 def test_verify_confirms_python_c(tmp_path: Path, capsys, monkeypatch):
     monkeypatch.setenv("CLAIMIDX_VERIFY_SEEN", str(tmp_path / "seen.json"))
     db = str(tmp_path / "ix.sqlite")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -75,10 +76,13 @@ _TREE_MARKERS = {
     "rustc": ("Cargo.toml",),
     "docker": ("Dockerfile", "docker-compose.yml", "compose.yml"),
 }
+_LOCAL_PIP = re.compile(r"\bpip\b.+\binstall\b.*(\s-e\s|\s\.(?:\s|$))", re.I)
 
 
-def _precondition(head: str, cwd: str | None) -> str | None:
+def _precondition(head: str, cwd: str | None, cmd: str = "") -> str | None:
     markers = _TREE_MARKERS.get(head)
+    if head in {"python", "python3"} and _LOCAL_PIP.search(cmd or ""):
+        markers = ("pyproject.toml", "setup.py", "setup.cfg")
     if not markers:
         return None
     root = cwd or os.getcwd()
@@ -99,7 +103,7 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
         rc = 0 if _norm_head(parts[0]) == "true" else 1
         held = rc == expect
         return ReplayResult(True, True, rc, expect, held, "builtin")
-    missing = _precondition(_norm_head(parts[0]), cwd)
+    missing = _precondition(_norm_head(parts[0]), cwd, cmd)
     if missing:
         return ReplayResult(True, False, None, expect, False, missing)
     argv = resolve_argv(parts)
