@@ -43,6 +43,16 @@ def test_public_fix_body_keeps_pins_flags_and_relative_paths():
     assert "3.12" in py.fix.b
 
 
+def test_public_fix_body_keeps_uri_schemes():
+    pg = project_public(_claim(fix_b="Use postgresql:// not postgres://"))
+    assert "postgresql://" in pg.fix.b
+    assert "postgres://" in pg.fix.b
+    assert "<PATH>" not in pg.fix.b
+    docs = project_public(_claim(fix_b="see https://docs.sqlalchemy.org/en/20/"))
+    assert "https://" in docs.fix.b
+    assert "<PATH>" not in docs.fix.b
+
+
 def test_public_fix_body_redacts_mailbox_and_home_paths():
     p = project_public(_claim(fix_b=r"mail ops@example.com then edit C:\Users\alice\.env"))
     assert "ops@example.com" not in p.fix.b

@@ -28,8 +28,9 @@ _HOSTY = re.compile(
     re.I,
 )
 # Home/tmp/drive paths only. Relative aliases like ./src/* are public recipe.
+# Windows drive is C:\ or C:/foo — not l:// inside postgresql:// or https://.
 _ABS_PATH = re.compile(
-    r"(?:[A-Za-z]:[/\\]|\\\\|~[/\\]|/(?:home|Users|usr|var|tmp|root|etc)/)[^\s'\"]+",
+    r"(?:[A-Za-z]:(?:\\+|/(?!/))|\\\\|~[/\\]|/(?:home|Users|usr|var|tmp|root|etc)/)[^\s'\"]+",
     re.I,
 )
 
