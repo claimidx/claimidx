@@ -11,6 +11,7 @@ def test_seed_ask_confirm_roundtrip(tmp_path: Path, capsys):
     rc = main(["--db", db, "--fmt", "json", "ask", "--err", "TypeError: params is a Promise", "--eco", "npm", "--dep", "next@15.0.0"])
     out = capsys.readouterr().out
     assert rc == 0 and "spr_a11c000000000001" in out
+    assert "age_days" in out and "warn" in out
     assert main(["--db", db, "--fmt", "id", "confirm", "spr_a11c000000000001"]) == 0
 
 

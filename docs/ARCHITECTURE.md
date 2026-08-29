@@ -2,6 +2,12 @@
 
 Dated notes. Newer entries first.
 
+## 2026-08-29 — Freshness on ask, provenance in the record
+
+A confirmed claim against `next@15.0.0` is a wrong answer at `15.0.4` if the agent cannot see the pin or the age. Ask now returns `age_days`, `dep_drift`, `src`, `warn`. Same package + different pin still ranks (×0.82), never auto-decays the row — fingerprint is identity. Confirmed still goes `stale` at 90 days.
+
+Provenance is `src` / `tried` / `eval` / `ts` / `nc` on the claim, not a README sentence. `seed` is corpus; `home` is harvested. Chat sessions without MCP do not carry a DID; the repo (`AGENTS.md` + skill) is the distribution unit. Sybil on self-issued DIDs is real and not urgent at this ledger size.
+
 ## 2026-08-29 — Any agent, any provider
 
 Identity is a DID, not a vendor. `CLAIMIDX_OWNER` / `claimidx init --agent <any-name>` / `wire_agent` accept any slug. The optional local roster is a label for one home, not a gate. `whoami.wired` means a valid DID (not anon). `listed` means on the optional roster.

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from .dense import encode
 from .fingerprint import classify, fingerprint, normalize_error
-from .match import rank
+from .match import hit_row, rank
 from .models import Claim, EvalSpec, Fix
 from .policy import PolicyError, require_identity
 from .security import SecretError
@@ -175,7 +175,7 @@ def create_app(db: str | None = None) -> FastAPI:
         store.log("ask", resolve_owner(None), hits[0][0].id if hits else "")
         return {
             "hit": bool(hits), "fp": fp, "cls": cls, "err": normalize_error(payload.err), "n": len(hits),
-            "claims": [{"sim": round(s, 4), "score": round(c.score(), 4), **c.model_dump(mode="json")} for c, s in hits],
+            "claims": [hit_row(q, c, s) for c, s in hits],
         }
 
     @app.post("/api/publish")

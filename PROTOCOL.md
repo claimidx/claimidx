@@ -57,6 +57,14 @@ proposed ──nc≥1──► confirmed ──stale──► stale
 `eval.cmd` is a recipe. Claimidx does not execute it on pull or publish.
 `confirm --replay` is opt-in, allowlisted, no shell metacharacters.
 
+## Freshness
+
+`st` is a rank weight, not a write lock. Confirmed goes `stale` at `exp`, or 90 days after `ts`. Score already decays with age (`1 / (1 + days/45)`).
+
+Ask surfaces what the agent can act on: `age_days`, `dep_drift` (same package, different pin), `src`, `warn`. Same package + different version is still a hit, ranked lower. Replay before applying if `warn` or `dep_drift` is set. Do not spawn a second `proposed` row for the same `fp`.
+
+Provenance is on the claim: `src` (`seed` corpus / `home` harvested / `local`), `tried`, `eval`, `ts`, `nc`. Seed is not proof. Pulled home claims stay `proposed` until `confirm --replay`.
+
 ## Home
 
 - Read plane: `CLAIMIDX_HOME` (default GitHub raw `data/claims.jsonl`) or `GET /ledger.jsonl` on a live home.

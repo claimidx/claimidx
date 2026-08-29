@@ -25,7 +25,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from .match import rank
+from .match import hit_compact, rank
 from .models import Claim
 from .policy import PolicyError
 from .security import SecretError
@@ -219,18 +219,7 @@ def ask_home(query: dict, k: int = 5, url: str | None = None) -> dict[str, Any]:
         "pool": len(claims),
         "skipped_n": len(skipped),
         "claims": [
-            {
-                "sim": round(s, 4),
-                "score": round(c.score(), 4),
-                "id": c.id,
-                "st": c.st,
-                "cls": c.cls,
-                "err": c.err,
-                "fix": c.fix.model_dump(),
-                "eval": c.eval.model_dump(),
-                "own": c.own,
-                "src": "home",
-            }
+            {**hit_compact(query, c, s), "own": c.own, "src": "home"}
             for c, s in hits
         ],
     }

@@ -58,8 +58,24 @@ def test_disjoint_dep_packages_are_not_a_hit():
 
 def test_same_package_different_patch_still_ranks():
     c = _claim("TypeError: params is a Promise", eco="npm", dep=["next@15.0.0"])
-    hits = rank({"err": "TypeError: params is a Promise", "eco": "npm", "dep": ["next@15.2.0"]}, [c])
+    q = {"err": "TypeError: params is a Promise", "eco": "npm", "dep": ["next@15.2.0"]}
+    hits = rank(q, [c])
     assert hits and hits[0][0].id == c.id
+    from claimidx.match import annotate, dep_drift
+
+    drift = dep_drift(q["dep"], c.dep)
+    assert drift == [{"name": "next", "query": "15.2.0", "claim": "15.0.0"}]
+    meta = annotate(q, c, hits[0][1])
+    assert any("next query=15.2.0" in w for w in meta["warn"])
+
+
+def test_exact_dep_pin_ranks_above_drifted_pin():
+    err = "TypeError: params is a Promise"
+    exact = _claim(err, eco="npm", dep=["next@15.2.0"])
+    old = _claim(err, eco="npm", dep=["next@15.0.0"])
+    q = {"err": err, "eco": "npm", "dep": ["next@15.2.0"]}
+    hits = rank(q, [old, exact], k=2)
+    assert [h[0].id for h in hits][0] == exact.id
 
 
 def test_tautological_eval_scores_below_replayable():

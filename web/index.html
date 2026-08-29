@@ -91,8 +91,11 @@
     }
     function card(c) {
       const sim = c.sim != null ? `sim=${c.sim}` : "";
+      const age = c.age_days != null ? `age=${c.age_days}d` : "";
+      const src = c.src ? `src=${c.src}` : "";
+      const warn = (c.warn && c.warn.length) ? `<div class="hint">${c.warn.map(w => String(w).replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]))).join(" · ")}</div>` : "";
       const esc = dense(c).replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]));
-      return `<article class="hit"><div class="meta"><span class="info">${c.id}</span><span>${c.st}</span><span class="ok">nc ${c.nc}</span><span class="bad">nf ${c.nf}</span><span>${sim}</span></div><pre>${esc}</pre><div class="row"><button onclick="vote('${c.id}','confirm')">confirm</button><button onclick="vote('${c.id}','confirm',true)">replay</button><button onclick="vote('${c.id}','fail')">fail</button><button onclick="vote('${c.id}','reject')">reject</button></div></article>`;
+      return `<article class="hit"><div class="meta"><span class="info">${c.id}</span><span>${c.st}</span><span class="ok">nc ${c.nc}</span><span class="bad">nf ${c.nf}</span><span>${sim}</span><span>${age}</span><span>${src}</span></div>${warn}<pre>${esc}</pre><div class="row"><button onclick="vote('${c.id}','confirm')">confirm</button><button onclick="vote('${c.id}','confirm',true)">replay</button><button onclick="vote('${c.id}','fail')">fail</button><button onclick="vote('${c.id}','reject')">reject</button></div></article>`;
     }
     async function ask() {
       const err = $("err").value.trim(); const out = $("out");

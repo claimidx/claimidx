@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from .fingerprint import classify, fingerprint, normalize_error
 from .models import Claim
 
@@ -13,20 +15,78 @@ def _jaccard(a: list[str], b: list[str]) -> float:
     return len(sa & sb) / len(sa | sb)
 
 
+def _split_dep(raw: str) -> tuple[str, str]:
+    """('next', '15.0.0') or ('@types/node', '20'). Empty version if unpinned."""
+    s = (raw or "").strip()
+    if not s:
+        return "", ""
+    if s.startswith("@") and s.count("@") >= 2:
+        name, _, ver = s.rpartition("@")
+        return name.lower(), ver
+    if s.startswith("@"):
+        return s.lower(), ""
+    if "@" in s:
+        name, _, ver = s.partition("@")
+        return name.lower(), ver
+    return s.lower(), ""
+
+
 def _dep_names(items: list[str] | None) -> set[str]:
     """Package names only. next@15.0 and next@15.2 are the same prior-art env."""
-    out: set[str] = set()
-    for raw in items or []:
-        s = raw.strip().lower()
-        if not s:
-            continue
-        if s.startswith("@") and s.count("@") >= 2:
-            s = s.rsplit("@", 1)[0]
-        elif "@" in s:
-            s = s.split("@", 1)[0]
-        if s:
-            out.add(s)
+    return {n for n, _ in (_split_dep(x) for x in (items or [])) if n}
+
+
+def dep_drift(query_dep: list[str] | None, claim_dep: list[str] | None) -> list[dict[str, str]]:
+    """Same package name, different version string. Empty if either side is unpinned."""
+    qmap = {n: v for n, v in (_split_dep(x) for x in (query_dep or [])) if n}
+    cmap = {n: v for n, v in (_split_dep(x) for x in (claim_dep or [])) if n}
+    out: list[dict[str, str]] = []
+    for name, qv in qmap.items():
+        cv = cmap.get(name)
+        if qv and cv and qv != cv:
+            out.append({"name": name, "query": qv, "claim": cv})
     return out
+
+
+def age_days(claim: Claim, *, now: datetime | None = None) -> float:
+    ts = claim.ts
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    when = now or datetime.now(timezone.utc)
+    return max(0.0, (when - ts).total_seconds() / 86400)
+
+
+def hit_warn(query: Claim | dict, claim: Claim) -> list[str]:
+    """Machine-readable caution. Provenance is on the claim (`src`, `tried`, `eval`, `ts`)."""
+    qdep = query.dep if isinstance(query, Claim) else (query.get("dep") or [])
+    warns: list[str] = []
+    age = age_days(claim)
+    if age >= 45:
+        warns.append(f"age {int(age)}d")
+    if claim.st == "stale":
+        warns.append("st=stale")
+    src = getattr(claim, "src", "local") or "local"
+    if src == "seed":
+        warns.append("src=seed; replay before apply")
+    elif src == "home":
+        warns.append("src=home; confirm requires replay")
+    for d in dep_drift(qdep, claim.dep):
+        warns.append(f"{d['name']} query={d['query']} claim={d['claim']}")
+    head = (claim.eval.cmd or "true").strip().split()[0].lower()
+    if head in ("true", "false"):
+        warns.append("eval is a hint")
+    return warns
+
+
+def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
+    qdep = query.dep if isinstance(query, Claim) else (query.get("dep") or [])
+    return {
+        "sim": round(sim, 4),
+        "score": round(claim.score(), 4),
+        "age_days": round(age_days(claim), 1),
+        "dep_drift": dep_drift(qdep, claim.dep),
+        "warn": hit_warn(query, claim),
+    }
 
 
 _ERR_BOILER = {
@@ -75,6 +135,9 @@ def similarity(query: Claim | dict, cand: Claim) -> float:
     s += 0.20 * (1.0 if qcls and qcls == cand.cls else 0.0)
     s += 0.15 * (1.0 if qeco and qeco == cand.eco else 0.0)
     s += 0.20 * _jaccard(qdep, cand.dep)
+    # Same package, different pin: still a hit (agent sees dep_drift), ranked lower.
+    if dep_drift(qdep, cand.dep):
+        s *= 0.82
     return s
 
 
@@ -87,3 +150,27 @@ def rank(query: Claim | dict, claims: list[Claim], *, k: int = 5, min_sim: float
         scored.append((c, sim * (0.5 + 0.5 * c.score())))
     scored.sort(key=lambda x: x[1], reverse=True)
     return scored[:k]
+
+
+def hit_row(query: Claim | dict, claim: Claim, sim: float) -> dict:
+    """Ask payload: annotation first so sim/score/warn are not buried."""
+    row = annotate(query, claim, sim)
+    row.update(claim.model_dump(mode="json"))
+    return row
+
+
+def hit_compact(query: Claim | dict, claim: Claim, sim: float) -> dict:
+    """MCP / home-ask: enough to apply or skip, plus freshness."""
+    row = annotate(query, claim, sim)
+    row.update({
+        "id": claim.id,
+        "st": claim.st,
+        "src": getattr(claim, "src", "local"),
+        "nc": claim.nc,
+        "nf": claim.nf,
+        "err": claim.err,
+        "dep": claim.dep,
+        "fix": claim.fix.model_dump(),
+        "eval": claim.eval.model_dump(),
+    })
+    return row

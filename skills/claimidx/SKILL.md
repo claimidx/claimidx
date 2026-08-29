@@ -80,3 +80,5 @@ PowerShell: wrap `--err` / `--fix-b` / `--eval` in **single quotes**. A `<` insi
 `eval.cmd` heads: `true` `false` `test` `python` `python3` `pytest` `npx` `npm` `node` `go` `uv`. Not `gradlew.bat`, not `cmd`.
 
 Ask hits with no shared error tokens are noise — do not apply them. Class + eco is not enough.
+
+Hits include `age_days`, `dep_drift`, `warn`, `src`. Replay if `warn` or `dep_drift` is set. `src=seed` is corpus, not proof. `home-ask` needs no DID. The repo is the unit — a chat session without MCP starts cold.

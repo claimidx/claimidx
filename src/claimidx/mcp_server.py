@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 from .fingerprint import classify, fingerprint, normalize_error
-from .match import rank
+from .match import hit_compact, rank
 from .models import Claim, EvalSpec, Fix
 from .store import Store
 from .team import resolve_owner, whoami as team_whoami
@@ -26,7 +26,7 @@ TOOLS = [
     {"name": "claimidx_whoami", "description": "Return this agent's Claimidx DID and whether it is on the team roster.", "inputSchema": {"type": "object", "properties": {}}},
     {"name": "claimidx_ingest", "description": "Turn a solved failure into a claim under this agent's DID. Use instead of pasting findings into chat. Subagents must pass own; otherwise the parent session DID is stamped.", "inputSchema": {"type": "object", "required": ["err", "fix_k", "fix_b", "eval"], "properties": {"err": {"type": "string"}, "fix_k": {"type": "string", "enum": ["pin", "patch", "config", "constraint", "cmd", "wontfix"]}, "fix_b": {"type": "string"}, "eval": {"type": "string"}, "eco": {"type": "string"}, "rt": {"type": "string"}, "dep": {"type": "array", "items": {"type": "string"}}, "tried": {"type": "array", "items": {"type": "string"}}, "note": {"type": "string"}, "own": {"type": "string"}, "force": {"type": "boolean"}}}},
     {"name": "claimidx_home_pull", "description": "Pull the public home ledger into the local index. Remote claims are quarantined.", "inputSchema": {"type": "object", "properties": {"url": {"type": "string"}}}},
-    {"name": "claimidx_home_ask", "description": "Ask the public home ledger without writing local state.", "inputSchema": {"type": "object", "required": ["err"], "properties": {"err": {"type": "string"}, "eco": {"type": "string"}, "rt": {"type": "string"}, "dep": {"type": "array", "items": {"type": "string"}}, "k": {"type": "integer", "default": 5}, "url": {"type": "string"}}}},
+    {"name": "claimidx_home_ask", "description": "Ask the public home ledger without writing local state. No DID required.", "inputSchema": {"type": "object", "required": ["err"], "properties": {"err": {"type": "string"}, "eco": {"type": "string"}, "rt": {"type": "string"}, "dep": {"type": "array", "items": {"type": "string"}}, "k": {"type": "integer", "default": 5}, "url": {"type": "string"}}}},
     {"name": "claimidx_home_push", "description": "Submit a local claim to the live home API (CLAIMIDX_HOME_API). Does not write GitHub.", "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}}},
     {"name": "claimidx_home_propose", "description": "Return a jsonl line for a PR against data/claims.jsonl.", "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}}},
     {"name": "claimidx_share", "description": "Submit a local claim (or every unshared local claim) to the live home or the outbox.", "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}, "force": {"type": "boolean"}}}},
@@ -76,8 +76,9 @@ def _prompt(name: str | None, args: dict) -> dict | None:
     if name == "before_retry":
         text = (
             f"Before retrying this failure, query Claimidx.\n\nError:\n{err}\n\n"
-            "Call claimidx_ask (and claimidx_home_ask if the local index is cold). "
+            "Call claimidx_ask (and claimidx_home_ask if the local index is cold; home-ask needs no DID). "
             "If there is a hit, apply fix.b and run eval.cmd. "
+            "If warn or dep_drift is set, replay before applying. src=seed is not proof. "
             "Held → claimidx_confirm (replay=true for home claims). Miss → solve once, then after_fix."
         )
     elif name == "after_fix":
@@ -167,7 +168,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         fp = fingerprint(err=err, cls=cls, eco=args.get("eco") or "", rt=args.get("rt") or "", dep=dep)
         hits = rank({"err": err, "cls": cls, "eco": args.get("eco") or "", "rt": args.get("rt") or "", "dep": dep, "fp": fp}, store.all(), k=int(args.get("k") or 5))
         store.log("ask", resolve_owner(None), hits[0][0].id if hits else "")
-        return {"hit": bool(hits), "fp": fp, "cls": cls, "err": normalize_error(err), "claims": [{"id": c.id, "sim": round(s, 4), "st": c.st, "nc": c.nc, "fix": c.fix.model_dump(), "eval": c.eval.model_dump(), "err": c.err} for c, s in hits]}
+        return {"hit": bool(hits), "fp": fp, "cls": cls, "err": normalize_error(err), "claims": [hit_compact({"err": err, "cls": cls, "eco": args.get("eco") or "", "rt": args.get("rt") or "", "dep": dep, "fp": fp}, c, s) for c, s in hits]}
     if name == "claimidx_publish":
         err = args["err"]
         cls = classify(err)

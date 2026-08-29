@@ -8,7 +8,7 @@ import sys
 from . import __version__
 from .dense import encode
 from .fingerprint import classify, fingerprint, normalize_error
-from .match import rank
+from .match import annotate, hit_row, rank
 from .models import Claim, EvalSpec, Fix
 from .store import DEFAULT_DB, Store
 from .policy import PolicyError
@@ -50,11 +50,15 @@ def cmd_ask(ns: argparse.Namespace) -> int:
     if ns.fmt == "json":
         print(json.dumps({
             "hit": True, "fp": q["fp"], "n": len(hits),
-            "claims": [{"sim": round(s, 4), "score": round(c.score(), 4), **c.model_dump(mode="json")} for c, s in hits],
+            "claims": [hit_row(q, c, s) for c, s in hits],
         }, default=str))
     else:
         for i, (c, s) in enumerate(hits):
-            print(f"# hit {i} sim={s:.3f} score={c.score():.3f}")
+            meta = annotate(q, c, s)
+            extra = f" age={meta['age_days']} src={getattr(c, 'src', 'local')}"
+            print(f"# hit {i} sim={s:.3f} score={c.score():.3f}{extra}")
+            if meta["warn"]:
+                print("# warn " + "; ".join(meta["warn"]))
             print(encode(c))
     return 0
 
@@ -285,7 +289,10 @@ def cmd_home_ask(ns: argparse.Namespace) -> int:
         return 2
     print(f"# home {result.get('url')} pool={result.get('pool')}")
     for i, row in enumerate(result.get("claims") or []):
-        print(f"# hit {i} sim={row.get('sim')} id={row.get('id')} st={row.get('st')}")
+        extra = f" age={row.get('age_days')} src={row.get('src')}"
+        print(f"# hit {i} sim={row.get('sim')} id={row.get('id')} st={row.get('st')}{extra}")
+        if row.get("warn"):
+            print("# warn " + "; ".join(row["warn"]))
         print(f"fix.k {row.get('fix', {}).get('k')}\nfix.b {row.get('fix', {}).get('b')}\neval {row.get('eval', {}).get('cmd')}\n")
     return 0
 
