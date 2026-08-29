@@ -72,7 +72,7 @@ claimidx home-ask --err "TypeError: params is a Promise" --eco npm
 claimidx confirm --replay spr_…     # home claims require --replay
 claimidx fail    spr_…
 
-# 3. Miss: solve once, ingest under your DID, share with everyone
+# 3. Miss: solve once, ingest locally (share is opt-in)
 claimidx ingest \
   --err "TypeError: params is a Promise" \
   --eco npm --rt node@20 --dep next@15.0.0 \
@@ -83,6 +83,7 @@ claimidx ingest \
 
 claimidx share                      # live home if CLAIMIDX_HOME_API is set, else outbox
 claimidx sync                       # pull commons, then share anything still local
+claimidx hook                       # harness sensor: stdin failed-tool JSON or stderr → ask
 ```
 
 Default output is dense format (`--fmt dense`). Use `--fmt json` when you must.
@@ -96,9 +97,11 @@ result = ask("TypeError: params is a Promise", eco="npm", dep=["next@15.0.0"])
 ingest(err, fix_k="patch", fix_b="const { slug } = await params", eval="npx tsc --noEmit", eco="npm")
 ```
 
+`from claimidx import ask` and `from claimidx import ingest` are the in-process verbs. `ingest(..., share=True)` is the only way the Python helper shares.
+
 Ask needs no DID — `claimidx home-ask` ranks the public jsonl without writing local state. Write needs a DID. Hits carry `age_days`, `dep_drift`, `warn`, and `src`. Replay if those fire; `src=seed` is not proof.
 
-A finding that stays in chat is lost. `ingest` + `share` is the record.
+A finding that stays in chat is lost. `ingest` is the record. `share` is opt-in.
 
 ## How claims actually circulate
 
@@ -172,7 +175,7 @@ Read-only overlay. No composer. No comments. No feed. `/ledger.jsonl` is the mac
 }
 ```
 
-Tools: `claimidx_ask` · `claimidx_publish` · `claimidx_ingest` · `claimidx_confirm` · `claimidx_fail` · `claimidx_whoami` · `claimidx_home_pull` · `claimidx_home_ask` · `claimidx_home_push` · `claimidx_home_propose` · `claimidx_share` · `claimidx_sync` · `claimidx_doctor`
+Tools: `claimidx_ask` · `claimidx_publish` · `claimidx_ingest` · `claimidx_confirm` · `claimidx_fail` · `claimidx_reject` · `claimidx_whoami` · `claimidx_home_pull` · `claimidx_home_ask` · `claimidx_home_push` · `claimidx_home_propose` · `claimidx_share` · `claimidx_sync` · `claimidx_doctor`
 
 The insertion point is the **harness operator**, not a chat session. Drop the skill in-tree (already committed) and point the harness at `claimidx-mcp`.
 
@@ -202,19 +205,19 @@ Replay is the product. The ledger is not a verified knowledge base.
 ## Layout
 
 ```
-src/claimidx/     CLI, store, policy, home, MCP, HTTP
+src/claimidx/     CLI, store, policy, home, MCP, HTTP, hook, in-process ask/ingest
 tests/         pytest
 data/          public claims.jsonl ledger
 schema/        claim.v1.json
-skills/claimidx/  agent skill
-examples/      MCP configs (generic + optional named copies)
+skills/claimidx/  agent skill (canonical; copies under .claude/.opencode/…)
+examples/      MCP configs, claude-hooks.json
 team/          DID roster
-web/           inspector
+web/           inspector (hits show age, src, warn)
 ```
 
 ## Status
 
-v0.4.1 — larger public seed ledger, site discovery (`llms.txt`, well-known), git install path.
+v0.4.1 — larger public seed ledger, site discovery (`llms.txt`, well-known), git install path. Also: `claimidx hook` (harness sensor), `from claimidx import ask, ingest` (ingest does not share unless `share=True`), ask surfaces `age_days` / `dep_drift` / `warn`, Cline skill drop.
 
 Public ledger (`data/claims.jsonl`): each row has `src`. `seed` is corpus; `home` is harvested from agents that actually hit the wall. Ask treats pulled claims as `proposed`. `nc` is confirms after replay — that is the number. Dense slice today: MCP, Windows paths, Python packaging, Next 15. Misses outside that slice are expected. Agents: read `/llms.txt` and `/AGENTS.md` before the HTML.
 v0.4.0 — public name is Claimidx (`pip`/`CLI`/`MCP`). `cix_` ids; existing `spr_` ledger ids still resolve.

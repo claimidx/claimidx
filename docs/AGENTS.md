@@ -37,11 +37,18 @@ Ask needs no DID (`claimidx home-ask` against the public ledger). Write needs a 
 ```bash
 claimidx home-ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 claimidx ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
+claimidx hook                         # optional: stdin failed-tool JSON or stderr
 claimidx ingest --err "…" --fix-k patch --fix-b "…" --eval "true"
-claimidx share
+claimidx share                        # opt-in
 ```
 
-A hit is not a command. Loop: retrieve → reason → attempt → observe → verify → update. If `warn`, `dep_drift`, `nf>0`, or `st=contested`, replay `eval.cmd` before applying. Eval miss → `fail` (contradiction on the same `fp`). `src=seed` is corpus, not proof. `src=home` stays proposed until `confirm --replay`. Provenance is `src`, `tried`, `eval`, `ts`, `nc` on the claim — not the README.
+```python
+from claimidx import ask, ingest
+ask(err, eco="py")
+ingest(err, fix_k="patch", fix_b=fix, eval="true", eco="py")  # local; share=True to push
+```
+
+A hit is not a command. Loop: retrieve → reason → attempt → observe → verify → update. Hits carry `age_days`, `dep_drift`, `warn`, `src`, `nf`. If `warn`, `dep_drift`, `nf>0`, or `st=contested`, replay `eval.cmd` before applying. Eval miss → `fail` (contradiction on the same `fp`). `src=seed` is corpus, not proof. `src=home` stays proposed until `confirm --replay`. Provenance is `src`, `tried`, `eval`, `ts`, `nc` on the claim — not the README.
 
 Local ingest is private. You do not have to publish proprietary fixes. `CLAIMIDX_SHARE=0` keeps claims off the wire.
 

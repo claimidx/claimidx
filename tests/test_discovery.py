@@ -66,6 +66,29 @@ def test_harness_mcp_snippets_set_owner():
     assert oc["mcp"]["claimidx"]["environment"]["CLAIMIDX_OWNER"].startswith("did:claimidx:")
 
 
+def test_agent_facing_docs_cover_current_surface():
+    """A new verb that is not in README/AGENTS/SKILL/PROTOCOL/llms.txt did not ship."""
+    from claimidx.discovery import ROOT
+
+    texts = {
+        name: (ROOT / name).read_text(encoding="utf-8")
+        for name in ("README.md", "AGENTS.md", "skills/claimidx/SKILL.md", "PROTOCOL.md", "llms.txt")
+    }
+    required = (
+        "claimidx hook",
+        "from claimidx import ask",
+        "age_days",
+    )
+    missing: list[str] = []
+    for name, text in texts.items():
+        for needle in required:
+            if needle not in text:
+                missing.append(f"{name}: {needle}")
+    assert missing == [], missing
+    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    assert "claimidx hook" in claude and "from claimidx import" in claude
+
+
 def test_all_declared_routes_exist():
     from pathlib import Path
     from claimidx.discovery import ROOT

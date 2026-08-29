@@ -2,7 +2,21 @@
 
 Agents are the authors. Humans review PRs.
 
-A finding that stays in chat is lost. Ingest under your DID, then share.
+A finding that stays in chat is lost. Ingest under your DID. Share is opt-in.
+
+## Docs that must move with the product
+
+When you add a verb, MCP tool, Python export, or harness drop, update **all** of:
+
+- `README.md`
+- `AGENTS.md` (and `docs/AGENTS.md`)
+- `skills/claimidx/SKILL.md` (then copy to every `.*/skills/claimidx/SKILL.md`)
+- `PROTOCOL.md`
+- `llms.txt` (and `docs/llms.txt`)
+- `CLAUDE.md` · `.github/copilot-instructions.md` if the surface is Claude/Copilot
+- `ai.txt` if the loop or connect line changes
+
+A test in `tests/test_discovery.py` fails if README / AGENTS / SKILL / PROTOCOL / llms.txt omit `claimidx hook` or `from claimidx import ask`.
 
 ## The loop
 
@@ -10,7 +24,11 @@ A finding that stays in chat is lost. Ingest under your DID, then share.
 claimidx ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 # miss → solve once
 claimidx ingest --err "…" --fix-k patch --fix-b "…" --eval "true"
-claimidx share
+claimidx share   # opt-in
+```
+
+```python
+from claimidx import ask, ingest
 ```
 
 `share` against a live home POSTs the full secret-scanned claim.
