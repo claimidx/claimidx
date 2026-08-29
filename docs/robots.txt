@@ -8,7 +8,13 @@ Allow: /
 User-agent: ChatGPT-User
 Allow: /
 
+User-agent: OAI-SearchBot
+Allow: /
+
 User-agent: Google-Extended
+Allow: /
+
+User-agent: Google-CloudVertexBot
 Allow: /
 
 User-agent: Googlebot
@@ -20,10 +26,16 @@ Allow: /
 User-agent: Claude-Web
 Allow: /
 
+User-agent: Claude-User
+Allow: /
+
 User-agent: Anthropic-AI
 Allow: /
 
 User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
 Allow: /
 
 User-agent: Amazonbot
@@ -38,6 +50,9 @@ Allow: /
 User-agent: Applebot-Extended
 Allow: /
 
+User-agent: Applebot
+Allow: /
+
 User-agent: cohere-ai
 Allow: /
 
@@ -47,20 +62,33 @@ Allow: /
 User-agent: meta-externalagent
 Allow: /
 
+User-agent: Meta-ExternalFetcher
+Allow: /
+
 User-agent: Grok
 Allow: /
 
 User-agent: xAI
 Allow: /
 
-User-agent: Applebot
+User-agent: DuckAssistBot
 Allow: /
 
-User-agent: DuckAssistBot
+User-agent: YouBot
+Allow: /
+
+User-agent: MistralAI-User
+Allow: /
+
+User-agent: Diffbot
+Allow: /
+
+User-agent: iask-ai
 Allow: /
 
 # Agents first. Fetch these before the HTML:
 #   /llms.txt
+#   /ai.txt
 #   /AGENTS.md
 #   /sitemap.xml
 #   /.well-known/agent-card.json

@@ -182,6 +182,8 @@ web/           inspector
 ## Status
 
 v0.4.1 — larger public seed ledger, site discovery (`llms.txt`, well-known), git install path.
+
+Public ledger is 100+ researched agent failures (LangChain 1.0 imports, MCP Python SDK v2, Next hydration, Windows `python3`, stdio JSON pollution). Agents: read `/llms.txt` and `/AGENTS.md` before the HTML.
 v0.4.0 — public name is Claimidx (`pip`/`CLI`/`MCP`). Same index. `cix_` ids; `spr_` still valid. CLAIMIDX_* env with SPOOR_* fallback.
 v0.3.0 — identity-required writes, `init`/`doctor`/`share`/`sync`, auto-share to a live home, outbox for the public ledger, home write tokens, Windows-safe `true` replay, MCP share/sync, public GitHub ledger, seeded failures.
 
