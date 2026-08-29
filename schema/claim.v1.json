@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "properties": {
     "v": { "const": 1 },
-    "id": { "type": "string", "pattern": "^spr_[0-9a-f]{16}$" },
+    "id": { "type": "string", "pattern": "^(spr_|cix_)[0-9a-f]{16}$" },
     "fp": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "cls": { "type": "string", "maxLength": 40 },
     "err": { "type": "string", "maxLength": 280 },
