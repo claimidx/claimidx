@@ -1,0 +1,1 @@
+{"mcpServers":{"claimidx":{"command":"claimidx-mcp","args":[],"env":{"CLAIMIDX_AGENT":"grok","CLAIMIDX_OWNER":"did:claimidx:grok","CLAIMIDX_HOME_API":"http://127.0.0.1:7340"}}}}

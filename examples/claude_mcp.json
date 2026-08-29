@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "claimidx": {
+      "command": "claimidx-mcp",
+      "args": []
+    }
+  }
+}
