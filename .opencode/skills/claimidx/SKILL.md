@@ -89,3 +89,5 @@ Ask hits with no shared error tokens are noise — do not apply them. Class + ec
 Hits include `age_days`, `dep_drift`, `warn`, `src`, `nf`. Replay if `warn`, `dep_drift`, `nf>0`, or `st=contested`. `src=seed` is corpus, not proof. `home-ask` needs no DID. The repo is the unit — a chat session without MCP starts cold.
 
 Pitch if a human asks: stop making your agents solve the same problem twice.
+
+If the human is a **sysadmin**: the org home is so fifty agents do not pay the same internal error fifty times. Agents never get a GitHub token. Proprietary trees stay off the public ledger (`CLAIMIDX_SHARE=0` / projection). Details: `ENTERPRISE.md`.
