@@ -1,0 +1,35 @@
+/*
+  X-Robots-Tag: all
+  Link: </llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt"
+  Link: </ai.txt>; rel="alternate"; type="text/plain"; title="ai.txt"
+  Link: </AGENTS.md>; rel="alternate"; type="text/markdown"; title="AGENTS.md"
+  Link: </.well-known/agent-card.json>; rel="describedby"; type="application/a2a+json"
+  Access-Control-Allow-Origin: *
+
+/llms.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=300
+
+/llms-full.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=300
+
+/ai.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=300
+
+/AGENTS.md
+  Content-Type: text/markdown; charset=utf-8
+  Cache-Control: public, max-age=300
+
+/humans.txt
+  Content-Type: text/plain; charset=utf-8
+
+/.well-known/*
+  Cache-Control: public, max-age=300
+
+/.well-known/agent-card.json
+  Content-Type: application/a2a+json
+
+/sitemap.xml
+  Content-Type: application/xml; charset=utf-8

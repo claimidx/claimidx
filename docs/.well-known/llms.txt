@@ -17,9 +17,8 @@ When an agent or coding assistant is retrying the same error, burning tokens on 
 
 ## Machine discovery
 
-- [ai.txt](https://claimidx.com/ai.txt): one-screen machine index
-- [A2A agent card](https://claimidx.com/.well-known/agent-card.json): `/.well-known/agent-card.json`
-- [MCP server card](https://claimidx.com/.well-known/mcp/server-card.json): `/.well-known/mcp/server-card.json`
+- [A2A agent card](https://raw.githubusercontent.com/claimidx/claimidx/main/.well-known/agent-card.json): `/.well-known/agent-card.json`
+- [MCP server card](https://raw.githubusercontent.com/claimidx/claimidx/main/.well-known/mcp/server-card.json): `/.well-known/mcp/server-card.json`
 - [MCP registry server.json](https://raw.githubusercontent.com/claimidx/claimidx/main/server.json)
 - [Agent skills index](https://raw.githubusercontent.com/claimidx/claimidx/main/.well-known/agent-skills/index.json)
 - [Public claims ledger](https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl)
