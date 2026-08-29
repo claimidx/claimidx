@@ -2,6 +2,44 @@
 
 Claimidx is not a chatbot. It is a **private claim index** your agents write into under DIDs, plus an optional public commons. The sales object is a **home**: one process every agent in the org points at.
 
+## What we sell (decisions)
+
+These are product decisions, not a pitch deck.
+
+**Do not sell queries.** `ask` / `home-ask` / `from claimidx import ask` stay free and local. If ask costs money, agents will not call it, the ledger dies, and there is no enterprise to sell.
+
+**Sell the home.** An org pays for a private index their agents write into: identity, tokens, audit, quarantine, no public leak. That is the thing procurement can point at. SKUs:
+
+| SKU | who runs it | who pays for | when |
+|---|---|---|---|
+| Commons | nobody (GitHub jsonl) | $0 | always; distribution |
+| Cloud home | Claimidx hosts | per org, includes N agent DIDs | default enterprise |
+| Self-host home | buyer, in their VPC | license + support, data stays on their disk | regulated / residency |
+
+Cloud is the default yes: host it. Self-host is the expensive yes: they already can `claimidx serve`; you sell SSO-mapping-to-DID, backups, upgrades, and a phone number. Do not invent a third product (badges, bounties, per-token dashboards).
+
+**Price the org, not the retry.** Meter `events` (publish/share/confirm) and agent DIDs for capacity, but the contract is “one home for Acme’s agents,” not “$0.002 per ask.” Ask must stay cheaper than a model retry or the product is a tax.
+
+**Apache-2.0 stays.** Someone can run the code. That is the adoption engine (harnesses, Claude hunters, Grok hunters). What they cannot take:
+
+- the name and site (`Claimidx`, claimidx.com) — trademark this
+- the canonical public ledger agents already `home-ask`
+- operated Cloud (uptime, tokens, support)
+- the private-home split (full record inside; projection outside)
+
+Do not relicense to AGPL to “stop theft.” Agent runtimes will not embed AGPL by default; you would kill the flywheel to protect a CLI they can already clone. Dual-license later only if a funded competitor is shipping your home as their cloud under your name. Until then: trademark + being the canonical ledger + hosting.
+
+**What not to sell yet:** SSO/SAML (map IdP → DID, not a new identity product), multi-tenant-in-one-sqlite (one home per tenant), crypto, impact-score social.
+
+## Next steps (in order)
+
+1. Trademark **Claimidx** / claimidx.com. The license does not protect the name.
+2. Cloud home MVP: HTTPS `claimidx serve`, persistent sqlite, `claimidx token new`, backups, one tenant = one home. No Stripe in-tree until the loop in the proof pack holds for a paying org.
+3. Contract: per-org home + N DIDs. Public commons remains free. Buyer never required to project to GitHub.
+4. SSO after the first buyer asks. Until then Bearer + DID is the honest gate.
+
+If the second agent in the proof pack does not get a hit it did not publish, do not take money.
+
 That is how you stop knowledge fragmentation: the same `ModuleNotFoundError` is not paid twice in two teams. Federation is `GET /ledger.jsonl` between homes, not a knowledge graph. Replay stays local. There is no agent trust-tier product. Buyers do not have to publish to the public ledger — local and home are enough. Set `CLAIMIDX_SHARE=0` if ingest must stay off the wire. That private home *is* the enterprise registry: internal agents learn from each other’s failures without shipping trees to the commons.
 
 ## What the buyer gets
@@ -58,8 +96,8 @@ The **public commons** (`home-propose` / outbox PR against `data/claims.jsonl`) 
 | SSO / SAML | not yet. DID + issued Bearer is the gate. SSO maps to DID issuance. |
 | Multi-tenant orgs in one process | run one home per tenant, or prefix DIDs (`did:claimidx:acme:harper`) |
 | SLA / HA | SQLite file + a reverse proxy. Put the db on persistent disk. |
-| Hosted cloud | you run the home. Public GitHub ledger is the open commons, not the product. |
-| Billing | meter `events` (publish/share) per DID. No stripe hook in-tree. |
+| Hosted cloud | **yes, that is the default SKU.** One tenant = one `claimidx serve` + sqlite + tokens. Self-host remains for residency. |
+| Billing | per org home + N DIDs. Meter `events` (publish/share/confirm) for capacity. **Do not bill ask.** No stripe hook in-tree until a buyer exists. |
 | Data residency | the db is a file the buyer holds. |
 
 ## Security story for procurement
