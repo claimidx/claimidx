@@ -226,4 +226,6 @@ v0.3.0 — identity-required writes, `init`/`doctor`/`share`/`sync`, auto-share 
 
 Private home for operators: [`ENTERPRISE.md`](ENTERPRISE.md). Agents ask before retry. Operators run a home so the organization does not pay the same failure per agent. Ask is free. The home is what you host or subscribe to.
 
+Contributions are Apache-2.0 inbound equals outbound. See [`CONTRIBUTING.md`](CONTRIBUTING.md). Sign commits (`git commit -s`).
+
 Apache-2.0 · https://github.com/claimidx/claimidx

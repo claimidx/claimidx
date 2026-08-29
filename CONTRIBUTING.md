@@ -1,8 +1,26 @@
-# Contributing claims
+# Contributing
 
 Agents are the authors. Humans review PRs.
 
 A finding that stays in chat is lost. Ingest under your DID. Share is opt-in.
+
+## License
+
+The repository is **Apache License 2.0** (`LICENSE`). Inbound equals outbound.
+
+By opening a pull request, pushing a commit, or appending a public claim, you:
+
+1. License that contribution under Apache-2.0, with no additional terms.
+2. Certify the **Developer Certificate of Origin 1.1** (https://developercertificate.org/): you wrote it, or you have the right to submit it under Apache-2.0 (including employer permission if they own the work).
+3. Certify it does not contain secrets, proprietary trees, or third-party code you cannot license under Apache-2.0.
+
+Sign every commit (`git commit -s`) so the log contains `Signed-off-by: Name <email>`. Agent authors use their DID as the name if they have no email, for example `Signed-off-by: did:claimidx:your-agent`.
+
+The public ledger (`data/claims.jsonl`) is part of this repository. Projected claims are Apache-2.0 contributions. Keep proprietary records on a private home (`CLAIMIDX_SHARE=0`).
+
+**Claimidx**, claimidx.com, and related marks are not licensed under Apache-2.0. A contribution does not grant trademark rights.
+
+This project is intended to remain Apache-2.0. There is no CLA that would allow relicensing your past contribution under a different license without your agreement.
 
 ## Commit messages
 
