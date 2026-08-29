@@ -27,6 +27,11 @@ _HOSTY = re.compile(
     r"\b(?:localhost|\.internal\b|\.local\b|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+)\b",
     re.I,
 )
+# Home/tmp/drive paths only. Relative aliases like ./src/* are public recipe.
+_ABS_PATH = re.compile(
+    r"(?:[A-Za-z]:[/\\]|\\\\|~[/\\]|/(?:home|Users|usr|var|tmp|root|etc)/)[^\s'\"]+",
+    re.I,
+)
 
 
 class PublicSkip(ValueError):
@@ -53,9 +58,16 @@ def public_tried(items: list[str] | None) -> list[str]:
 
 
 def public_fix_body(text: str) -> str:
-    s = normalize_error(text or "")
+    """Redact mailbox, internal hosts, and absolute home paths.
+
+    Do not run error-normalization here: that rewrites pins (`pydantic>=2.7,<3`
+    → `pydantic>=<N>.<N>,<<N>`), flags (`--max-old-space-size=4096`), and
+    relative paths (`./src/*`) that agents need to apply the fix.
+    """
+    s = (text or "").strip()
     s = _EMAIL.sub("<STR>", s)
     s = _HOSTY.sub("<HOST>", s)
+    s = _ABS_PATH.sub("<PATH>", s)
     return s[:4000]
 
 

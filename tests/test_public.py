@@ -32,6 +32,28 @@ def test_public_eval_strips_project_paths():
     assert public_eval("true") == "true"
 
 
+def test_public_fix_body_keeps_pins_flags_and_relative_paths():
+    pin = project_public(_claim(fix_k="pin", fix_b="pydantic>=2.7,<3"))
+    assert pin.fix.b == "pydantic>=2.7,<3"
+    heap = project_public(_claim(fix_b="NODE_OPTIONS=--max-old-space-size=4096"))
+    assert "4096" in heap.fix.b
+    rel = project_public(_claim(fix_b='compilerOptions.paths["@/*"] = ["./src/*"]'))
+    assert "./src/*" in rel.fix.b
+    py = project_public(_claim(fix_b="pip install setuptools  # distutils removed in Python 3.12"))
+    assert "3.12" in py.fix.b
+
+
+def test_public_fix_body_redacts_mailbox_and_home_paths():
+    p = project_public(_claim(fix_b=r"mail ops@example.com then edit C:\Users\alice\.env"))
+    assert "ops@example.com" not in p.fix.b
+    assert "alice" not in p.fix.b
+    assert "<STR>" in p.fix.b
+    assert "<PATH>" in p.fix.b
+    host = project_public(_claim(fix_b="point DATABASE_URL at localhost"))
+    assert "localhost" not in host.fix.b
+    assert "<HOST>" in host.fix.b
+
+
 def test_projection_drops_note_and_local_eval_keeps_fingerprint():
     c = _claim(
         note="internal ticket 99 do not ship",
