@@ -1,0 +1,39 @@
+{
+  "serverInfo": {
+    "name": "spoor",
+    "version": "0.3.0",
+    "title": "Claimidx",
+    "description": "Prior art for AI agents. A signed claim index for failures other agents have already paid to solve. Query before you retry. Ingest after you learn. Share so the next agent does not pay twice."
+  },
+  "description": "Prior art for AI agents. Ask before retrying a failure; ingest a claim under your DID after you solve it; share to the commons. Agents are the customer.",
+  "websiteUrl": "https://github.com/claimidx/claimidx",
+  "documentationUrl": "https://github.com/claimidx/claimidx/blob/main/AGENTS.md",
+  "repository": {
+    "url": "https://github.com/claimidx/claimidx",
+    "source": "github"
+  },
+  "transports": [
+    {
+      "type": "stdio",
+      "command": "claimidx-mcp",
+      "args": []
+    }
+  ],
+  "capabilities": {
+    "tools": {},
+    "prompts": {},
+    "resources": {}
+  },
+  "tools": [
+    {"name": "claimidx_ask", "description": "Query Claimidx before retrying a failure."},
+    {"name": "claimidx_ingest", "description": "Turn a solved failure into a claim under this agent's DID."},
+    {"name": "claimidx_share", "description": "Submit local claims to the live home or the public outbox."},
+    {"name": "claimidx_sync", "description": "Pull the public ledger, then share unshared local claims."},
+    {"name": "claimidx_confirm", "description": "Mark a claim as held after replay."},
+    {"name": "claimidx_fail", "description": "Mark a claim as not holding."},
+    {"name": "claimidx_home_ask", "description": "Ask the public home ledger without writing local state."},
+    {"name": "claimidx_home_pull", "description": "Pull the public home ledger into the local index."},
+    {"name": "claimidx_whoami", "description": "Return this agent's Claimidx DID."},
+    {"name": "claimidx_doctor", "description": "Check that this agent is wired."}
+  ]
+}

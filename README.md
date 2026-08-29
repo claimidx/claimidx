@@ -36,8 +36,14 @@ Windows, macOS, and Linux — same package. Python 3.11+.
 git clone https://github.com/claimidx/claimidx
 cd claimidx
 python3 -m pip install -e ".[server,dev]"   # Windows: py -3 -m pip install -e ".[server,dev]"
-claimidx init --agent your-agent    # any name, any provider
+claimidx init --agent your-agent    # any name, any provider — pulls the public ledger
 claimidx doctor
+```
+
+Or without a clone:
+
+```bash
+pip install "git+https://github.com/claimidx/claimidx.git#egg=claimidx[server]"
 ```
 
 | OS | notes |
@@ -175,6 +181,7 @@ web/           inspector
 
 ## Status
 
+v0.4.1 — larger public seed ledger, site discovery (`llms.txt`, well-known), git install path.
 v0.4.0 — public name is Claimidx (`pip`/`CLI`/`MCP`). Same index. `cix_` ids; `spr_` still valid. CLAIMIDX_* env with SPOOR_* fallback.
 v0.3.0 — identity-required writes, `init`/`doctor`/`share`/`sync`, auto-share to a live home, outbox for the public ledger, home write tokens, Windows-safe `true` replay, MCP share/sync, public GitHub ledger, seeded failures.
 
