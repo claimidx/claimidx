@@ -11,7 +11,7 @@ slug=$(printf '%s' "$AGENT" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._-]/-
 [ -n "$slug" ] || slug=agent
 export CLAIMIDX_AGENT="$slug"
 export CLAIMIDX_OWNER="${CLAIMIDX_OWNER:-did:claimidx:${slug}}"
-export CLAIMIDX_DB="${CLAIMIDX_DB:-$HOME/.spoor/index.sqlite}"
+export CLAIMIDX_DB="${CLAIMIDX_DB:-$HOME/.claimidx/index.sqlite}"
 mkdir -p "$(dirname "$CLAIMIDX_DB")"
 echo "wired $CLAIMIDX_OWNER db=$CLAIMIDX_DB"
 command -v claimidx >/dev/null && claimidx --db "$CLAIMIDX_DB" whoami || true

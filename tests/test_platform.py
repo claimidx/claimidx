@@ -55,15 +55,11 @@ def test_config_and_db_live_under_home(tmp_path, monkeypatch):
     from claimidx.store import DEFAULT_DB
 
     monkeypatch.delenv("CLAIMIDX_CONFIG", raising=False)
-    monkeypatch.delenv("SPOOR_CONFIG", raising=False)
     path = config_path()
     assert path.name == "config.json"
-    assert path.parts[-2] in (".claimidx", ".spoor")
-    # .spoor is only a fallback when that file already exists on the machine.
-    if not (Path.home() / ".spoor" / "config.json").exists():
-        assert path.parts[-2] == ".claimidx"
+    assert path.parts[-2] == ".claimidx"
     assert DEFAULT_DB.name == "index.sqlite"
-    assert DEFAULT_DB.parts[-2] in (".claimidx", ".spoor")
+    assert DEFAULT_DB.parts[-2] == ".claimidx"
     if os.name == "nt":
         assert "\\" in str(DEFAULT_DB) or DEFAULT_DB.drive
     else:

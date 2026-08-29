@@ -41,10 +41,10 @@ def did_for_agent(name: str) -> str:
 def resolve_owner(explicit: str | None = None) -> str:
     if explicit:
         return explicit.strip()
-    env = (os.environ.get("CLAIMIDX_OWNER") or os.environ.get("SPOOR_OWNER") or "").strip()
+    env = (os.environ.get("CLAIMIDX_OWNER") or "").strip()
     if env:
         return env
-    name = (os.environ.get("CLAIMIDX_AGENT") or os.environ.get("SPOOR_AGENT") or "").strip()
+    name = (os.environ.get("CLAIMIDX_AGENT") or "").strip()
     if name:
         return did_for_agent(name)
     try:
@@ -66,15 +66,15 @@ def whoami(explicit: str | None = None) -> dict:
     listed = next((k for k, v in ROSTER.items() if v["did"] == did), None)
     rec = ROSTER.get(listed or "", {})
     agent = listed or agent_slug(did.split(":")[-1] if ":" in did else did)
-    valid = bool(did) and did.startswith("did:") and did not in ("did:claimidx:anon", "did:spoor:anon", "anon")
+    valid = bool(did) and did.startswith("did:") and did not in ("did:claimidx:anon", "anon")
     return {
         "did": did,
         "agent": agent,
         "role": rec.get("role") or "agent",
         "listed": listed is not None,
         "wired": valid,
-        "env_owner": os.environ.get("CLAIMIDX_OWNER") or os.environ.get("SPOOR_OWNER") or "",
-        "env_agent": os.environ.get("CLAIMIDX_AGENT") or os.environ.get("SPOOR_AGENT") or "",
+        "env_owner": os.environ.get("CLAIMIDX_OWNER") or "",
+        "env_agent": os.environ.get("CLAIMIDX_AGENT") or "",
     }
 
 

@@ -1,7 +1,4 @@
-"""User config at ~/.claimidx/config.json. Env vars always win.
-
-CLAIMIDX_* is canonical. SPOOR_* is still read so existing homes keep working.
-"""
+"""User config at ~/.claimidx/config.json. Env vars always win."""
 
 from __future__ import annotations
 
@@ -11,25 +8,21 @@ from pathlib import Path
 from typing import Any
 
 ENV = {
-    "owner": ("CLAIMIDX_OWNER", "SPOOR_OWNER"),
-    "agent": ("CLAIMIDX_AGENT", "SPOOR_AGENT"),
-    "home": ("CLAIMIDX_HOME", "SPOOR_HOME"),
-    "home_api": ("CLAIMIDX_HOME_API", "SPOOR_HOME_API"),
-    "home_token": ("CLAIMIDX_HOME_TOKEN", "SPOOR_HOME_TOKEN"),
-    "org": ("CLAIMIDX_ORG", "SPOOR_ORG"),
-    "share": ("CLAIMIDX_SHARE", "SPOOR_SHARE"),
+    "owner": ("CLAIMIDX_OWNER",),
+    "agent": ("CLAIMIDX_AGENT",),
+    "home": ("CLAIMIDX_HOME",),
+    "home_api": ("CLAIMIDX_HOME_API",),
+    "home_token": ("CLAIMIDX_HOME_TOKEN",),
+    "org": ("CLAIMIDX_ORG",),
+    "share": ("CLAIMIDX_SHARE",),
 }
 
 
 def config_path() -> Path:
-    override = os.environ.get("CLAIMIDX_CONFIG") or os.environ.get("SPOOR_CONFIG")
+    override = os.environ.get("CLAIMIDX_CONFIG")
     if override:
         return Path(override)
-    modern = Path.home() / ".claimidx" / "config.json"
-    legacy = Path.home() / ".spoor" / "config.json"
-    if modern.exists() or not legacy.exists():
-        return modern
-    return legacy
+    return Path.home() / ".claimidx" / "config.json"
 
 
 def load() -> dict[str, Any]:

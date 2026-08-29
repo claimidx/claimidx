@@ -17,7 +17,7 @@ from .team import activity, load_roster, resolve_owner, whoami
 
 
 def _db_path(ns: argparse.Namespace) -> str:
-    return ns.db or os.environ.get("CLAIMIDX_DB") or os.environ.get("SPOOR_DB") or str(DEFAULT_DB)
+    return ns.db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)
 
 
 def _store(ns: argparse.Namespace) -> Store:

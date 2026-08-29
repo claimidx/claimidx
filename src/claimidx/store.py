@@ -8,11 +8,7 @@ from .models import Claim, utcnow
 
 
 def _default_db() -> Path:
-    modern = Path.home() / ".claimidx" / "index.sqlite"
-    legacy = Path.home() / ".spoor" / "index.sqlite"
-    if modern.exists() or not legacy.exists():
-        return modern
-    return legacy
+    return Path.home() / ".claimidx" / "index.sqlite"
 
 
 DEFAULT_DB = _default_db()

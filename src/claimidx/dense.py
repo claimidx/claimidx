@@ -42,7 +42,7 @@ def encode(c: Claim) -> str:
 
 def decode(text: str) -> Claim:
     head = text.splitlines()[0] if text else ""
-    if head not in ("CLAIMIDX 1", "SPOOR 1"):
+    if head not in ("CLAIMIDX 1", "SPOOR 1"):  # SPOOR 1: pre-rename dense header on existing claims
         raise ValueError("not a Claimidx dense document")
     kv: dict[str, str] = {}
     for line in text.splitlines()[1:]:

@@ -98,7 +98,7 @@
       const err = $("err").value.trim(); const out = $("out");
       if (!err) {
         const claims = await fetch("/api/claims?limit=20").then(r => r.json());
-        out.innerHTML = claims.length ? claims.map(card).join("") : '<div class="empty">index empty. run <code>spoor seed</code>.</div>';
+        out.innerHTML = claims.length ? claims.map(card).join("") : '<div class="empty">index empty. run <code>claimidx seed</code>.</div>';
         return;
       }
       const dep = $("dep").value.split(",").map(s => s.trim()).filter(Boolean);

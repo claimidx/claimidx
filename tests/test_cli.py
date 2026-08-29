@@ -32,7 +32,7 @@ def test_scan_does_not_require_identity(tmp_path: Path, capsys, monkeypatch):
     assert '"ok": true' in out
 
 
-def test_spoor_db_env(tmp_path: Path, capsys, monkeypatch):
+def test_claimidx_db_env(tmp_path: Path, capsys, monkeypatch):
     db = tmp_path / "from-env.sqlite"
     monkeypatch.setenv("CLAIMIDX_DB", str(db))
     assert main(["--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'envdb'", "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install envdb", "--eval", "true"]) == 0

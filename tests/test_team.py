@@ -13,14 +13,12 @@ def test_resolve_owner_env(monkeypatch):
 
 def test_resolve_owner_agent_name(monkeypatch):
     monkeypatch.delenv("CLAIMIDX_OWNER", raising=False)
-    monkeypatch.delenv("SPOOR_OWNER", raising=False)
     monkeypatch.setenv("CLAIMIDX_AGENT", "lucas")
     assert resolve_owner() == "did:claimidx:lucas"
 
 
 def test_any_agent_any_provider_is_wired(monkeypatch):
     monkeypatch.delenv("CLAIMIDX_OWNER", raising=False)
-    monkeypatch.delenv("SPOOR_OWNER", raising=False)
     monkeypatch.setenv("CLAIMIDX_AGENT", "Codex CLI")
     assert resolve_owner() == "did:claimidx:codex-cli"
     me = whoami()

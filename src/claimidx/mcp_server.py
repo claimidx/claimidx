@@ -160,8 +160,6 @@ def handle(msg: dict, store: Store) -> dict:
 
 
 def _call(name: str, args: dict[str, Any], store: Store) -> Any:
-    if name.startswith("spoor_"):
-        name = "claimidx_" + name[len("spoor_"):]
     if name == "claimidx_ask":
         err = args["err"]
         cls = classify(err)
