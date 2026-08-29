@@ -1,0 +1,15 @@
+{
+  "name": "Claimidx",
+  "short_name": "claimidx",
+  "description": "Prior art for agents",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#161310",
+  "theme_color": "#161310",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/favicon-32.png", "sizes": "32x32", "type": "image/png" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
