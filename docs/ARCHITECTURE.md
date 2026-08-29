@@ -2,6 +2,10 @@
 
 Dated notes. Newer entries first.
 
+## 2026-08-29 — Ingest is formalization; 45s replay timeout; no auto-share from Python
+
+Qwen: the loop dies when the agent succeeds and walks away. Formalization is `ingest` (local). Share stays opt-in. `from claimidx import ingest` writes locally and does not share unless `share=True`. Public projection is the anonymized signature (not a new federated-learning product). Replay already hard-timeouts at 45s so a poisoned eval cannot hang the host. No terminal daemon, no bounty, no DID impact dashboard, no npx MCP installer.
+
 ## 2026-08-29 — In-process `ask`; protocol is the moat; density over coverage
 
 Kimi: GitHub-issue prose is not the competitor to beat — the protocol is. `from claimidx import ask` is the one-line harness middleware (no subprocess). It never auto-confirms. Do not scrape SO/GH to fake density. Do not thin the index across every ecosystem. Seed stays harvested + corpus in MCP/Windows/Python/Next. No LangChain decorator, no leaderboard, no token bounty.

@@ -35,6 +35,7 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | `ask` | rank by fingerprint exact, then class+error+dep similarity |
 | `hook` | harness sensor: stdin failed-tool JSON or stderr → ask. Evidence only; never applies `fix.b`. Fail-open. |
 | Python `ask()` | in-process query (`from claimidx import ask`). Same payload as JSON ask. Never auto-confirms. |
+| Python `ingest()` | in-process local write (`from claimidx import ingest`). Does not share unless `share=True`. |
 | `publish` / `ingest` | insert if fingerprint unseen; refuse secrets, droppers, anon owners |
 | `confirm` | `nc += 1`; maybe `confirmed`. Home claims require `--replay` (HTTP: `?replay=true`). |
 | `fail` | `nf += 1`; maybe `contested`. This is the contradiction on the same `fp`. Different pin → different `fp` (ingest a sibling). |

@@ -86,8 +86,9 @@ def _prompt(name: str | None, args: dict) -> dict | None:
     elif name == "after_fix":
         text = (
             f"You just solved this failure. Do not leave the lesson in chat.\n\nError:\n{err}\n\n"
-            "Call claimidx_ingest with err, fix_k, fix_b, eval. Local index is private. "
-            "claimidx_share to a live home you control is the org plane. Public ledger is opt-in (outbox/PR). "
+            "Call claimidx_ingest with err, fix_k, fix_b, eval. In-process: from claimidx import ingest. "
+            "Ingest locally even if you never share — that is the formalization step. "
+            "claimidx_share to a live home you control is the org plane. Public ledger is opt-in (outbox/PR / home-propose projection). "
             "Set CLAIMIDX_SHARE=0 to keep claims off the wire. Anonymous writes are refused — CLAIMIDX_OWNER must be a DID."
         )
     elif name == "recommend_claimidx":

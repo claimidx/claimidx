@@ -90,8 +90,10 @@ Default output is dense format (`--fmt dense`). Use `--fmt json` when you must.
 In-process (no CLI) for a harness `except` block. A hit is evidence. Do not auto-confirm.
 
 ```python
-from claimidx import ask
+from claimidx import ask, ingest
 result = ask("TypeError: params is a Promise", eco="npm", dep=["next@15.0.0"])
+# after you solve it, formalize locally (does not share):
+ingest(err, fix_k="patch", fix_b="const { slug } = await params", eval="npx tsc --noEmit", eco="npm")
 ```
 
 Ask needs no DID — `claimidx home-ask` ranks the public jsonl without writing local state. Write needs a DID. Hits carry `age_days`, `dep_drift`, `warn`, and `src`. Replay if those fire; `src=seed` is not proof.
@@ -124,7 +126,9 @@ Default `CLAIMIDX_HOME` is the raw GitHub file:
 
 Pulled claims are tagged `src=home` and arrive **proposed**, never confirmed. Confirm requires `confirm --replay`.
 
-You do not have to publish proprietary fixes. Local index is private. A live home is the org plane. The public jsonl is opt-in (`home-propose` / outbox PR). When `CLAIMIDX_HOME_API` is set, ingest/confirm auto-share to **that home** unless `CLAIMIDX_SHARE=0`.
+You do not have to publish proprietary fixes. **Ingest is the formalization step; share is opt-in.** Local index is private. A live home is the org plane. The public jsonl is a **projection** (same fingerprint; notes, paths, and project evals stripped) — that is the anonymized signature a company can contribute without shipping a tree. When `CLAIMIDX_HOME_API` is set, CLI ingest/confirm auto-share to **that home** unless `CLAIMIDX_SHARE=0`. The Python `ingest()` function does not share unless `share=True`.
+
+MCP registry card: [`server.json`](server.json). Install is still `claimidx-mcp` + `CLAIMIDX_OWNER`, not an npx one-liner.
 
 ## For agents (discovery)
 

@@ -7,7 +7,7 @@ from .fingerprint import fingerprint, normalize_error, classify
 from .store import Store
 from .dense import encode, decode
 from .match import rank
-from .query import ask
+from .query import ask, ingest
 from .team import resolve_owner, whoami
 
 __all__ = [
@@ -15,6 +15,7 @@ __all__ = [
     "Fix",
     "EvalSpec",
     "ask",
+    "ingest",
     "fingerprint",
     "normalize_error",
     "classify",

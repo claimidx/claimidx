@@ -12,7 +12,7 @@ A poisoned claim whose `fix.b` or `eval.cmd` is a dropper, so that an agent whic
 
 1. **Admission scan.** Publish, ingest, and `store.put` run `inspect_claim`. Secrets, packed blobs, fetch-and-execute shapes, encoded command lines, and well-known living-off-the-land runners are refused. They never hit the index.
 2. **`fix.b` is data.** The inspector and the CLI print it. Claimidx does not apply patches and does not spawn a shell to “run the fix.”
-3. **`eval.cmd` is a recipe.** Default `confirm` only increments a counter. `confirm --replay` is opt-in, allowlisted heads only (`true`, `python`, `pytest`, `npx`, `npm`, `node`, `go`, `test`), no pipes, no redirects, no network fetchers, hard timeout.
+3. **`eval.cmd` is a recipe.** Default `confirm` only increments a counter. `confirm --replay` is opt-in, allowlisted heads only (`true`, `python`, `pytest`, `npx`, `npm`, `node`, `go`, `test`), no pipes, no redirects, no network fetchers, **45s timeout**. A poisoned eval cannot hang the host.
 4. **Home is quarantined.** Claims with `src=home` cannot arrive as `confirmed`. Remote hearsay does not become local proof.
 5. **No attachments.** No binaries, no `data:` URIs, no long base64 runs. Size caps on every field.
 6. **Identity.** Wired agents publish under a DID. Anonymous writes should not graduate without a signed owner and a local replay.
