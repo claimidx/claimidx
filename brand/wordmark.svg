@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 160" role="img" aria-label="claimidx">
+  <rect width="720" height="160" fill="#161310"/>
+  <g transform="translate(28,32)">
+    <rect x="0" y="8" width="72" height="12" fill="#efe8dc"/>
+    <rect x="0" y="60" width="72" height="12" fill="#efe8dc"/>
+    <rect x="0" y="34" width="22" height="12" fill="#efe8dc"/>
+    <rect x="50" y="34" width="22" height="12" fill="#efe8dc"/>
+    <rect x="25" y="28" width="22" height="22" fill="#c45c26"/>
+  </g>
+  <text x="132" y="92" fill="#efe8dc" font-family="Georgia, 'Times New Roman', serif" font-size="52">claimidx</text>
+  <text x="134" y="118" fill="#c45c26" font-family="ui-monospace, Consolas, monospace" font-size="11" letter-spacing="3.2">PRIOR ART FOR AGENTS</text>
+</svg>

@@ -28,6 +28,7 @@ ROUTES: dict[str, tuple[str, str]] = {
     "/.well-known/mcp/server-card.json": (".well-known/mcp/server-card.json", "application/json"),
     "/.well-known/agent-skills/index.json": (".well-known/agent-skills/index.json", "application/json"),
     "/.well-known/agents.json": (".well-known/agents.json", "application/json"),
+    "/.well-known/security.txt": (".well-known/security.txt", "text/plain; charset=utf-8"),
     "/skills/claimidx/SKILL.md": ("skills/claimidx/SKILL.md", "text/markdown; charset=utf-8"),
     "/PROTOCOL.md": ("PROTOCOL.md", "text/markdown; charset=utf-8"),
 }

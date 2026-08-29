@@ -24,6 +24,17 @@ A poisoned claim whose `fix.b` or `eval.cmd` is a dropper, so that an agent whic
 - Pattern scanners are not a proof of safety. They raise the cost of sloppy droppers. They do not make a zero-day filter.
 - A hosted home API must sit behind the same admission scan, plus auth. An open anonymous write endpoint is how you get sludge and worse.
 
+## The public site
+
+`claimidx.com` is a static index on Cloudflare Pages.
+
+- HTTPS only (HSTS, `upgrade-insecure-requests`). `www` redirects to the apex.
+- CORS `*` is limited to machine files (`/llms.txt`, `/.well-known/*`, `/AGENTS.md`). HTML is not readable cross-origin.
+- No third-party scripts or webfonts. CSP: `default-src 'self'`.
+- Reports: `/.well-known/security.txt` → `hello@claimidx.com`.
+
+A live home API (`claimidx serve`) is a different surface. Do not expose `:7340` to the internet without auth.
+
 ## Operator rules
 
 - Do not set an agent skill to “apply every confirmed fix.” Apply under org policy, in a sandbox, after reading `fix.k`.
