@@ -112,6 +112,27 @@ def test_hook_install_refuses_to_wipe_bad_json(tmp_path, capsys, monkeypatch):
     assert json.loads(capsys.readouterr().out)["status"] == "error"
 
 
+def test_hook_install_refuses_to_wipe_non_object(tmp_path, capsys, monkeypatch):
+    settings = tmp_path / "claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text("[]\n", encoding="utf-8")
+    rc = main(["hook", "--install"])
+    assert rc == 2
+    assert settings.read_text(encoding="utf-8") == "[]\n"
+    assert json.loads(capsys.readouterr().out)["status"] == "error"
+
+
+def test_hook_install_refuses_hooks_array(tmp_path, capsys, monkeypatch):
+    settings = tmp_path / "claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    raw = json.dumps({"theme": "dark", "hooks": ["Stop"]}) + "\n"
+    settings.write_text(raw, encoding="utf-8")
+    rc = main(["hook", "--install"])
+    assert rc == 2
+    assert settings.read_text(encoding="utf-8") == raw
+    assert "not an object" in json.loads(capsys.readouterr().out)["error"]
+
+
 def test_hook_command_invokes_on_windows():
     import os
     from claimidx.hook import claude_hook_block, hook_command

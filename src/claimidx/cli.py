@@ -373,6 +373,14 @@ def cmd_export(ns: argparse.Namespace) -> int:
 
 def cmd_serve(ns: argparse.Namespace) -> int:
     from .api import run
+    from . import tokens as home_tokens
+
+    host = (ns.host or "").strip().lower()
+    if host not in {"127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1"} and not home_tokens.write_protection_enabled():
+        print(
+            "warn: serving on a non-loopback bind without CLAIMIDX_HOME_TOKEN; writes are open",
+            file=sys.stderr,
+        )
     run(host=ns.host, port=ns.port, db=_db_path(ns))
     return 0
 

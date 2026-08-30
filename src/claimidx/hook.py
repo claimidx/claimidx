@@ -126,8 +126,16 @@ def settings_has_claimidx(data: dict) -> bool:
 
 def merge_claude_hooks(data: dict) -> dict:
     out = dict(data or {})
-    hooks = dict(out.get("hooks") or {})
-    groups = list(hooks.get("PostToolUseFailure") or [])
+    raw_hooks = out.get("hooks")
+    if raw_hooks is None:
+        raw_hooks = {}
+    if not isinstance(raw_hooks, dict):
+        raise ValueError("settings.json hooks is not an object")
+    hooks = dict(raw_hooks)
+    raw_groups = hooks.get("PostToolUseFailure") or []
+    if not isinstance(raw_groups, list):
+        raise ValueError("settings.json PostToolUseFailure is not a list")
+    groups = list(raw_groups)
     cmd = hook_command()
     found = False
     for group in groups:
@@ -165,9 +173,17 @@ def install_claude_hook(path: Path | None = None) -> dict:
             }
         except OSError as e:
             return {"path": str(target), "status": "error", "error": str(e)}
-        if isinstance(loaded, dict):
-            data = loaded
-    merged = merge_claude_hooks(data)
+        if not isinstance(loaded, dict):
+            return {
+                "path": str(target),
+                "status": "error",
+                "error": "settings.json is not a json object",
+            }
+        data = loaded
+    try:
+        merged = merge_claude_hooks(data)
+    except ValueError as e:
+        return {"path": str(target), "status": "error", "error": str(e)}
     target.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
     return {
         "path": str(target),

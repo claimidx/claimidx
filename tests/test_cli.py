@@ -260,3 +260,10 @@ def test_fail_note(tmp_path: Path, capsys):
     cid = capsys.readouterr().out.strip()
     assert main(["--db", db, "--fmt", "json", "fail", cid, "--note", "setuptools 84 dropped it"]) == 0
     assert "setuptools 84 dropped it" in capsys.readouterr().out
+
+
+def test_serve_warns_on_public_bind_without_token(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr("claimidx.api.run", lambda **kwargs: None)
+    rc = main(["--db", str(tmp_path / "ix.sqlite"), "serve", "--host", "0.0.0.0", "--port", "9"])
+    assert rc == 0
+    assert "non-loopback" in capsys.readouterr().err
