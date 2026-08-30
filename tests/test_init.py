@@ -67,6 +67,30 @@ def test_init_wires_cursor_and_grok_mcp(tmp_path: Path, capsys, monkeypatch):
     assert again["harness"]["grok"]["status"] == "present"
 
 
+def test_init_wires_opencode_and_vscode_mcp(tmp_path: Path, capsys, monkeypatch):
+    import json
+
+    monkeypatch.setenv("CLAIMIDX_CONFIG", str(tmp_path / "config.json"))
+    oc = tmp_path / "opencode" / "opencode.json"
+    vs = tmp_path / "vscode" / "mcp.json"
+    monkeypatch.setenv("CLAIMIDX_OPENCODE_CONFIG", str(oc))
+    monkeypatch.setenv("CLAIMIDX_VSCODE_MCP", str(vs))
+    oc.parent.mkdir(parents=True)
+    oc.write_text('{"$schema": "https://opencode.ai/config.json", "mcp": {}}\n', encoding="utf-8")
+    db = str(tmp_path / "ix.sqlite")
+    rc = main(["--db", db, "init", "--agent", "wiretest", "--offline"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["harness"]["opencode"]["status"] == "installed"
+    assert out["harness"]["vscode"]["status"] == "installed"
+    od = json.loads(oc.read_text(encoding="utf-8"))
+    assert od["mcp"]["claimidx"]["command"] == ["claimidx-mcp"]
+    assert od["mcp"]["claimidx"]["environment"]["CLAIMIDX_OWNER"] == "did:claimidx:wiretest"
+    vd = json.loads(vs.read_text(encoding="utf-8"))
+    assert vd["servers"]["claimidx"]["command"] == "claimidx-mcp"
+    assert "HOME_API" not in json.dumps(od) + json.dumps(vd)
+
+
 def test_init_skips_cursor_when_dir_absent(tmp_path: Path, capsys, monkeypatch):
     import json
 
@@ -81,3 +105,5 @@ def test_init_skips_cursor_when_dir_absent(tmp_path: Path, capsys, monkeypatch):
     out = json.loads(capsys.readouterr().out)
     assert out["harness"]["cursor"]["status"] == "skip"
     assert out["harness"]["grok"]["status"] == "skip"
+    assert out["harness"]["opencode"]["status"] == "skip"
+    assert out["harness"]["vscode"]["status"] == "skip"

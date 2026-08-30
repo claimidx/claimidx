@@ -220,6 +220,25 @@ def grok_config_path() -> Path:
     return Path.home() / ".grok" / "config.toml"
 
 
+def opencode_config_path() -> Path:
+    override = os.environ.get("CLAIMIDX_OPENCODE_CONFIG")
+    if override:
+        return Path(override)
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    base = Path(xdg) if xdg else Path.home() / ".config"
+    return base / "opencode" / "opencode.json"
+
+
+def vscode_mcp_path() -> Path:
+    override = os.environ.get("CLAIMIDX_VSCODE_MCP")
+    if override:
+        return Path(override)
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        return Path(appdata) / "Code" / "User" / "mcp.json"
+    return Path.home() / ".config" / "Code" / "User" / "mcp.json"
+
+
 def _json_mcp_block(own: str, agent: str) -> dict:
     return {"command": "claimidx-mcp", "args": [], "env": mcp_owner_env(own, agent)}
 
@@ -276,10 +295,79 @@ def install_grok_mcp(path: Path | None = None, *, own: str, agent: str = "") -> 
     return {"path": str(target), "status": "installed", "command": "claimidx-mcp"}
 
 
+def _load_json_object(target: Path, label: str) -> dict | tuple[dict, dict]:
+    if not target.exists():
+        return {}
+    try:
+        loaded = json.loads(target.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        return ({"path": str(target), "status": "error", "error": f"{label} is not json: {e}"},)
+    if not isinstance(loaded, dict):
+        return ({"path": str(target), "status": "error", "error": f"{label} is not a json object"},)
+    return loaded
+
+
+def install_opencode_mcp(path: Path | None = None, *, own: str, agent: str = "") -> dict:
+    """Merge claimidx into OpenCode opencode.json. Skip if OpenCode is not installed."""
+    target = path or opencode_config_path()
+    forced = bool(os.environ.get("CLAIMIDX_OPENCODE_CONFIG"))
+    if not forced and not target.exists() and not target.parent.exists():
+        return {"path": str(target), "status": "skip", "reason": "no opencode config dir"}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    loaded = _load_json_object(target, "opencode.json")
+    if isinstance(loaded, tuple):
+        return loaded[0]
+    data = loaded
+    mcp = data.get("mcp")
+    if mcp is None:
+        mcp = {}
+        data["mcp"] = mcp
+    if not isinstance(mcp, dict):
+        return {"path": str(target), "status": "error", "error": "mcp is not an object"}
+    existing = mcp.get("claimidx")
+    if isinstance(existing, dict) and "claimidx-mcp" in str(existing.get("command") or ""):
+        return {"path": str(target), "status": "present", "command": "claimidx-mcp"}
+    mcp["claimidx"] = {
+        "type": "local",
+        "command": ["claimidx-mcp"],
+        "enabled": True,
+        "environment": mcp_owner_env(own, agent),
+    }
+    target.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return {"path": str(target), "status": "installed", "command": "claimidx-mcp"}
+
+
+def install_vscode_mcp(path: Path | None = None, *, own: str, agent: str = "") -> dict:
+    """Merge claimidx into VS Code User mcp.json. Skip if VS Code is not installed."""
+    target = path or vscode_mcp_path()
+    forced = bool(os.environ.get("CLAIMIDX_VSCODE_MCP"))
+    if not forced and not target.exists() and not target.parent.exists():
+        return {"path": str(target), "status": "skip", "reason": "no vscode user dir"}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    loaded = _load_json_object(target, "mcp.json")
+    if isinstance(loaded, tuple):
+        return loaded[0]
+    data = loaded
+    servers = data.get("servers")
+    if servers is None:
+        servers = {}
+        data["servers"] = servers
+    if not isinstance(servers, dict):
+        return {"path": str(target), "status": "error", "error": "servers is not an object"}
+    existing = servers.get("claimidx")
+    if isinstance(existing, dict) and existing.get("command") == "claimidx-mcp":
+        return {"path": str(target), "status": "present", "command": "claimidx-mcp"}
+    servers["claimidx"] = _json_mcp_block(own, agent)
+    target.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return {"path": str(target), "status": "installed", "command": "claimidx-mcp"}
+
+
 def install_harness(*, own: str, agent: str = "") -> dict:
-    """Claude failure hook plus Cursor/Grok MCP when those configs exist."""
+    """Claude failure hook plus MCP into Cursor/Grok/OpenCode/VS Code when those configs exist."""
     return {
         "claude": install_claude_hook(),
         "cursor": install_cursor_mcp(own=own, agent=agent),
         "grok": install_grok_mcp(own=own, agent=agent),
+        "opencode": install_opencode_mcp(own=own, agent=agent),
+        "vscode": install_vscode_mcp(own=own, agent=agent),
     }

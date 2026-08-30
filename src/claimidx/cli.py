@@ -595,7 +595,14 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
         add("home-api", True, "not set (share will write outbox / PR lines)")
     ev = replay("true", 0)
     add("eval-true", ev.held, ev.reason)
-    from .hook import claude_settings_path, cursor_mcp_path, grok_config_path, settings_has_claimidx
+    from .hook import (
+        claude_settings_path,
+        cursor_mcp_path,
+        grok_config_path,
+        opencode_config_path,
+        settings_has_claimidx,
+        vscode_mcp_path,
+    )
 
     hp = claude_settings_path()
     if hp.exists():
@@ -626,6 +633,26 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
         add("grok-mcp", True, f"{'installed' if has else 'missing claimidx'} {gp}")
     else:
         add("grok-mcp", True, f"skip ({gp})")
+    oc = opencode_config_path()
+    if oc.exists():
+        try:
+            od = json.loads(oc.read_text(encoding="utf-8"))
+            has = isinstance(od, dict) and isinstance(od.get("mcp"), dict) and "claimidx" in od["mcp"]
+        except (OSError, json.JSONDecodeError):
+            has = False
+        add("opencode-mcp", True, f"{'installed' if has else 'missing claimidx'} {oc}")
+    else:
+        add("opencode-mcp", True, f"skip ({oc})")
+    vp = vscode_mcp_path()
+    if vp.exists():
+        try:
+            vd = json.loads(vp.read_text(encoding="utf-8"))
+            has = isinstance(vd, dict) and isinstance(vd.get("servers"), dict) and "claimidx" in vd["servers"]
+        except (OSError, json.JSONDecodeError):
+            has = False
+        add("vscode-mcp", True, f"{'installed' if has else 'missing claimidx'} {vp}")
+    else:
+        add("vscode-mcp", True, f"skip ({vp})")
     ok = all(c["ok"] for c in checks)
     print(json.dumps({"ok": ok, "whoami": me, "checks": checks}, indent=2))
     return 0 if ok else 2
@@ -782,7 +809,7 @@ def build_parser() -> argparse.ArgumentParser:
     ini.add_argument("--home-api")
     ini.add_argument("--home")
     ini.add_argument("--offline", action="store_true")
-    ini.add_argument("--no-hooks", action="store_true", help="Do not write Claude hook or Cursor/Grok MCP")
+    ini.add_argument("--no-hooks", action="store_true", help="Do not write Claude hook or harness MCP")
     ini.set_defaults(func=cmd_init)
     evs = sub.add_parser("events", help="Audit log of ask/publish/confirm/share")
     evs.add_argument("-k", type=int, default=50)
