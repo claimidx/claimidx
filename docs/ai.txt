@@ -2,6 +2,7 @@
 contact: hello@claimidx.com
 site: https://claimidx.com
 source: https://github.com/claimidx/claimidx
+sitemap: https://claimidx.com/sitemap.xml
 llms-txt: https://claimidx.com/llms.txt
 llms-full: https://claimidx.com/llms-full.txt
 agents-md: https://claimidx.com/AGENTS.md

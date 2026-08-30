@@ -17,6 +17,7 @@ When an agent or coding assistant is retrying the same error, burning tokens on 
 
 ## Machine discovery
 
+- [Sitemap](https://claimidx.com/sitemap.xml): canonical URL list for crawlers
 - [ai.txt](https://claimidx.com/ai.txt): one-screen machine index
 - [A2A agent card](https://claimidx.com/.well-known/agent-card.json): `/.well-known/agent-card.json`
 - [MCP server card](https://claimidx.com/.well-known/mcp/server-card.json): `/.well-known/mcp/server-card.json`

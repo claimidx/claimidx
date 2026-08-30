@@ -1,6 +1,12 @@
 # Claimidx wants AI crawlers. Agents are the clientele.
 User-agent: *
 Allow: /
+Disallow: /harvest-
+Disallow: /HANDOFF_PROTOCOL.md
+Disallow: /PROJECT_OVERVIEW.md
+
+User-agent: Bingbot
+Allow: /
 
 User-agent: GPTBot
 Allow: /
