@@ -118,12 +118,35 @@ def _exact_pin(raw: str) -> tuple[str, str] | None:
 
 
 def _version_triple(raw: str) -> tuple[int, int, int] | None:
-    """Numeric X / X.Y / X.Y.Z only. Pre-releases and local tags are not a pin check."""
+    """Numeric X / X.Y / X.Y.Z only."""
     s = (raw or "").strip()
     if not re.fullmatch(r"\d+(?:\.\d+){0,2}", s):
         return None
     parts = [int(p) for p in s.split(".")] + [0, 0]
     return parts[0], parts[1], parts[2]
+
+
+def _installed_triple(raw: str) -> tuple[int, int, int] | None:
+    """PEP 440 against >=,< : post/local count as the release; pre-releases miss."""
+    s = (raw or "").strip().split("+", 1)[0]
+    if re.search(r"(?:a|b|rc|dev)\d", s, re.I):
+        return None
+    s = re.sub(r"\.post\d+$", "", s, flags=re.I)
+    return _version_triple(s)
+
+
+def _compatible_release(ver: str) -> list[tuple[str, tuple[int, int, int]]] | None:
+    """~=X.Y → >=X.Y,<X+1 ; ~=X.Y.Z → >=X.Y.Z,<X.Y+1. One segment is invalid."""
+    parts = ver.split(".")
+    if len(parts) < 2:
+        return None
+    lower = _version_triple(ver)
+    if lower is None:
+        return None
+    prefix = [int(p) for p in parts[:-1]]
+    prefix[-1] += 1
+    upper = tuple((prefix + [0, 0])[:3])
+    return [(">=", lower), ("<", upper)]
 
 
 def _range_pin(raw: str) -> tuple[str, list[tuple[str, tuple[int, int, int]]]] | None:
@@ -142,14 +165,21 @@ def _range_pin(raw: str) -> tuple[str, list[tuple[str, tuple[int, int, int]]]] |
         rest = rest.lstrip(",").strip()
         if not rest:
             break
-        cm = re.match(r"(==|!=|<=|>=|<|>)\s*([A-Za-z0-9_.+-]+)", rest)
+        cm = re.match(r"(~=|==|!=|<=|>=|<|>)\s*([A-Za-z0-9_.+-]+)", rest)
         if not cm:
             return None
-        trip = _version_triple(cm.group(2))
+        op, ver = cm.group(1), cm.group(2)
+        rest = rest[cm.end() :].strip()
+        if op == "~=":
+            extra = _compatible_release(ver)
+            if extra is None:
+                return None
+            clauses.extend(extra)
+            continue
+        trip = _version_triple(ver)
         if trip is None:
             return None
-        clauses.append((cm.group(1), trip))
-        rest = rest[cm.end() :].strip()
+        clauses.append((op, trip))
     if not clauses:
         return None
     if len(clauses) == 1 and clauses[0][0] == "==":
@@ -158,14 +188,16 @@ def _range_pin(raw: str) -> tuple[str, list[tuple[str, tuple[int, int, int]]]] |
 
 
 def _py_range_eval(name: str, clauses: list[tuple[str, tuple[int, int, int]]]) -> str | None:
-    """Stdlib-only interval check. Unparseable installed versions miss, they do not pass."""
+    """Stdlib-only interval check. Pre-releases miss; post/local compare as the release."""
     if not re.match(r"^[A-Za-z0-9._-]+$", name):
         return None
     conds = " and ".join(f"(v{op}{trip})" for op, trip in clauses)
     return (
-        'python -c "from importlib.metadata import version as V;'
-        "t=lambda s:tuple(int(x) for x in (s.split('.')+['0','0'])[:3]);"
-        f"v=t(V({name!r}));raise SystemExit(not ({conds}))\""
+        'python -c "from importlib.metadata import version as V;import re;'
+        f"s=V({name!r}).split('+')[0];p=re.search(r'(?:a|b|rc|dev)\\d',s);"
+        "s=re.sub(r'\\.post\\d+$','',s);"
+        "v=tuple(int(x) for x in (s.split('.')+['0','0'])[:3]);"
+        f'raise SystemExit(bool(p) or not ({conds}))"'
     )
 
 
@@ -181,9 +213,9 @@ def refine_eval(
 
     An exact pin (`pkg==1.2.3` / `pkg@1.2.3`) must check that version, not
     merely that some build of `pkg` imports. A numeric range (`pkg>=1.2,<2`)
-    must check the interval the same way. Non-numeric markers stay an
-    import/require. Never refuses. Never invents a tree recipe. A remaining
-    `true` is still a valid local hint.
+    or compatible release (`pkg~=1.4` → `>=1.4,<2`) must check the interval
+    the same way. Env markers stay an import/require. Never refuses. Never
+    invents a tree recipe. A remaining `true` is still a valid local hint.
     """
     raw = (cmd or "").strip() or "true"
     if eval_is_proof(raw):

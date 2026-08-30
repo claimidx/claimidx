@@ -3,7 +3,14 @@ from pathlib import Path
 from claimidx.fingerprint import fingerprint, normalize_error
 from claimidx.home import propose_line, share_claim
 from claimidx.models import Claim, EvalSpec, Fix
-from claimidx.public import eval_is_proof, project_public, public_eval, refine_eval
+from claimidx.public import (
+    _compatible_release,
+    _installed_triple,
+    eval_is_proof,
+    project_public,
+    public_eval,
+    refine_eval,
+)
 from claimidx.store import Store
 
 
@@ -75,11 +82,45 @@ def test_refine_eval_range_pin_checks_interval_not_import():
     miss = refine_eval("true", fix_k="pin", fix_b="pydantic>=99", eco="py")
     missed = replay(miss)
     assert missed.ran and not missed.held, missed.as_dict()
-    # non-numeric / already-proof recipes are not rewritten
-    tilde = refine_eval("true", fix_k="pin", fix_b="pydantic~=2.7", eco="py")
-    assert tilde == 'python -c "import pydantic"'
     given = refine_eval('python -c "import pydantic"', fix_k="pin", fix_b="pydantic>=2.7,<3", eco="py")
     assert given == 'python -c "import pydantic"'
+    marker = refine_eval("true", fix_k="pin", fix_b="pydantic>=2.7; python_version>='3.11'", eco="py")
+    assert marker == 'python -c "import pydantic"'
+
+
+def test_refine_eval_compatible_release_desugars_to_interval():
+    from claimidx.policy import eval_allowed
+    from claimidx.sandbox import replay
+
+    assert _compatible_release("1.4") == [(">=", (1, 4, 0)), ("<", (2, 0, 0))]
+    assert _compatible_release("1.4.5") == [(">=", (1, 4, 5)), ("<", (1, 5, 0))]
+    assert _compatible_release("1") is None
+    tilde = refine_eval("true", fix_k="pin", fix_b="pydantic~=2.7", eco="py")
+    assert "importlib.metadata" in tilde
+    assert "import pydantic" not in tilde
+    assert "(2, 7, 0)" in tilde and "(3, 0, 0)" in tilde
+    assert eval_is_proof(tilde) is True
+    ok, why = eval_allowed(tilde)
+    assert ok, why
+    held = replay(tilde)
+    assert held.ran and held.held, held.as_dict()
+    patch = refine_eval("true", fix_k="pin", fix_b="pydantic~=2.7.0", eco="py")
+    assert "(2, 8, 0)" in patch
+    missed = replay(patch)
+    assert missed.ran and not missed.held, missed.as_dict()
+
+
+def test_installed_triple_post_local_hold_pre_misses():
+    assert _installed_triple("2.7.0.post1") == (2, 7, 0)
+    assert _installed_triple("2.7.0+local") == (2, 7, 0)
+    assert _installed_triple("2.7.0.post1+local") == (2, 7, 0)
+    assert _installed_triple("2.7.0rc1") is None
+    assert _installed_triple("2.7.0a1") is None
+    assert _installed_triple("2.7.0.dev1") is None
+    rng = refine_eval("true", fix_k="pin", fix_b="pydantic>=2.7,<3", eco="py")
+    assert "split('+')" in rng
+    assert "post" in rng
+    assert "(?:a|b|rc|dev)" in rng
 
 
 def test_public_fix_body_keeps_pins_flags_and_relative_paths():
