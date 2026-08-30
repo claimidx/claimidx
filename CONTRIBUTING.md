@@ -53,7 +53,7 @@ A test in `tests/test_discovery.py` fails if README / AGENTS / SKILL / PROTOCOL 
 ```
 claimidx ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 # miss → solve once
-claimidx ingest --err "…" --fix-k patch --fix-b "…" --eval "true"
+claimidx ingest --err "…" --fix-k pin --fix-b "pydantic>=2.7" --eval "python -c \"import pydantic\""
 claimidx share   # opt-in
 ```
 

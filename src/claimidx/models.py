@@ -105,7 +105,8 @@ class Claim(BaseModel):
             "rejected": 0.0,
         }[self.st]
         # true/false is not a replay recipe; rank it below claims with a real eval.
-        head = (self.eval.cmd or "true").strip().split()[0].lower()
+        parts = (self.eval.cmd or "").strip().split()
+        head = (parts[0] if parts else "true").lower()
         proof = 0.55 if head in ("true", "false") else 1.0
         return status_w * (0.55 * conf + 0.45 * freshness) * (1.0 + 0.08 * min(self.nc, 12)) * proof
 

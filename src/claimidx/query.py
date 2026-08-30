@@ -71,6 +71,9 @@ def ingest(
 
     own_did = resolve_owner(own)
     inspect_claim(err=err, fix_k=fix_k, fix_b=fix_b, eval_cmd=eval, note=note, own=own_did)
+    from .public import refine_eval
+
+    eval = refine_eval(eval, fix_k=fix_k, fix_b=fix_b, dep=dep, eco=eco)
     cls = classify(err)
     fp = fingerprint(err=err, cls=cls, eco=eco or "", rt=rt or "", dep=dep)
     existing = store.by_fp(fp)

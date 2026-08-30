@@ -39,11 +39,85 @@ class PublicSkip(ValueError):
     """This claim must not leave the machine."""
 
 
+_TAUTOLOGY_CMD = re.compile(
+    r"^(true|false|(?:python3?|node|go|cargo|rustc|npm|npx|docker|uv)(?:\.exe)?\s+(?:--version|-v|-V|version))\s*$",
+    re.I,
+)
+
+
+def eval_is_proof(cmd: str | None) -> bool:
+    """True when eval.cmd can discriminate held vs miss. `true` is a hint."""
+    raw = (cmd or "").strip()
+    if not raw:
+        return False
+    if _TAUTOLOGY_CMD.match(raw):
+        return False
+    head = raw.split()[0].lower()
+    return head not in {"true", "false"}
+
+
 def public_eval(cmd: str) -> str:
-    raw = (cmd or "").strip() or "true"
+    """Portable recipe only. A tree path is not rewritten as `true` — that looked like proof."""
+    raw = (cmd or "").strip()
+    if not raw:
+        return ""
     if _EVAL_LOCAL.search(raw) or _HOSTY.search(raw) or _EMAIL.search(raw):
-        return "true"
+        return ""
     return raw[:200]
+
+
+def _pkg_token(raw: str) -> str:
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    if s.startswith("@"):
+        body = s[1:]
+        if "/" in body:
+            scope, _, rest = body.partition("/")
+            name, _, _ = rest.partition("@")
+            name = name.split("[", 1)[0].strip()
+            if scope and name:
+                return "@" + scope + "/" + name
+        return ""
+    for sep in ("==", ">=", "<=", "~=", ">", "<", "@", "["):
+        if sep in s:
+            s = s.split(sep, 1)[0]
+            break
+    return s.strip()
+
+
+def refine_eval(
+    cmd: str,
+    *,
+    fix_k: str = "",
+    fix_b: str = "",
+    dep: list[str] | None = None,
+    eco: str = "",
+) -> str:
+    """If the agent passed a tautology, upgrade a pin into a portable import/require.
+
+    Never refuses. Never invents a tree recipe. A remaining `true` is still a valid local hint.
+    """
+    raw = (cmd or "").strip() or "true"
+    if eval_is_proof(raw):
+        return raw
+    token = _pkg_token(fix_b) if (fix_k or "") == "pin" else ""
+    if not token:
+        for d in dep or []:
+            token = _pkg_token(d)
+            if token:
+                break
+    if not token:
+        return raw
+    eco = (eco or "").lower()
+    if eco in {"npm", "node"} or token.startswith("@"):
+        import json as _json
+
+        return "node -e \"require(" + _json.dumps(token) + ")\""
+    mod = token.replace("-", "_")
+    if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", mod):
+        return f'python -c "import {mod}"'
+    return raw
 
 
 def public_tried(items: list[str] | None) -> list[str]:

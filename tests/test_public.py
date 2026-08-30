@@ -3,7 +3,7 @@ from pathlib import Path
 from claimidx.fingerprint import fingerprint, normalize_error
 from claimidx.home import propose_line, share_claim
 from claimidx.models import Claim, EvalSpec, Fix
-from claimidx.public import project_public, public_eval
+from claimidx.public import eval_is_proof, project_public, public_eval, refine_eval
 from claimidx.store import Store
 
 
@@ -27,7 +27,7 @@ def _claim(**kw) -> Claim:
 
 
 def test_public_eval_strips_project_paths():
-    assert public_eval("uv run pytest -q tests/test_widget_flow.py") == "true"
+    assert public_eval("uv run pytest -q tests/test_widget_flow.py") == ""
     assert public_eval("npx tsc --noEmit") == "npx tsc --noEmit"
     assert public_eval("true") == "true"
 
@@ -73,7 +73,7 @@ def test_projection_drops_note_and_local_eval_keeps_fingerprint():
     p = project_public(c)
     assert p.id == c.id and p.fp == c.fp
     assert p.note == ""
-    assert p.eval.cmd == "true"
+    assert p.eval.cmd == ""
     assert p.tried == []
     assert "ticket" not in p.model_dump_json()
 

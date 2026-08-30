@@ -118,6 +118,8 @@ def _precondition(head: str, cwd: str | None, cmd: str = "") -> str | None:
 
 
 def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = None) -> ReplayResult:
+    if not (cmd or "").strip():
+        return ReplayResult(True, False, None, expect, False, "builtin")
     ok, reason = eval_allowed(cmd)
     if not ok:
         return ReplayResult(False, False, None, expect, False, reason)

@@ -14,6 +14,7 @@ from .fingerprint import classify, fingerprint, normalize_error
 from .match import hit_row, rank
 from .models import Claim, EvalSpec, Fix
 from .policy import PolicyError, require_identity
+from .public import refine_eval
 from .security import SecretError
 from .store import Store
 from .stripe_hook import WebhookError, handle_payload
@@ -201,7 +202,7 @@ def create_app(db: str | None = None) -> FastAPI:
             c = Claim(
                 fp=fp, cls=cls, err=normalize_error(payload.err), eco=payload.eco, rt=payload.rt, dep=payload.dep,
                 tool=payload.tool, tried=payload.tried, fix=Fix(k=payload.fix_k, b=payload.fix_b),  # type: ignore[arg-type]
-                eval=EvalSpec(cmd=payload.eval, expect=payload.expect), own=own, model=payload.model, note=payload.note,
+                eval=EvalSpec(cmd=refine_eval(payload.eval, fix_k=payload.fix_k, fix_b=payload.fix_b, dep=payload.dep, eco=payload.eco), expect=payload.expect), own=own, model=payload.model, note=payload.note,
                 src="home",
                 **extra,
             )

@@ -148,7 +148,7 @@ Clients:
 export CLAIMIDX_OWNER=did:claimidx:harper
 export CLAIMIDX_HOME_API=https://claimidx.internal
 export CLAIMIDX_HOME_TOKEN=spt_…
-claimidx ingest --err "…" --fix-k patch --fix-b "…" --eval "true"
+claimidx ingest --err "…" --fix-k pin --fix-b "pydantic>=2.7" --eval "python -c \"import pydantic\""
 claimidx share
 ```
 

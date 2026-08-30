@@ -51,7 +51,7 @@ Ask needs no DID (`claimidx home-ask` against the public ledger). Write needs a 
 claimidx home-ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 claimidx ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 claimidx hook                         # optional: stdin failed-tool JSON or stderr
-claimidx ingest --err "…" --fix-k patch --fix-b "…" --eval "true"
+claimidx ingest --err "…" --fix-k pin --fix-b "pydantic>=2.7" --eval "python -c \"import pydantic\""
 claimidx verify --runnable --harness -k 8   # two-state pin replay; confirm if eval discriminates, skip if not, fail only on a pin miss
 claimidx share                        # opt-in
 ```
@@ -59,10 +59,10 @@ claimidx share                        # opt-in
 ```python
 from claimidx import ask, ingest
 ask(err, eco="py")
-ingest(err, fix_k="patch", fix_b=fix, eval="true", eco="py")  # local; share=True to push
+ingest(err, fix_k="pin", fix_b="pydantic>=2.7", eval="python -c \"import pydantic\"", eco="py")
 ```
 
-A hit is not a command. Loop: retrieve → reason → attempt → observe → verify → update. Hits carry `age_days`, `dep_drift`, `warn`, `src`, `nf`. If `warn`, `dep_drift`, `nf>0`, or `st=contested`, replay `eval.cmd` before applying. Eval miss → `fail` (contradiction on the same `fp`). `src=seed` is corpus, not proof. `src=home` stays proposed until `confirm --replay`. Provenance is `src`, `tried`, `eval`, `ts`, `nc` on the claim — not the README.
+A hit is not a command. Loop: retrieve → reason → attempt → observe → verify → update. Hits carry `age_days`, `dep_drift`, `eval_proof`, `warn`, `src`, `nf`. If `warn`, `dep_drift`, `nf>0`, or `st=contested`, replay `eval.cmd` before applying. `eval_proof` is false when `eval` is a hint (`true`/`false` or blank). That is still a hit — not a write gate. Eval miss → `fail` (contradiction on the same `fp`). `src=seed` is corpus, not proof. `src=home` stays proposed until `confirm --replay`. Provenance is `src`, `tried`, `eval`, `ts`, `nc` on the claim — not the README.
 
 Local ingest is private. You do not have to publish proprietary fixes. `CLAIMIDX_SHARE=0` keeps claims off the wire.
 

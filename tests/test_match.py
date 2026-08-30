@@ -78,6 +78,26 @@ def test_exact_dep_pin_ranks_above_drifted_pin():
     assert [h[0].id for h in hits][0] == exact.id
 
 
+def test_eval_proof_is_false_for_tautology_and_ranks_under_recipe():
+    from claimidx.match import annotate, rank
+    from claimidx.public import eval_is_proof, refine_eval
+
+    err = "TypeError: params is a Promise"
+    hint = _claim(err, eco="npm", dep=["next@15.0.0"])
+    proof = _claim(err, eco="npm", dep=["next@15.0.0"])
+    proof.eval.cmd = "npx tsc --noEmit"
+    q = {"err": err, "eco": "npm", "dep": ["next@15.0.0"]}
+    assert eval_is_proof("true") is False
+    assert eval_is_proof("npx tsc --noEmit") is True
+    meta = annotate(q, hint, 0.9)
+    assert meta["eval_proof"] is False
+    assert any("eval is not proof" in w for w in meta["warn"])
+    hits = rank(q, [hint, proof], k=2)
+    assert hits[0][0].eval.cmd == "npx tsc --noEmit"
+    assert refine_eval("true", fix_k="pin", fix_b="pydantic>=2.7", eco="py") == 'python -c "import pydantic"'
+    assert refine_eval("true", fix_k="patch", fix_b="await params", eco="npm") == "true"
+
+
 def test_fail_count_and_contested_surface_on_ask():
     from claimidx.match import hit_warn
 

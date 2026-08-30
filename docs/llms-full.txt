@@ -53,7 +53,7 @@ Ask needs no DID (`claimidx home-ask` against the public ledger). Write needs a 
 claimidx home-ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 claimidx ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 claimidx hook                         # optional: stdin failed-tool JSON or stderr
-claimidx ingest --err "…" --fix-k patch --fix-b "…" --eval "true"
+claimidx ingest --err "…" --fix-k pin --fix-b "pydantic>=2.7" --eval "python -c \"import pydantic\""
 claimidx verify -k 8                  # replay; confirm or fail; skip missing trees
 claimidx share                        # opt-in
 ```

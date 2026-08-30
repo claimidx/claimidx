@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from .fingerprint import classify, fingerprint, normalize_error
 from .models import Claim
+from .public import eval_is_proof
 
 
 def _jaccard(a: list[str], b: list[str]) -> float:
@@ -76,9 +77,8 @@ def hit_warn(query: Claim | dict, claim: Claim) -> list[str]:
         warns.append("src=home; confirm requires replay")
     for d in dep_drift(qdep, claim.dep):
         warns.append(f"{d['name']} query={d['query']} claim={d['claim']}")
-    head = (claim.eval.cmd or "true").strip().split()[0].lower()
-    if head in ("true", "false"):
-        warns.append("eval is a hint")
+    if not eval_is_proof(claim.eval.cmd):
+        warns.append("eval is not proof")
     return warns
 
 
@@ -89,6 +89,7 @@ def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
         "score": round(claim.score(), 4),
         "age_days": round(age_days(claim), 1),
         "dep_drift": dep_drift(qdep, claim.dep),
+        "eval_proof": eval_is_proof(claim.eval.cmd),
         "warn": hit_warn(query, claim),
     }
 
@@ -151,6 +152,11 @@ def rank(query: Claim | dict, claims: list[Claim], *, k: int = 5, min_sim: float
         sim = similarity(query, c)
         if sim < min_sim:
             continue
+        # Proof-weighted retrieval: replayable recipes surface first. Hints still hit.
+        if eval_is_proof(c.eval.cmd):
+            sim = min(1.0, sim * 1.08)
+        else:
+            sim *= 0.92
         scored.append((c, sim * (0.5 + 0.5 * c.score())))
     scored.sort(key=lambda x: x[1], reverse=True)
     return scored[:k]

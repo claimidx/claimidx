@@ -159,8 +159,8 @@ def eval_allowed(cmd: str, *, heads: set[str] | None = None) -> tuple[bool, str]
 
 
 def reject_eval(cmd: str | None) -> None:
-    if not cmd:
-        raise PolicyError("eval required")
+    if not (cmd or "").strip():
+        return
     reject_secrets(cmd)
     _scan_dropper(cmd, "eval")
     ok, reason = eval_allowed(cmd)

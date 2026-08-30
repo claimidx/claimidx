@@ -98,6 +98,7 @@ def cmd_hook(ns: argparse.Namespace) -> int:
 
 def cmd_publish(ns: argparse.Namespace) -> int:
     from .policy import PolicyError, inspect_claim
+    from .public import refine_eval
     from .security import SecretError
 
     store = _store(ns)
@@ -123,7 +124,7 @@ def cmd_publish(ns: argparse.Namespace) -> int:
     claim = Claim(
         fp=fp, cls=cls, err=normalize_error(err), eco=ns.eco or "other", rt=ns.rt or "",
         dep=ns.dep or [], tool=ns.tool or [], tried=ns.tried or [],
-        fix=Fix(k=ns.fix_k, b=ns.fix_b), eval=EvalSpec(cmd=ns.eval, expect=ns.expect),
+        fix=Fix(k=ns.fix_k, b=ns.fix_b), eval=EvalSpec(cmd=refine_eval(ns.eval, fix_k=ns.fix_k, fix_b=ns.fix_b, dep=ns.dep or [], eco=ns.eco or ""), expect=ns.expect),
         own=resolve_owner(ns.own),
         model=ns.model or "", note=ns.note or "",
         **extra,

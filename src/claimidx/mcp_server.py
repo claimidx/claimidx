@@ -191,7 +191,10 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         if existing and not args.get("force"):
             return {"exists": True, "id": existing[0].id, "st": existing[0].st}
         extra = {"id": existing[0].id} if existing else {}
-        c = Claim(fp=fp, cls=cls, err=normalize_error(err), eco=args.get("eco") or "other", rt=args.get("rt") or "", dep=dep, tried=args.get("tried") or [], fix=Fix(k=args["fix_k"], b=args["fix_b"]), eval=EvalSpec(cmd=args["eval"]), own=own, note=args.get("note") or "", **extra)
+        from .public import refine_eval
+
+        ev = refine_eval(args["eval"], fix_k=args["fix_k"], fix_b=args["fix_b"], dep=dep, eco=args.get("eco") or "")
+        c = Claim(fp=fp, cls=cls, err=normalize_error(err), eco=args.get("eco") or "other", rt=args.get("rt") or "", dep=dep, tried=args.get("tried") or [], fix=Fix(k=args["fix_k"], b=args["fix_b"]), eval=EvalSpec(cmd=ev), own=own, note=args.get("note") or "", **extra)
         store.put(c)
         store.log("publish", c.own, c.id)
         from .home import maybe_share

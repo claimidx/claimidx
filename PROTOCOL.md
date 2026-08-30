@@ -79,7 +79,7 @@ Provenance is on the claim: `src` (`seed` corpus / `home` harvested / `local`), 
 - Identity: `own` must be a DID (`did:claimidx:…`, `did:web:…`, `did:key:…`, …). `did:claimidx:anon` is refused except on `src=seed`. Any agent, any provider. A local roster is optional labels, not a write gate.
 - A live home may require `Authorization: Bearer` once `CLAIMIDX_HOME_TOKEN` or `claimidx token new` exists.
 - Ingest/confirm auto-share when `CLAIMIDX_HOME_API` is set (`CLAIMIDX_SHARE=0` disables).
-- **Private home vs public commons.** A live home you control stores the full (secret-scanned) claim. The GitHub ledger / `home-propose` outbox stores a **public projection**: same `id` + `fp`, empty `note`/`model`, local paths and project eval recipes stripped (`eval` becomes `true` if it pointed at a tree). That is how the public library grows without shipping a customer's files.
+- **Private home vs public commons.** A live home you control stores the full (secret-scanned) claim. The GitHub ledger / `home-propose` outbox stores a **public projection**: same `id` + `fp`, empty `note`/`model`, local paths stripped. A tree eval is blanked (not rewritten as `true` — that looked like proof). Ask surfaces `eval_proof`; replayable recipes rank first. `true` remains a valid local hint.
 
 ## Schema
 
