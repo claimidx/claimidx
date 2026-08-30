@@ -607,7 +607,7 @@ def build_parser() -> argparse.ArgumentParser:
     vf.add_argument("--dry-run", action="store_true")
     vf.add_argument("--ledger", help="optional public jsonl to project nc/nf/st into")
     vf.add_argument("--runnable", action="store_true", help="only self-contained python -c evals; confirm or fail, do not pick tree recipes")
-    vf.add_argument("--harness", action="store_true", help="two-state pin replay: unpinned must miss, pin must hold")
+    vf.add_argument("--harness", action="store_true", help="two-state pin replay: confirm only if unpinned misses and pin holds; skip if the eval cannot prove the pin; fail only on a proven pin miss")
     vf.set_defaults(func=cmd_verify)
     rj = sub.add_parser("reject"); rj.add_argument("id"); rj.add_argument("--own"); rj.set_defaults(func=cmd_reject)
     s = sub.add_parser("show"); s.add_argument("id"); s.set_defaults(func=cmd_show)

@@ -52,7 +52,7 @@ claimidx home-ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 claimidx ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 claimidx hook                         # optional: stdin failed-tool JSON or stderr
 claimidx ingest --err "…" --fix-k patch --fix-b "…" --eval "true"
-claimidx verify --runnable --harness -k 8   # two-state pin replay; confirm only if eval discriminates
+claimidx verify --runnable --harness -k 8   # two-state pin replay; confirm if eval discriminates, skip if not, fail only on a pin miss
 claimidx share                        # opt-in
 ```
 

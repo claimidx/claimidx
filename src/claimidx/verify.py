@@ -1,8 +1,10 @@
-"""Replay evals. Confirm when they hold, fail only on a real miss, skip otherwise.
+"""Replay evals. Confirm when they hold, fail only on a proven miss, skip otherwise.
 
 Does not apply patch/config trees. For `fix.k=pin` + `python -c` evals, may install
 the pin into a throwaway venv and rerun. Builtin `true`/`false` cannot discriminate
-and are skipped. Missing trees and missing interpreters are skips, not fails.
+and are skipped. Missing trees, missing interpreters, and evals that cannot prove
+the pin are skips, not fails. `--harness` is two-state: confirm only if unpinned
+misses and the pin holds.
 """
 from __future__ import annotations
 
@@ -57,16 +59,50 @@ def _head(cmd: str) -> str:
     return _norm_head(parts[0]) if parts else ""
 
 
-def _pin_spec(fix_b: str) -> str | None:
+def _pin_specs(fix_b: str) -> list[str]:
     line = (fix_b or "").strip().splitlines()[0] if fix_b else ""
-    token = re.split(r"\s{2,}|\s+\(|\s+#", line, maxsplit=1)[0].strip().strip("\"'")
-    if _PIN.fullmatch(token) and not token.lower().startswith("pip"):
-        return token
-    return None
+    if not line:
+        return []
+    line = re.split(r"\s+#", line, maxsplit=1)[0].strip()
+    line = re.sub(
+        r"^(?:pip3?|uv|python3?\s+-m\s+pip)\s+install\s+",
+        "",
+        line,
+        count=1,
+        flags=re.I,
+    ).strip()
+    line = re.split(r"\s{2,}|\s+\(", line, maxsplit=1)[0].strip()
+    out: list[str] = []
+    for part in re.split(r"\s+and\s+|,\s*", line):
+        token = part.strip().strip("\"'")
+        if _PIN.fullmatch(token) and not token.lower().startswith("pip"):
+            out.append(token)
+    return out
+
+
+def _pin_spec(fix_b: str) -> str | None:
+    specs = _pin_specs(fix_b)
+    return specs[0] if specs else None
 
 
 def _pkg_name(spec: str) -> str:
     return re.split(r"[<>=!~\[]", spec, maxsplit=1)[0].strip()
+
+
+def _eval_targets_pin(cmd: str, names: list[str]) -> bool:
+    """True when eval mentions a pinned dist (or dist with '-' → '_')."""
+    blob = (cmd or "").lower()
+    if not blob:
+        return False
+    for name in names:
+        n = (name or "").lower().strip()
+        if not n:
+            continue
+        ident = n.replace("-", "_")
+        for token in dict.fromkeys((n, ident)):
+            if re.search(rf"(?<![A-Za-z0-9_]){re.escape(token)}(?![A-Za-z0-9_])", blob):
+                return True
+    return False
 
 
 def _replay_py(py: Path, cmd: str, expect: int):
@@ -82,13 +118,19 @@ def _replay_py(py: Path, cmd: str, expect: int):
 
 
 def harness(c: Claim, scratch: Path) -> dict:
-    """Two-state pin replay: broken (unpinned) then fixed (pin). Confirm only if eval discriminates."""
-    spec = _pin_spec(c.fix.b) if c.fix.k == "pin" else None
-    if not spec or _head(c.eval.cmd) not in _RUNNABLE_HEADS:
-        return {"action": "fail", "reason": "harness-no-repro", "id": c.id}
-    name = _pkg_name(spec)
-    if not name:
-        return {"action": "fail", "reason": "harness-no-repro", "id": c.id}
+    """Two-state pin replay: unpinned then pin.
+
+    Confirm only if the eval discriminates (unpinned misses, pin holds).
+    Skip when the setup or eval cannot prove the pin. Fail only on a
+    proven miss (pin applied, eval still misses a pin-targeted command,
+    or the pin regresses an eval that already held).
+    """
+    specs = _pin_specs(c.fix.b) if c.fix.k == "pin" else []
+    if not specs or _head(c.eval.cmd) not in _RUNNABLE_HEADS:
+        return {"action": "skip", "reason": "harness-no-repro", "id": c.id}
+    names = [_pkg_name(s) for s in specs if _pkg_name(s)]
+    if not names:
+        return {"action": "skip", "reason": "harness-no-repro", "id": c.id}
     venv = scratch / "venv"
     try:
         subprocess.run(
@@ -98,43 +140,48 @@ def harness(c: Claim, scratch: Path) -> dict:
             timeout=60,
         )
     except (subprocess.SubprocessError, OSError) as e:
-        return {"action": "fail", "reason": f"harness-venv:{e}", "id": c.id}
+        return {"action": "skip", "reason": f"harness-venv:{e}", "id": c.id}
     py = _venv_python(venv)
     pip = [str(py), "-m", "pip", "install", "--disable-pip-version-check", "-q"]
     try:
-        br = subprocess.run(pip + [name], capture_output=True, text=True, timeout=120)
+        br = subprocess.run(pip + names, capture_output=True, text=True, timeout=120)
     except (subprocess.SubprocessError, OSError) as e:
-        return {"action": "fail", "reason": f"harness-broken-install:{e}", "id": c.id}
+        return {"action": "skip", "reason": f"harness-broken-install:{e}", "id": c.id}
     if br.returncode != 0:
         return {
-            "action": "fail",
+            "action": "skip",
             "reason": "harness-broken-install",
             "id": c.id,
             "stderr": (br.stderr or "")[-300:],
         }
     broken = _replay_py(py, c.eval.cmd, c.eval.expect)
     try:
-        fx = subprocess.run(pip + [spec], capture_output=True, text=True, timeout=120)
+        fx = subprocess.run(pip + specs, capture_output=True, text=True, timeout=120)
     except (subprocess.SubprocessError, OSError) as e:
-        return {"action": "fail", "reason": f"harness-pin-install:{e}", "id": c.id}
+        return {"action": "skip", "reason": f"harness-pin-install:{e}", "id": c.id}
     if fx.returncode != 0:
         return {
-            "action": "fail",
+            "action": "skip",
             "reason": "harness-pin-install",
             "id": c.id,
             "stderr": (fx.stderr or "")[-300:],
         }
     fixed = _replay_py(py, c.eval.cmd, c.eval.expect)
+    applied = " ".join(specs)
     out = {
         "id": c.id,
         "broken": broken.as_dict(),
         "fixed": fixed.as_dict(),
-        "applied": spec,
+        "applied": applied,
     }
     if (not broken.held) and fixed.held:
         return {**out, "action": "confirm", "reason": "harness-discriminates"}
     if broken.held and fixed.held:
-        return {**out, "action": "fail", "reason": "harness-no-discriminate"}
+        return {**out, "action": "skip", "reason": "harness-no-discriminate"}
+    if broken.held and not fixed.held:
+        return {**out, "action": "fail", "reason": "harness-eval-miss"}
+    if not _eval_targets_pin(c.eval.cmd, names):
+        return {**out, "action": "skip", "reason": "harness-no-repro"}
     return {**out, "action": "fail", "reason": "harness-eval-miss"}
 
 
@@ -179,6 +226,15 @@ def is_runnable(c: Claim) -> bool:
     return True
 
 
+def is_harnessable(c: Claim) -> bool:
+    """Pins whose eval we can two-state replay in an empty scratch venv."""
+    if c.fix.k != "pin":
+        return False
+    if not is_runnable(c):
+        return False
+    return bool(_pin_specs(c.fix.b))
+
+
 def pick(
     claims: list[Claim],
     *,
@@ -186,6 +242,7 @@ def pick(
     ids: list[str] | None,
     seen: set[str],
     runnable: bool = False,
+    harness_mode: bool = False,
 ) -> list[Claim]:
     if ids:
         by_id = {c.id: c for c in claims}
@@ -194,7 +251,10 @@ def pick(
     for c in claims:
         if c.id in seen or c.st == "rejected":
             continue
-        if runnable:
+        if harness_mode:
+            if not is_harnessable(c):
+                continue
+        elif runnable:
             if not is_runnable(c):
                 continue
         else:
@@ -264,9 +324,27 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
         except subprocess.TimeoutExpired:
             return {"action": "skip", "reason": "timeout", "id": c.id}
         held = proc.returncode == c.eval.expect
+        if held:
+            return {
+                "action": "confirm",
+                "reason": "held-pin",
+                "id": c.id,
+                "rc": proc.returncode,
+                "stderr": (proc.stderr or "")[-300:],
+                "applied": spec,
+            }
+        if not _eval_targets_pin(c.eval.cmd, [_pkg_name(spec)]):
+            return {
+                "action": "skip",
+                "reason": "pin-eval-unproven",
+                "id": c.id,
+                "rc": proc.returncode,
+                "stderr": (proc.stderr or "")[-300:],
+                "applied": spec,
+            }
         return {
-            "action": "confirm" if held else "fail",
-            "reason": "held-pin" if held else "eval-miss-pin",
+            "action": "fail",
+            "reason": "eval-miss-pin",
             "id": c.id,
             "rc": proc.returncode,
             "stderr": (proc.stderr or "")[-300:],
@@ -367,7 +445,8 @@ def run(
         k=k,
         ids=ids,
         seen=seen,
-        runnable=runnable or harness_mode,
+        runnable=runnable,
+        harness_mode=harness_mode,
     )
     results = []
     changed: list[Claim] = []
@@ -387,6 +466,10 @@ def run(
                     store.fail(c.id, actor, note=decision.get("reason") or "verify eval-miss")
                     changed.append(store.get(c.id))
                     seen.add(c.id)
+                elif action == "skip":
+                    reason = decision.get("reason") or ""
+                    if reason in {"harness-no-repro", "harness-no-discriminate", "pin-eval-unproven"}:
+                        seen.add(c.id)
             decision["st"] = (store.get(c.id).st if store.get(c.id) else c.st)
             results.append(decision)
         if not dry_run:

@@ -39,7 +39,7 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | `publish` / `ingest` | insert if fingerprint unseen; refuse secrets, droppers, anon owners |
 | `confirm` | `nc += 1`; maybe `confirmed`. Home claims require `--replay` (HTTP: `?replay=true`). |
 | `fail` | `nf += 1`; maybe `contested`. This is the contradiction on the same `fp`. Different pin → different `fp` (ingest a sibling). |
-| `verify` | batch replay. Confirm if the eval held. Fail only on a real miss. Skip builtin `true`/`false`, missing trees, missing interpreters. `--cwd` via a scratch dir. Pin+`python -c` may rerun in a throwaway venv. |
+| `verify` | batch replay. Confirm if the eval held. Fail only on a proven miss. Skip builtin `true`/`false`, missing trees, missing interpreters, and evals that cannot prove the pin. `--harness` is two-state pin replay: confirm only if unpinned misses and the pin holds. `--cwd` via a scratch dir. |
 | `reject` | `st=rejected`; omitted from `/ledger.jsonl` |
 | `home-pull` | fetch `CLAIMIDX_HOME` jsonl, inspect, store as `src=home` (quarantined) |
 | `home-ask` | rank against the live ledger, no local write |
