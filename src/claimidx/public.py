@@ -149,6 +149,26 @@ def _compatible_release(ver: str) -> list[tuple[str, tuple[int, int, int]]] | No
     return [(">=", lower), ("<", upper)]
 
 
+_ONE_SEG_TILDE = re.compile(r"~=\s*\d+(?!\.)")
+
+
+def _one_segment_tilde(raw: str) -> bool:
+    return bool(_ONE_SEG_TILDE.search(_pin_line(raw)))
+
+
+def _env_marker(raw: str) -> bool:
+    return ";" in _pin_line(raw)
+
+
+def pin_error(fix_k: str, fix_b: str) -> str | None:
+    """Admission error for a pin that cannot hold. None if the row may exist."""
+    if (fix_k or "") != "pin":
+        return None
+    if _one_segment_tilde(fix_b):
+        return "malformed compatible-release pin; ~= needs two version segments"
+    return None
+
+
 def _range_pin(raw: str) -> tuple[str, list[tuple[str, tuple[int, int, int]]]] | None:
     """Name + numeric range clauses. None for exact, unversioned, or non-numeric specs."""
     s = _pin_line(raw)
@@ -214,8 +234,9 @@ def refine_eval(
     An exact pin (`pkg==1.2.3` / `pkg@1.2.3`) must check that version, not
     merely that some build of `pkg` imports. A numeric range (`pkg>=1.2,<2`)
     or compatible release (`pkg~=1.4` → `>=1.4,<2`) must check the interval
-    the same way. Env markers stay an import/require. Never refuses. Never
-    invents a tree recipe. A remaining `true` is still a valid local hint.
+    the same way. Env markers and other uncheckable specs stay a hint, not
+    an import. Never refuses. Never invents a tree recipe. A remaining
+    `true` is still a valid local hint.
     """
     raw = (cmd or "").strip() or "true"
     if eval_is_proof(raw):
@@ -250,6 +271,8 @@ def refine_eval(
         generated = _py_range_eval(rng[0], rng[1])
         if generated:
             return generated
+    if pin_src and (_one_segment_tilde(pin_src) or _env_marker(pin_src)):
+        return raw
     token = _pkg_token(pin_src) if pin_src else ""
     if not token:
         for d in dep or []:

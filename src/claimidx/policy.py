@@ -192,6 +192,11 @@ def inspect_claim(*, err: str, fix_k: str, fix_b: str, eval_cmd: str, note: str 
     _scan_dropper(err, "err")
     _scan_dropper(note, "note")
     reject_payload(fix_b, "fix")
+    from .public import pin_error
+
+    bad_pin = pin_error(fix_k, fix_b)
+    if bad_pin:
+        raise PolicyError(bad_pin)
     if fix_k == "cmd":
         ok, reason = (
             eval_allowed(fix_b, heads=ALLOWED_CMD_HEADS)

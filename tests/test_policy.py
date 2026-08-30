@@ -134,6 +134,24 @@ def test_cmd_kind_allows_alembic_pnpm_bundle():
     )
 
 
+def test_rejects_one_segment_compatible_release_pin():
+    with pytest.raises(PolicyError, match="compatible-release"):
+        inspect_claim(
+            err="ModuleNotFoundError: No module named 'pkg'",
+            fix_k="pin",
+            fix_b="pkg~=1",
+            eval_cmd="true",
+            own="did:claimidx:test",
+        )
+    inspect_claim(
+        err="ModuleNotFoundError: No module named 'pydantic'",
+        fix_k="pin",
+        fix_b="pydantic~=2.7",
+        eval_cmd="true",
+        own="did:claimidx:test",
+    )
+
+
 def test_cmd_kind_allows_git_head():
     inspect_claim(
         err="error: failed to push some refs",

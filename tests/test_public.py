@@ -85,7 +85,11 @@ def test_refine_eval_range_pin_checks_interval_not_import():
     given = refine_eval('python -c "import pydantic"', fix_k="pin", fix_b="pydantic>=2.7,<3", eco="py")
     assert given == 'python -c "import pydantic"'
     marker = refine_eval("true", fix_k="pin", fix_b="pydantic>=2.7; python_version>='3.11'", eco="py")
-    assert marker == 'python -c "import pydantic"'
+    assert marker == "true"
+    assert eval_is_proof(marker) is False
+    one = refine_eval("true", fix_k="pin", fix_b="pydantic~=1", eco="py")
+    assert one == "true"
+    assert eval_is_proof(one) is False
 
 
 def test_refine_eval_compatible_release_desugars_to_interval():
