@@ -3,8 +3,8 @@
   --paper: #fafafa;
   --mute: #a1a1aa;
   --rule: #3f3f46;
-  --oxide: #f97316;
-  --oxide-hot: #fb923c;
+  --oxide: #3b82f6;
+  --oxide-hot: #60a5fa;
   --claim: #111113;
   --card: #1c1c21;
   --edge: #73738c;
@@ -351,12 +351,12 @@ footer p { margin: 0 0 0.35rem; }
 #bill-mo:checked ~ .bill-wrap .bill-bar label[for="bill-mo"],
 #bill-yr:checked ~ .bill-wrap .bill-bar label[for="bill-yr"] {
   background: var(--oxide);
-  color: var(--ink);
+  color: #fff;
 }
 
 #bill-mo:checked ~ .bill-wrap .bill-bar label[for="bill-mo"] small,
 #bill-yr:checked ~ .bill-wrap .bill-bar label[for="bill-yr"] small {
-  color: var(--ink);
+  color: #fff;
 }
 
 #bill-yr:checked ~ .plans .for-mo,
@@ -385,7 +385,7 @@ footer p { margin: 0 0 0.35rem; }
 
 .plan-featured {
   border: 2px solid var(--oxide);
-  background: #1c1410;
+  background: #0f172a;
   position: relative;
   box-shadow: 0 0 0 1px var(--oxide);
 }
@@ -396,7 +396,7 @@ footer p { margin: 0 0 0.35rem; }
   margin: 0 0 0.65rem;
   padding: 0.28rem 0.55rem;
   background: var(--oxide);
-  color: var(--ink);
+  color: #fff;
   font-size: 0.62rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -491,7 +491,7 @@ footer p { margin: 0 0 0.35rem; }
   min-height: 48px;
   padding: 0.75rem 1rem;
   background: var(--oxide);
-  color: var(--ink);
+  color: #fff;
   text-decoration: none;
   font-size: 0.9rem;
   letter-spacing: 0.01em;
@@ -502,7 +502,7 @@ footer p { margin: 0 0 0.35rem; }
 
 .btn:hover {
   background: var(--oxide-hot);
-  color: var(--ink);
+  color: #fff;
 }
 
 .btn-ghost {
