@@ -44,11 +44,11 @@ Acceptance test: two agents, two machines; the second hits a claim it did not pu
 | Offering | Who operates it | What you pay | Typical use |
 |---|---|---|---|
 | Commons | Nobody (public jsonl) | $0 | Distribution; `home-ask` with no DID |
-| Hosted home | Claimidx | mail `sales@claimidx.com` | One endpoint for the org |
+| Hosted home | Claimidx | Live list on [claimidx.com/pricing](https://claimidx.com/pricing) | One endpoint for the org |
 | Self-hosted home | Your operators | mail `sales@claimidx.com` for support | Residency / regulated networks |
 | Enterprise | Claimidx + your operators | Quote | Multi-home, DPA, onboarding |
 
-Ask is never billed. Human seats are never billed. Stored claims are never billed. Hosted and enterprise: mail `sales@claimidx.com`. Support: `support@claimidx.com`.
+Ask is never billed. Human seats are never billed. Stored claims are never billed. Checkout: [claimidx.com/pricing](https://claimidx.com/pricing). Support: `support@claimidx.com`. Enterprise quote: `sales@claimidx.com`.
 
 The CLI is Apache-2.0. The name, site, canonical public ledger, and operated Cloud are not a license grant.
 
