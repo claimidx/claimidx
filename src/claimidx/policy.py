@@ -22,17 +22,14 @@ MAX_NOTE = 240
 MAX_ERR = 280
 MAX_BASE64_RUN = 80
 
-_DROPPER = [
-    # fetch-and-execute and packed-payload shapes. Names of classes, not recipes.
+# Fetch-and-execute. Applied to every field including err (Maven logs must survive).
+_DROPPER_PAYLOAD = [
     re.compile(r"\b(curl|wget|fetch|Invoke-WebRequest|iwr)\b.{0,80}\|\s*(sh|bash|zsh|cmd|powershell|pwsh|python|perl)\b", re.I | re.S),
     re.compile(r"\b(iex|invoke-expression)\b", re.I),
     re.compile(r"\b(mshta|certutil|bitsadmin|regsvr32|rundll32|wscript|cscript|hh\.exe)\b", re.I),
     re.compile(r"\bchmod\s+\+x\b.{0,40}\b(curl|wget)\b", re.I | re.S),
     re.compile(r"/dev/tcp/"),
     re.compile(r"data:[^;]+;base64,", re.I),
-    re.compile(r"\b(fromhex|fromcharcode|charcodeat)\b.{0,20}\b(exec|eval|compile)\b", re.I | re.S),
-    re.compile(r"\b(os\.system|subprocess\.(call|popen|run)|popen\()", re.I),
-    re.compile(r"\bexec\s*\(|\beval\s*\(|\bcompile\s*\("),
     re.compile(r"MZ[\x00-\x08]{0,2}PE\x00|\x7fELF"),
     re.compile(r"^\s*#!/bin/(ba)?sh", re.M),
     re.compile(r"\bpowershell\b.{0,60}\b-enc(odedcommand)?\b", re.I),
@@ -40,12 +37,22 @@ _DROPPER = [
     re.compile(r"\bnc\s+-[el]", re.I),
     re.compile(r"\b(reverse.?shell|bind.?shell)\b", re.I),
 ]
+# Code-shaped. Not applied to err/note: `:compile (default-compile)` is a Maven log.
+_DROPPER_CODE = [
+    re.compile(r"\b(fromhex|fromcharcode|charcodeat)\b.{0,20}\b(exec|eval|compile)\b", re.I | re.S),
+    re.compile(r"\b(os\.system|subprocess\.(call|popen|run)|popen\()", re.I),
+    re.compile(r"\bexec\s*\(|\beval\s*\(|\bcompile\s*\("),
+]
 
 _LONG_B64 = re.compile(r"[A-Za-z0-9+/]{%d,}={0,2}" % MAX_BASE64_RUN)
 
 ALLOWED_EVAL_HEADS = {
     "true", "false", "test", "python", "python3", "pytest",
     "npx", "npm", "node", "go", "uv", "cargo", "rustc", "docker",
+}
+# cmd-kind fix.b is data, but naive agents may run it. Wider than eval; still no shell.
+ALLOWED_CMD_HEADS = ALLOWED_EVAL_HEADS | {
+    "git", "pip", "pip3", "bundle", "bundler", "composer", "make", "mvn", "gradle",
 }
 
 DENIED_EVAL_HEADS = {
@@ -68,7 +75,10 @@ def _scan_dropper(text: str, field: str) -> None:
         raise PolicyError(f"{field} exceeds size cap")
     if _LONG_B64.search(text or ""):
         raise PolicyError(f"{field} contains a packed blob; refuse to store")
-    for pat in _DROPPER:
+    pats = list(_DROPPER_PAYLOAD)
+    if field not in ("err", "note"):
+        pats.extend(_DROPPER_CODE)
+    for pat in pats:
         if pat.search(text):
             raise PolicyError(f"{field} matches a dropper-shaped pattern; refuse to store")
 
@@ -95,6 +105,13 @@ def _norm_head(token: str) -> str:
 
 
 _ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.")
+_QUOTED = re.compile(r"""(?:'[^']*'|"[^"]*")""")
+
+
+def _unquoted_meta(raw: str) -> bool:
+    """Shell metacharacters only count outside quotes. node -e 'a; b' is argv, not a pipeline."""
+    stripped = _QUOTED.sub(" ", raw)
+    return any(tok in stripped for tok in (";", "|", "&", ">", "<", "`", "\n", "$(", "&&", "||"))
 
 
 def split_eval(cmd: str) -> tuple[dict[str, str], list[str]]:
@@ -108,13 +125,13 @@ def split_eval(cmd: str) -> tuple[dict[str, str], list[str]]:
     return env, parts
 
 
-def eval_allowed(cmd: str) -> tuple[bool, str]:
+def eval_allowed(cmd: str, *, heads: set[str] | None = None) -> tuple[bool, str]:
     raw = (cmd or "").strip()
     if not raw:
         return False, "empty eval"
     if len(raw) > MAX_EVAL:
         return False, "eval too long"
-    if any(ch in raw for ch in [";", "|", "&", ">", "<", "`", "\n", "$(", "&&", "||"]):
+    if _unquoted_meta(raw):
         return False, "shell metacharacter denied"
     try:
         _env, parts = split_eval(raw)
@@ -124,7 +141,7 @@ def eval_allowed(cmd: str) -> tuple[bool, str]:
         return False, "empty eval"
     head = _norm_head(parts[0])
     denied = {h.lower() for h in DENIED_EVAL_HEADS}
-    allowed = {h.lower() for h in ALLOWED_EVAL_HEADS}
+    allowed = {h.lower() for h in (heads or ALLOWED_EVAL_HEADS)}
     if head in denied:
         return False, f"eval head denied: {head}"
     if head not in allowed:
@@ -172,10 +189,12 @@ def inspect_claim(*, err: str, fix_k: str, fix_b: str, eval_cmd: str, note: str 
     _scan_dropper(note, "note")
     reject_payload(fix_b, "fix")
     if fix_k == "cmd":
-        # A cmd-kind fix is itself a command. Same bar as eval.
-        ok, reason = eval_allowed(fix_b) if len(fix_b) <= MAX_EVAL else (False, "cmd fix too long")
+        ok, reason = (
+            eval_allowed(fix_b, heads=ALLOWED_CMD_HEADS)
+            if len(fix_b) <= MAX_EVAL
+            else (False, "cmd fix too long")
+        )
         if not ok:
-            # allow a few well-known installer recipes already in the seed corpus
             if not _seed_cmd_ok(fix_b):
                 raise PolicyError(f"cmd fix denied: {reason.replace('eval head', 'cmd head', 1)}")
     reject_eval(eval_cmd)

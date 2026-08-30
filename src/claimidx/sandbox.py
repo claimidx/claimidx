@@ -15,13 +15,20 @@ from .policy import eval_allowed, split_eval, _norm_head
 def resolve_argv(parts: list[str]) -> list[str]:
     """Map an allowlisted eval recipe onto this OS's real executable.
 
-    Unix recipes stay canonical (`python -c`, `npx tsc`). On Windows we
-    resolve `python` to `sys.executable` and `npx`/`npm`/`node` via PATHEXT.
+    Unix recipes stay canonical (`python -c`, `npx tsc`). `python`/`python3`
+    follow PATH (venv) or CLAIMIDX_PYTHON, then this interpreter. Other
+    heads resolve via PATHEXT on Windows.
     """
     if not parts:
         return parts
     name = _norm_head(parts[0])
     if name in ("python", "python3"):
+        pinned = (os.environ.get("CLAIMIDX_PYTHON") or "").strip()
+        if pinned:
+            return [pinned, *parts[1:]]
+        found = _which(parts[0])
+        if found:
+            return [found, *parts[1:]]
         return [sys.executable, *parts[1:]]
     found = _which(parts[0])
     return [found or parts[0], *parts[1:]]

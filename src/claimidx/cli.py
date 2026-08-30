@@ -282,6 +282,8 @@ def cmd_ls(ns: argparse.Namespace) -> int:
         claims = [c for c in claims if c.st == ns.st]
     if getattr(ns, "eco", None):
         claims = [c for c in claims if c.eco == ns.eco]
+    if getattr(ns, "own", None):
+        claims = [c for c in claims if c.own == ns.own]
     claims.sort(key=lambda c: c.score(), reverse=True)
     if ns.fmt == "json":
         print(json.dumps([c.model_dump(mode="json") for c in claims], default=str))
@@ -605,7 +607,7 @@ def build_parser() -> argparse.ArgumentParser:
     vf.set_defaults(func=cmd_verify)
     rj = sub.add_parser("reject"); rj.add_argument("id"); rj.add_argument("--own"); rj.set_defaults(func=cmd_reject)
     s = sub.add_parser("show"); s.add_argument("id"); s.set_defaults(func=cmd_show)
-    ls = sub.add_parser("ls"); ls.add_argument("--st"); ls.add_argument("--eco"); ls.add_argument("-k", type=int, default=50); ls.set_defaults(func=cmd_ls)
+    ls = sub.add_parser("ls"); ls.add_argument("--st"); ls.add_argument("--eco"); ls.add_argument("--own"); ls.add_argument("-k", type=int, default=50); ls.set_defaults(func=cmd_ls)
     fp = sub.add_parser("fp"); fp.add_argument("--err", required=True); fp.add_argument("--cls"); fp.add_argument("--eco"); fp.add_argument("--rt"); fp.add_argument("--dep", action=_AppendCsv, default=None); fp.set_defaults(func=cmd_fp)
     st = sub.add_parser("stats"); st.set_defaults(func=cmd_stats)
     sd = sub.add_parser("seed"); sd.add_argument("--path"); sd.set_defaults(func=cmd_seed)

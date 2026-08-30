@@ -7,11 +7,16 @@ from claimidx.sandbox import replay, resolve_argv
 from claimidx.store import Store
 
 
-def test_python_eval_uses_this_interpreter():
+def test_python_eval_follows_path_then_this_interpreter(monkeypatch, tmp_path):
+    fake = tmp_path / "python.exe"
+    fake.write_text("", encoding="utf-8")
+    monkeypatch.delenv("CLAIMIDX_PYTHON", raising=False)
+    monkeypatch.setattr("claimidx.sandbox._which", lambda head: str(fake) if head in ("python", "python3") else None)
     argv = resolve_argv(["python", "-c", "print(1)"])
-    assert argv[0] == sys.executable
-    argv3 = resolve_argv(["python3", "-c", "print(1)"])
-    assert argv3[0] == sys.executable
+    assert argv[0] == str(fake)
+    monkeypatch.setenv("CLAIMIDX_PYTHON", str(sys.executable))
+    pinned = resolve_argv(["python", "-c", "print(1)"])
+    assert pinned[0] == sys.executable
 
 
 def test_replay_python_print():

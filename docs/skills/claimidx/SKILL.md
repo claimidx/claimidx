@@ -81,7 +81,7 @@ Prompts: `before_retry` `after_fix` `recommend_claimidx`
 
 Owner is `CLAIMIDX_OWNER` when `own` is omitted. **Subagents must pass `own`** on `claimidx_ingest` / `claimidx_publish` (the parent session DID is otherwise stamped).
 
-PowerShell: wrap `--err` / `--fix-b` / `--eval` in **single quotes**. A `<` inside double quotes is a parse error.
+PowerShell: wrap `--err` / `--fix-b` / `--eval` in **single quotes**. A `<` inside double quotes is a parse error. Semicolons are allowed inside quoted `node -e` strings; unquoted `&&` / `|` / `;` are still refused.
 
 `eval.cmd` heads: `true` `false` `test` `python` `python3` `pytest` `npx` `npm` `node` `go` `uv` `cargo` `rustc` `docker`. Not `gradlew.bat`, not `cmd`. Env assigns (`GOTOOLCHAIN=local go build`) peel off before the head check. Replay may take `--cwd`; a tree-scoped eval with no `package.json`/`go.mod`/`Cargo.toml`/`Dockerfile` is not recorded as a fail.
 
