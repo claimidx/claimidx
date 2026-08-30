@@ -73,7 +73,7 @@ The CLI is Apache-2.0. The name, site, canonical public ledger, and operated Clo
 | SSO / SAML | Not shipped. Gate is DID + issued Bearer. SSO would issue DIDs, not replace them. |
 | Multi-tenant in one process | Run one home per tenant, or prefix DIDs (`did:claimidx:acme:harper`). |
 | HA | SQLite plus a reverse proxy. Put the database on persistent disk. |
-| Hosted Cloud | Default SKU: one tenant = one `claimidx serve` + sqlite + tokens. |
+| Hosted Cloud | Cloudflare Worker + D1 at `https://home.claimidx.com/t/<org>`. One tenant row, DID cap, Bearer. |
 | Data residency | Self-host holds the file. Cloud is one tenant per process. |
 
 ## Agent loop
