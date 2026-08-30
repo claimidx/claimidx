@@ -13,7 +13,7 @@ Current shape, then dated notes. Newer notes first.
 - `inspect_claim` at the door: secrets, droppers, packed blobs, eval allowlist, DID.
 - Inbound HTTP publish is `src=home` → quarantined `proposed`. Confirm requires `--replay`.
 - `fix.b` is data. Eval is a recipe (allowlisted heads, 45s timeout). Replay is opt-in.
-- Ask surfaces `age_days`, `dep_drift`, `eval_proof` (recipe-per-fp, not query-err match; 1.08 does not break sibling ties), `nr`, `src`, `nf`, `warn` (`normalization_risk`, `nc without replay`, `rt omitted`). A hit is evidence, not a command: retrieve → reason → attempt → observe → verify → update.
+- Ask surfaces `age_days`, `dep_drift`, `eval_proof` (recipe-per-fp, not query-err match; 1.08 does not break sibling ties; the recipe-per-fp warn fires only when query err differs), `nr`, `src`, `nf`, `warn` (`normalization_risk`, `nc without replay`, `rt omitted`). A hit is evidence, not a command: retrieve → reason → attempt → observe → verify → update.
 - Public tree evals blank (not rewritten as `true`). Pin ingest with `eval=true` upgrades to a portable import/require.
 - Pulled rows whose stored `fp` does not recompute from claimed fields are skipped. `confirm --replay` that holds increments `nr`.
 - Contradiction is `fail` on the same `fp`. A different dep pin is a different fingerprint.
