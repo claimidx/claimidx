@@ -580,6 +580,7 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 148px;
   padding: 24px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -587,8 +588,10 @@ h2 {
   box-shadow: var(--shadow);
   text-decoration: none;
   color: inherit;
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.15s ease, border-color 0.15s ease, opacity 0.55s ease;
 }
+
+.claim-card.is-swap { opacity: 0; }
 
 .claim-card:hover {
   color: inherit;
@@ -882,6 +885,7 @@ blockquote.not {
   html { scroll-behavior: auto; }
   .btn, .claim-card, .pulse { transition: none; animation: none; transform: none; }
   .btn:hover, .claim-card:hover { transform: none; }
+  .claim-card.is-swap { opacity: 1; }
 }
 
 /* Pricing / inner pages keep existing structure on the new tokens */
