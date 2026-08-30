@@ -90,23 +90,22 @@ def test_agent_facing_docs_cover_current_surface():
 
 
 def test_repo_has_no_machine_home_paths():
-    """Public tree must not contain this machine's username or AppData Python path."""
+    """Tracked public tree must not contain this machine's username or AppData Python path."""
+    import subprocess
     from claimidx.discovery import ROOT
 
-    skip_parts = {".git", "__pycache__", ".pytest_cache", "node_modules"}
-    skip_suffix = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2", ".pyc"}
+    tracked = subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
     needles = (
         r"Users\Administrator",
         r"Users/Administrator",
         r"AppData\Local\Programs\Python",
     )
     hits: list[str] = []
-    for p in ROOT.rglob("*"):
-        if not p.is_file() or p.suffix.lower() in skip_suffix:
+    for rel in tracked:
+        if rel.replace("\\", "/").endswith("tests/test_discovery.py"):
             continue
-        if any(part in skip_parts for part in p.parts):
-            continue
-        if p.name == "test_discovery.py":
+        p = ROOT / rel
+        if not p.is_file() or p.suffix.lower() in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2"}:
             continue
         try:
             text = p.read_text(encoding="utf-8")
@@ -114,7 +113,7 @@ def test_repo_has_no_machine_home_paths():
             continue
         for n in needles:
             if n in text:
-                hits.append(f"{p.relative_to(ROOT)}: {n}")
+                hits.append(f"{rel}: {n}")
     assert hits == [], hits
 
 

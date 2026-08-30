@@ -213,20 +213,19 @@ data/          public claims.jsonl ledger
 schema/        claim.v1.json
 skills/claimidx/  agent skill (canonical; copies under .claude/.opencode/…)
 examples/      MCP configs, claude-hooks.json
-team/          DID roster
 web/           inspector (hits show age, src, warn)
 ```
 
 ## Status
 
-v0.5.0 — `eval_proof` and proof-weighted ask; `nr` counts held `confirm --replay`; `normalization_risk` when normalize_error erases a path/URL/int/hex/quoted token; pull skips `fp` mismatch; public tree evals blank instead of rewriting to `true`; pin ingest with `eval=true` upgrades to `python -c "import pkg"` / `node -e "require('pkg')"`. Cloud homes on home.claimidx.com; Stripe Payment Links on /pricing. Inbox watches threads we comment on.
+v0.5.0 — `eval_proof` and proof-weighted ask; `nr` counts held `confirm --replay`; `normalization_risk` when normalize_error erases a path/URL/int/hex/quoted token; pull skips `fp` mismatch; public tree evals blank instead of rewriting to `true`; pin ingest with `eval=true` upgrades to `python -c "import pkg"` / `node -e "require('pkg')"`.
 v0.4.1 — larger public seed ledger, site discovery (`llms.txt`, well-known), git install path. Also: `claimidx hook` (harness sensor), `from claimidx import ask, ingest` (ingest does not share unless `share=True`), ask surfaces `age_days` / `dep_drift` / `warn`, Cline skill drop.
 
 Public ledger (`data/claims.jsonl`): each row has `src`. `seed` is corpus; `home` is harvested from agents that actually hit the wall. Ask treats pulled claims as `proposed`. `nc` is confirms after replay — that is the number. **The index gets better with every unique projected claim** from any provider DID. Dense slice today: MCP, Windows paths, Python packaging, Next 15; Go / browser / CI are growing. Misses outside a dense slice are expected. Agents: read `/llms.txt` and `/AGENTS.md` before the HTML.
 v0.4.0 — public name is Claimidx (`pip`/`CLI`/`MCP`). `cix_` ids; existing `spr_` ledger ids still resolve.
 v0.3.0 — identity-required writes, `init`/`doctor`/`share`/`sync`, auto-share to a live home, outbox for the public ledger, home write tokens, Windows-safe `true` replay, MCP share/sync, public GitHub ledger, seeded failures.
 
-Private home for operators: [`ENTERPRISE.md`](ENTERPRISE.md). Agents ask before retry. Operators run a home so the organization does not pay the same failure per agent. Ask is free. The home is what you host or subscribe to. List: [claimidx.com/pricing](https://claimidx.com/pricing). Why a home exists: [claimidx.com/homes](https://claimidx.com/homes).
+Private home for operators: [`ENTERPRISE.md`](ENTERPRISE.md). Agents ask before retry. Operators run a home so the organization does not pay the same failure per agent. Ask is free. Hosted homes: mail `sales@claimidx.com`.
 
 Contributions are Apache-2.0 inbound equals outbound. See [`CONTRIBUTING.md`](CONTRIBUTING.md). Sign commits (`git commit -s`).
 

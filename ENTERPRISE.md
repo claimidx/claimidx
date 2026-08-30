@@ -44,25 +44,11 @@ Acceptance test: two agents, two machines; the second hits a claim it did not pu
 | Offering | Who operates it | What you pay | Typical use |
 |---|---|---|---|
 | Commons | Nobody (public jsonl) | $0 | Distribution; `home-ask` with no DID |
-| Cloud Starter / Team / Business | Claimidx | Monthly or annual, DID cap + write bucket | Default hosted option |
-| Self-hosted home | Your operators | Annual support on software you can already run | Residency / regulated networks |
-| Enterprise | Claimidx + your operators | Quote, from $15k ACV | Multi-home, DPA, onboarding |
+| Hosted home | Claimidx | mail `sales@claimidx.com` | One endpoint for the org |
+| Self-hosted home | Your operators | mail `sales@claimidx.com` for support | Residency / regulated networks |
+| Enterprise | Claimidx + your operators | Quote | Multi-home, DPA, onboarding |
 
-Ask is never billed. Human seats are never billed. Stored claims are never billed. Capacity is organization + DID count. Included write buckets are not a hard cut on `ask`.
-
-List (also [claimidx.com/pricing](https://claimidx.com/pricing)):
-
-| SKU | Price | Includes |
-|---|---|---|
-| Commons | $0 | Local sqlite, public jsonl, unlimited ask |
-| Cloud Starter | $29 / mo · $290 / yr | 15 DIDs, hosted home, 5k writes/mo |
-| Cloud Team | $99 / mo · $990 / yr | 50 DIDs, audit export, 25k writes/mo |
-| Cloud Business | $299 / mo · $2,990 / yr | 200 DIDs, SLA target, 100k writes/mo |
-| Extra DID | $3 / DID / mo | After cap |
-| Self-host support | $4,800 or $9,600 / yr | Support, not a license |
-| Enterprise | from $15k ACV | Quote only |
-
-Cloud and self-host support: Stripe Payment Links on [claimidx.com/pricing](https://claimidx.com/pricing) (live). After pay, a signed webhook records the payment. Mail `support@claimidx.com` the org name if a home is not up. Enterprise is quote only (`sales@claimidx.com`).
+Ask is never billed. Human seats are never billed. Stored claims are never billed. Hosted and enterprise: mail `sales@claimidx.com`. Support: `support@claimidx.com`.
 
 The CLI is Apache-2.0. The name, site, canonical public ledger, and operated Cloud are not a license grant.
 
@@ -73,7 +59,7 @@ The CLI is Apache-2.0. The name, site, canonical public ledger, and operated Clo
 | SSO / SAML | Not shipped. Gate is DID + issued Bearer. SSO would issue DIDs, not replace them. |
 | Multi-tenant in one process | Run one home per tenant, or prefix DIDs (`did:claimidx:acme:harper`). |
 | HA | SQLite plus a reverse proxy. Put the database on persistent disk. |
-| Hosted Cloud | Cloudflare Worker + D1 at `https://home.claimidx.com/t/<org>`. One tenant row, DID cap, Bearer. |
+| Hosted home | Operated by Claimidx. Mail `sales@claimidx.com`. |
 | Data residency | Self-host holds the file. Cloud is one tenant per process. |
 
 ## Agent loop

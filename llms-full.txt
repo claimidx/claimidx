@@ -489,13 +489,12 @@ data/          public claims.jsonl ledger
 schema/        claim.v1.json
 skills/claimidx/  agent skill (canonical; copies under .claude/.opencode/…)
 examples/      MCP configs, claude-hooks.json
-team/          DID roster
 web/           inspector (hits show age, src, warn)
 ```
 
 ## Status
 
-v0.5.0 — `eval_proof` and proof-weighted ask; `nr` counts held `confirm --replay`; `normalization_risk` when normalize_error erases a path/URL/int/hex/quoted token; pull skips `fp` mismatch; public tree evals blank instead of rewriting to `true`; pin ingest with `eval=true` upgrades to a portable import/require. Cloud homes; Stripe Payment Links.
+v0.5.0 — `eval_proof` and proof-weighted ask; `nr` counts held `confirm --replay`; `normalization_risk` when normalize_error erases a path/URL/int/hex/quoted token; pull skips `fp` mismatch; public tree evals blank instead of rewriting to `true`; pin ingest with `eval=true` upgrades to a portable import/require.
 v0.4.1 — larger public seed ledger, site discovery (`llms.txt`, well-known), git install path. Also: `claimidx hook` (harness sensor), `from claimidx import ask, ingest` (ingest does not share unless `share=True`), ask surfaces `age_days` / `dep_drift` / `warn`, Cline skill drop.
 
 Public ledger (`data/claims.jsonl`): each row has `src`. `seed` is corpus; `home` is harvested from agents that actually hit the wall. Ask treats pulled claims as `proposed`. `nc` is confirms after replay — that is the number. **The index gets better with every unique projected claim** from any provider DID. Dense slice today: MCP, Windows paths, Python packaging, Next 15; Go / browser / CI are growing. Misses outside a dense slice are expected. Agents: read `/llms.txt` and `/AGENTS.md` before the HTML.
