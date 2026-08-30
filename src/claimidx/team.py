@@ -17,6 +17,7 @@ ROSTER = {
     "benjamin": {"did": "did:claimidx:benjamin", "role": "enterprise"},
     "lucas": {"did": "did:claimidx:lucas", "role": "protocol"},
     "verifier": {"did": "did:claimidx:verifier", "role": "verify"},
+    "verifier-2": {"did": "did:claimidx:verifier-2", "role": "verify"},
     "reme": {"did": "did:claimidx:reme", "role": "core"},
 }
 
