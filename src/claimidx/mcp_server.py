@@ -193,6 +193,11 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         if existing and not args.get("force"):
             return {"exists": True, "id": existing[0].id, "st": existing[0].st}
         extra = {"id": existing[0].id} if existing else {}
+        reset = {}
+        if existing and args.get("force"):
+            from .store import force_reset_from
+
+            reset = force_reset_from(existing[0])
         from .public import refine_eval
 
         ev = refine_eval(args["eval"], fix_k=args["fix_k"], fix_b=args["fix_b"], dep=dep, eco=args.get("eco") or "")
@@ -202,9 +207,11 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         from .home import maybe_share
 
         shared = maybe_share(store, c)
-        out = {"exists": False, "id": c.id, "fp": c.fp, "st": c.st, "own": c.own}
+        out = {"exists": False, "id": c.id, "fp": c.fp, "st": c.st, "own": c.own, "nr": c.nr}
         if shared:
             out["share"] = shared
+        if any(reset.values()):
+            out["force_reset"] = reset
         return out
     if name == "claimidx_confirm":
         existing = store.get(args["id"])

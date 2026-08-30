@@ -103,7 +103,9 @@ def hit_warn(query: Claim | dict, claim: Claim) -> list[str]:
         warns.append(f"{d['name']} query={d['query']} claim={d['claim']}")
     qerr = query.err if isinstance(query, Claim) else (query.get("err") or "")
     if eval_is_proof(claim.eval.cmd):
-        if normalize_error(qerr) != (claim.err or ""):
+        # Stored err is already canonical. Same normalize_error form is not
+        # exact: quoted non-module tokens collapse to <STR>.
+        if (qerr or "").strip() != (claim.err or ""):
             warns.append("eval_proof is recipe-per-fp, not query-err match")
     else:
         warns.append("eval is not proof")

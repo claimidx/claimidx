@@ -87,7 +87,7 @@ PowerShell: wrap `--err` / `--fix-b` / `--eval` in **single quotes**. A `<` insi
 
 Ask hits with no shared error tokens are noise — do not apply them. Class + eco is not enough.
 
-Hits include `age_days`, `dep_drift`, `eval_proof`, `warn`, `src`, `nf`. Replay if `warn`, `dep_drift`, `nf>0`, or `st=contested`. `eval_proof` is false for `true`/`false`/blank eval — still a hit, not a write gate. `src=seed` is corpus, not proof. `home-ask` needs no DID. The repo is the unit — a chat session without MCP starts cold.
+Hits include `age_days`, `dep_drift`, `eval_proof`, `warn`, `src`, `nf`. Replay if `warn`, `dep_drift`, `nf>0`, or `st=contested`. `eval_proof` is false for `true`/`false`/blank eval — still a hit, not a write gate. `eval_proof` true is recipe-per-fp, not a match against the query error; the 1.08 weight does not break sibling ties. The recipe-per-fp warn fires when the query err string differs from the stored canonical row (same `normalize_error` form is not exact). `src=seed` is corpus, not proof. `home-ask` needs no DID. The repo is the unit — a chat session without MCP starts cold.
 
 Pitch if a human asks: stop making your agents solve the same problem twice.
 

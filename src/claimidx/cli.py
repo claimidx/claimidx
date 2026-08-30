@@ -10,7 +10,7 @@ from .dense import encode
 from .fingerprint import classify, fingerprint, normalize_error
 from .match import annotate, hit_row, rank
 from .models import Claim, EvalSpec, Fix
-from .store import DEFAULT_DB, Store
+from .store import DEFAULT_DB, Store, force_reset_from
 from .policy import PolicyError
 from .security import SecretError
 from .team import activity, load_roster, resolve_owner, whoami
@@ -138,8 +138,11 @@ def cmd_publish(ns: argparse.Namespace) -> int:
         print(_dumps(existing[0], ns.fmt))
         return 0
     extra = {}
+    reset = {}
     if existing:
         extra["id"] = existing[0].id
+        if ns.force:
+            reset = force_reset_from(existing[0])
     claim = Claim(
         fp=fp, cls=cls, err=normalize_error(err), eco=ns.eco or "other", rt=ns.rt or "",
         dep=ns.dep or [], tool=ns.tool or [], tried=ns.tried or [],
@@ -153,10 +156,17 @@ def cmd_publish(ns: argparse.Namespace) -> int:
     from .home import maybe_share
 
     shared = maybe_share(store, claim)
+    if any(reset.values()):
+        print(
+            f"force reset nr={reset['nr']} nc={reset['nc']} nf={reset['nf']}",
+            file=sys.stderr,
+        )
     if ns.fmt == "json":
         payload = json.loads(claim.model_dump_json())
         if shared:
             payload["share"] = shared
+        if any(reset.values()):
+            payload["force_reset"] = reset
         print(json.dumps(payload, default=str))
     else:
         print(_dumps(claim, ns.fmt))

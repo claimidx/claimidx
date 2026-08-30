@@ -113,6 +113,39 @@ def test_force_publish_reuses_id(tmp_path: Path, capsys):
     assert "force-mod==2" in capsys.readouterr().out
 
 
+def test_force_resets_nr_and_surfaces_previous(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    rt = _py_rt()
+    eval_cmd = "python -c \"import sys\""
+    assert main([
+        "--db", db, "--fmt", "id", "publish",
+        "--err", "ModuleNotFoundError: No module named 'force_nr'", "--eco", "py",
+        "--rt", rt, "--fix-k", "constraint", "--fix-b", "ok", "--eval", eval_cmd,
+    ]) == 0
+    cid = capsys.readouterr().out.strip()
+    assert main(["--db", db, "--fmt", "json", "confirm", "--replay", cid]) == 0
+    held = json.loads(capsys.readouterr().out)
+    assert held.get("nr") == 1 or (held.get("claim") or {}).get("nr") == 1 or '"nr": 1' in json.dumps(held)
+    rc = main([
+        "--db", db, "--fmt", "json", "publish", "--force",
+        "--err", "ModuleNotFoundError: No module named 'force_nr'", "--eco", "py",
+        "--rt", "py@3.9", "--fix-k", "constraint", "--fix-b", "ok", "--eval", eval_cmd,
+    ])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "force reset nr=1" in captured.err
+    out = json.loads(captured.out)
+    assert out["id"] == cid
+    assert out.get("nr") == 0
+    assert out.get("force_reset") == {"nr": 1, "nc": 1, "nf": 0}
+    assert out.get("rt") == "py@3.9"
+    assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
+    shown = json.loads(capsys.readouterr().out)
+    assert shown.get("nr") == 0
+    assert shown.get("nc") == 0
+    assert shown.get("rt") == "py@3.9"
+
+
 def test_confirm_replay_json(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
     assert main(["--db", db, "--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'replay_mod'", "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install replay-mod", "--eval", "true"]) == 0

@@ -193,11 +193,16 @@ def create_app(db: str | None = None) -> FastAPI:
         if existing and not payload.force:
             return {"exists": True, "claim": existing[0].model_dump(mode="json")}
         extra = {}
+        reset = {}
         cid = (payload.id or "").strip()
         if cid:
             extra["id"] = cid
         elif existing:
             extra["id"] = existing[0].id
+            if payload.force:
+                from .store import force_reset_from
+
+                reset = force_reset_from(existing[0])
         try:
             c = Claim(
                 fp=fp, cls=cls, err=normalize_error(payload.err), eco=payload.eco, rt=payload.rt, dep=payload.dep,
@@ -210,7 +215,10 @@ def create_app(db: str | None = None) -> FastAPI:
         except (PolicyError, SecretError, ValueError) as e:
             raise HTTPException(400, str(e)) from e
         store.log("publish", own, c.id)
-        return {"exists": False, "claim": c.model_dump(mode="json")}
+        body = {"exists": False, "claim": c.model_dump(mode="json")}
+        if any(reset.values()):
+            body["force_reset"] = reset
+        return body
 
     @app.post("/api/ingest")
     def ingest(payload: PublishBody, _auth: str = Depends(require_write)):

@@ -131,6 +131,28 @@ def test_eval_proof_warns_only_when_query_err_differs():
     assert any("recipe-per-fp" in w for w in annotate(sib, proof, 0.9)["warn"])
 
 
+def test_eval_proof_warns_when_quoted_value_only_matches_after_normalize():
+    from claimidx.match import annotate
+
+    raw = (
+        "pydantic.ValidationError: 1 validation error for Model\n"
+        "status\n  Input should be 'thumbs_up' [type=literal_error, input_value='👍']"
+    )
+    other = (
+        "pydantic.ValidationError: 1 validation error for Model\n"
+        "status\n  Input should be 'thumbs_up' [type=literal_error, input_value='👎']"
+    )
+    proof = _claim(raw, eco="py")
+    proof.eval.cmd = "python -c \"import pydantic\""
+    assert "<STR>" in proof.err
+    assert normalize_error(other) == proof.err
+    other_meta = annotate({"err": other, "eco": "py"}, proof, 0.9)
+    assert any("recipe-per-fp" in w for w in other_meta["warn"])
+    assert any("normalization_risk" in w and "str" in w for w in other_meta["warn"])
+    stored = annotate({"err": proof.err, "eco": "py"}, proof, 0.9)
+    assert not any("recipe-per-fp" in w for w in stored["warn"])
+
+
 def test_rt_drift_warns_and_ranks_under_matching_runtime():
     from claimidx.match import annotate, hit_warn, hold_applies, rank, rt_drift
 
