@@ -3,7 +3,17 @@ from pathlib import Path
 from claimidx.cli import main
 from claimidx.sandbox import ReplayResult
 from claimidx.store import Store
-from claimidx.verify import _pin_spec, decide, harness, is_harnessable, is_runnable, pick, run
+from claimidx.verify import (
+    _dep_pip,
+    _install_plan,
+    _pin_spec,
+    decide,
+    harness,
+    is_harnessable,
+    is_runnable,
+    pick,
+    run,
+)
 from claimidx.models import Claim, EvalSpec, Fix
 from claimidx.fingerprint import fingerprint, classify, normalize_error
 
@@ -175,6 +185,57 @@ def test_pin_spec_takes_first_requirement():
     assert _pin_spec("pip install setuptools") == "setuptools"
     assert _pin_spec("pip install standard-imghdr  # PEP 594") == "standard-imghdr"
     assert _pin_spec("pandas<2.0 and numpy<2  (both pins are required)") == "pandas<2.0"
+
+
+def test_dep_pip_and_install_plan_overlay_pin():
+    assert _dep_pip(["transformers@4.38.2", "huggingface-hub@1.29.0"]) == [
+        "transformers==4.38.2",
+        "huggingface-hub==1.29.0",
+    ]
+    assert _dep_pip(["github.com/ugorji/go@v1.1.4"]) == []
+    broken, fixed = _install_plan(
+        ["huggingface_hub<1.0"],
+        ["transformers@4.38.2", "huggingface-hub@1.29.0"],
+    )
+    assert "transformers==4.38.2" in broken
+    assert "huggingface-hub==1.29.0" in broken
+    assert "huggingface_hub<1.0" in fixed
+    assert "huggingface-hub==1.29.0" not in fixed
+
+
+def test_harness_installs_dep_then_pin(tmp_path: Path, monkeypatch):
+    calls = []
+    replays = iter(
+        [
+            ReplayResult(True, True, 1, 0, False, "eval-miss"),
+            ReplayResult(True, True, 0, 0, True, "held"),
+        ]
+    )
+    monkeypatch.setattr("claimidx.verify.replay", lambda *a, **k: next(replays))
+
+    class R:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    def fake_run(argv, *a, **k):
+        calls.append(list(argv))
+        return R()
+
+    monkeypatch.setattr("claimidx.verify.subprocess.run", fake_run)
+    c = _claim(
+        "ImportError: huggingface-hub is required",
+        "python -c \"import transformers\"",
+        fix_k="pin",
+        fix_b="huggingface_hub<1.0",
+    )
+    c.dep = ["transformers@4.38.2", "huggingface-hub@1.29.0"]
+    d = harness(c, tmp_path / "h")
+    assert d["action"] == "confirm"
+    assert d["reason"] == "harness-discriminates"
+    pip_calls = [x for x in calls if "-m" in x and "pip" in x]
+    assert any("transformers==4.38.2" in x for x in pip_calls)
+    assert any("huggingface_hub<1.0" in x for x in pip_calls)
 
 
 def test_pick_runnable_only_self_contained_python():

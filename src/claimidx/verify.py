@@ -89,6 +89,49 @@ def _pkg_name(spec: str) -> str:
     return re.split(r"[<>=!~\[]", spec, maxsplit=1)[0].strip()
 
 
+def _dist_key(name: str) -> str:
+    return (name or "").lower().replace("_", "-")
+
+
+def _dep_pip(dep: list[str] | None) -> list[str]:
+    """Map claim.dep entries like name@1.2.3 to pip requirement strings."""
+    out: list[str] = []
+    for raw in dep or []:
+        d = (raw or "").strip()
+        if not d:
+            continue
+        if "@" in d:
+            name, _, ver = d.partition("@")
+            name, ver = name.strip(), ver.strip()
+            if (not name) or "/" in name or not _PIN.fullmatch(name):
+                continue
+            if ver and re.fullmatch(r"[A-Za-z0-9_.+-]+", ver):
+                out.append(f"{name}=={ver}")
+        elif _PIN.fullmatch(d) and not d.lower().startswith("pip"):
+            out.append(d)
+    return out
+
+
+def _install_plan(specs: list[str], dep: list[str] | None) -> tuple[list[str], list[str]]:
+    """Broken combo (deps, else unpinned names) then pin overlay."""
+    names = [_pkg_name(s) for s in specs if _pkg_name(s)]
+    broken: dict[str, str] = {}
+    for spec in _dep_pip(dep):
+        pkg = _pkg_name(spec)
+        if pkg:
+            broken[_dist_key(pkg)] = spec
+    for name in names:
+        k = _dist_key(name)
+        if k not in broken:
+            broken[k] = name
+    fixed = dict(broken)
+    for spec in specs:
+        pkg = _pkg_name(spec)
+        if pkg:
+            fixed[_dist_key(pkg)] = spec
+    return list(broken.values()), list(fixed.values())
+
+
 def _eval_targets_pin(cmd: str, names: list[str]) -> bool:
     """True when eval mentions a pinned dist (or dist with '-' → '_')."""
     blob = (cmd or "").lower()
@@ -131,6 +174,8 @@ def harness(c: Claim, scratch: Path) -> dict:
     names = [_pkg_name(s) for s in specs if _pkg_name(s)]
     if not names:
         return {"action": "skip", "reason": "harness-no-repro", "id": c.id}
+    broken_req, fixed_req = _install_plan(specs, c.dep)
+    target_names = names + [_pkg_name(s) for s in _dep_pip(c.dep)]
     venv = scratch / "venv"
     try:
         subprocess.run(
@@ -144,7 +189,7 @@ def harness(c: Claim, scratch: Path) -> dict:
     py = _venv_python(venv)
     pip = [str(py), "-m", "pip", "install", "--disable-pip-version-check", "-q"]
     try:
-        br = subprocess.run(pip + names, capture_output=True, text=True, timeout=120)
+        br = subprocess.run(pip + broken_req, capture_output=True, text=True, timeout=180)
     except (subprocess.SubprocessError, OSError) as e:
         return {"action": "skip", "reason": f"harness-broken-install:{e}", "id": c.id}
     if br.returncode != 0:
@@ -156,7 +201,7 @@ def harness(c: Claim, scratch: Path) -> dict:
         }
     broken = _replay_py(py, c.eval.cmd, c.eval.expect)
     try:
-        fx = subprocess.run(pip + specs, capture_output=True, text=True, timeout=120)
+        fx = subprocess.run(pip + fixed_req, capture_output=True, text=True, timeout=180)
     except (subprocess.SubprocessError, OSError) as e:
         return {"action": "skip", "reason": f"harness-pin-install:{e}", "id": c.id}
     if fx.returncode != 0:
@@ -173,6 +218,8 @@ def harness(c: Claim, scratch: Path) -> dict:
         "broken": broken.as_dict(),
         "fixed": fixed.as_dict(),
         "applied": applied,
+        "broken_req": broken_req,
+        "fixed_req": fixed_req,
     }
     if (not broken.held) and fixed.held:
         return {**out, "action": "confirm", "reason": "harness-discriminates"}
@@ -180,7 +227,7 @@ def harness(c: Claim, scratch: Path) -> dict:
         return {**out, "action": "skip", "reason": "harness-no-discriminate"}
     if broken.held and not fixed.held:
         return {**out, "action": "fail", "reason": "harness-eval-miss"}
-    if not _eval_targets_pin(c.eval.cmd, names):
+    if not _eval_targets_pin(c.eval.cmd, target_names):
         return {**out, "action": "skip", "reason": "harness-no-repro"}
     return {**out, "action": "fail", "reason": "harness-eval-miss"}
 
@@ -468,7 +515,13 @@ def run(
                     seen.add(c.id)
                 elif action == "skip":
                     reason = decision.get("reason") or ""
-                    if reason in {"harness-no-repro", "harness-no-discriminate", "pin-eval-unproven"}:
+                    if reason in {
+                        "harness-no-repro",
+                        "harness-no-discriminate",
+                        "harness-broken-install",
+                        "harness-pin-install",
+                        "pin-eval-unproven",
+                    }:
                         seen.add(c.id)
             decision["st"] = (store.get(c.id).st if store.get(c.id) else c.st)
             results.append(decision)
