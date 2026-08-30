@@ -16,6 +16,7 @@ from .models import Claim, EvalSpec, Fix
 from .policy import PolicyError, require_identity
 from .security import SecretError
 from .store import Store
+from .stripe_hook import WebhookError, handle_payload
 from .team import resolve_owner, whoami as team_whoami
 from . import tokens as home_tokens
 from .discovery import LINK_HEADER, ROUTES, resolve as resolve_discovery
@@ -261,6 +262,22 @@ def create_app(db: str | None = None) -> FastAPI:
         except PolicyError as e:
             raise HTTPException(403, str(e)) from e
         return store.reject(claim_id, actor).model_dump(mode="json")
+
+    @app.post("/api/stripe/webhook")
+    async def stripe_webhook(request: Request):
+        secret = (os.environ.get("STRIPE_WEBHOOK_SECRET") or "").strip()
+        if not secret:
+            raise HTTPException(503, "webhook secret not configured")
+        payload = await request.body()
+        header = request.headers.get("stripe-signature") or request.headers.get("Stripe-Signature") or ""
+        try:
+            result = handle_payload(payload, header, secret)
+        except WebhookError as e:
+            raise HTTPException(400, str(e)) from e
+        paid = result.get("paid")
+        if paid:
+            store.log("stripe", paid.get("customer_email") or paid.get("id") or "", str(paid.get("type") or ""))
+        return result
 
     return app
 
