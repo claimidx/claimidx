@@ -59,3 +59,7 @@
 
 /brand/*
   Cache-Control: public, max-age=86400
+
+/site.css
+  Cache-Control: public, max-age=60, must-revalidate
+  Content-Type: text/css; charset=utf-8
