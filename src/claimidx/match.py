@@ -101,7 +101,9 @@ def hit_warn(query: Claim | dict, claim: Claim) -> list[str]:
         warns.append("src=home; confirm requires replay")
     for d in dep_drift(qdep, claim.dep):
         warns.append(f"{d['name']} query={d['query']} claim={d['claim']}")
-    if not eval_is_proof(claim.eval.cmd):
+    if eval_is_proof(claim.eval.cmd):
+        warns.append("eval_proof is recipe-per-fp, not query-err match")
+    else:
         warns.append("eval is not proof")
     qerr = query.err if isinstance(query, Claim) else (query.get("err") or "")
     risks = normalization_risk(qerr)

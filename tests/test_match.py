@@ -94,9 +94,29 @@ def test_eval_proof_is_false_for_tautology_and_ranks_under_recipe():
     assert any("eval is not proof" in w for w in meta["warn"])
     hits = rank(q, [hint, proof], k=2)
     assert hits[0][0].eval.cmd == "npx tsc --noEmit"
+    assert any("recipe-per-fp" in w for w in annotate(q, proof, hits[0][1])["warn"])
     rng = refine_eval("true", fix_k="pin", fix_b="pydantic>=2.7", eco="py")
     assert "importlib.metadata" in rng and eval_is_proof(rng) is True
     assert refine_eval("true", fix_k="patch", fix_b="await params", eco="npm") == "true"
+
+
+def test_eval_proof_weight_does_not_break_recipe_sibling_ties():
+    """*1.08 lifts every recipe sibling equally; it is not an err-match."""
+    from claimidx.match import annotate, rank
+
+    err = "TypeError: params is a Promise"
+    a = _claim(err, eco="npm", dep=["next@15.0.0"])
+    b = _claim(err, eco="npm", dep=["next@15.2.0"])
+    a.eval.cmd = "npx tsc --noEmit"
+    b.eval.cmd = "npx tsc --noEmit"
+    q = {"err": err, "eco": "npm", "dep": ["next@15.1.0"]}
+    hits = rank(q, [a, b], k=2)
+    assert len(hits) == 2
+    assert abs(hits[0][1] - hits[1][1]) < 1e-9
+    for c, s in hits:
+        meta = annotate(q, c, s)
+        assert meta["eval_proof"] is True
+        assert any("recipe-per-fp" in w for w in meta["warn"])
 
 
 def test_rt_drift_warns_and_ranks_under_matching_runtime():
