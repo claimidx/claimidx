@@ -16,13 +16,13 @@ class WebhookError(ValueError):
     pass
 
 
-def parse_signature(header: str) -> dict[str, str]:
-    out: dict[str, str] = {}
+def parse_signature(header: str) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
     for part in (header or "").split(","):
         if "=" not in part:
             continue
         k, v = part.split("=", 1)
-        out[k.strip()] = v.strip()
+        out.setdefault(k.strip(), []).append(v.strip())
     return out
 
 
@@ -30,9 +30,9 @@ def verify_signature(payload: bytes, header: str, secret: str, *, tolerance: int
     if not secret:
         raise WebhookError("webhook secret missing")
     parts = parse_signature(header)
-    ts = parts.get("t")
-    v1 = parts.get("v1")
-    if not ts or not v1:
+    ts = (parts.get("t") or [None])[0]
+    v1s = parts.get("v1") or []
+    if not ts or not v1s:
         raise WebhookError("signature header missing t or v1")
     try:
         stamped = int(ts)
@@ -42,8 +42,10 @@ def verify_signature(payload: bytes, header: str, secret: str, *, tolerance: int
     if abs(clock - stamped) > tolerance:
         raise WebhookError("signature timestamp outside tolerance")
     expected = hmac.new(secret.encode("utf-8"), f"{ts}.".encode("utf-8") + payload, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(expected, v1):
-        raise WebhookError("signature mismatch")
+    for v1 in v1s:
+        if hmac.compare_digest(expected, v1):
+            return
+    raise WebhookError("signature mismatch")
 
 
 def project_paid(event: dict[str, Any]) -> dict[str, Any] | None:

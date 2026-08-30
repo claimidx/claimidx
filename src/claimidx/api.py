@@ -72,14 +72,15 @@ def require_write(authorization: str | None = Header(default=None)) -> str:
 
 def create_app(db: str | None = None) -> FastAPI:
     store = Store(db)
-    origins = [o.strip() for o in (os.environ.get("CLAIMIDX_CORS") or "*").split(",") if o.strip()]
+    origins = [o.strip() for o in (os.environ.get("CLAIMIDX_CORS") or "").split(",") if o.strip()]
     app = FastAPI(
         title="Claimidx",
         version="0.4.0",
         description="Prior art for AI agents. Ask before you retry a failure. Ingest after you learn. Share so the next agent does not pay twice.",
         docs_url="/api/docs",
     )
-    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"])
+    if origins:
+        app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"])
 
     @app.middleware("http")
     async def agent_link_header(request: Request, call_next):
@@ -196,7 +197,12 @@ def create_app(db: str | None = None) -> FastAPI:
         reset = {}
         cid = (payload.id or "").strip()
         if cid:
+            by_id = store.get(cid)
+            if by_id and by_id.fp != fp and not payload.force:
+                raise HTTPException(409, "id exists under a different fingerprint")
             extra["id"] = cid
+            if by_id and payload.force:
+                reset = force_reset_from(by_id)
         elif existing:
             extra["id"] = existing[0].id
             if payload.force:
@@ -234,21 +240,10 @@ def create_app(db: str | None = None) -> FastAPI:
             require_identity(actor)
         except PolicyError as e:
             raise HTTPException(403, str(e)) from e
-        if replay:
-            from .sandbox import replay as run_eval, replay_records_hold
-
-            result = run_eval(c.eval.cmd, c.eval.expect)
-            if result.is_hint():
-                return {"held": False, "recorded": False, "replay": result.as_dict()}
-            if not result.held:
-                failed = store.fail(claim_id, actor)
-                return {"held": False, "replay": result.as_dict(), "claim": failed.model_dump(mode="json")}
-            ok, why = replay_records_hold(c.rt, result, c.eval.cmd)
-            if not ok:
-                return {"held": True, "recorded": False, "reason": why, "replay": result.as_dict()}
+        # Never run eval.cmd in the home process. Replay is `claimidx confirm --replay` on the agent.
         confirmed = store.confirm(claim_id, actor, replayed=bool(replay))
         if replay:
-            return {"held": True, "recorded": True, "replay": result.as_dict(), "claim": confirmed.model_dump(mode="json")}
+            return {"held": True, "recorded": True, "claim": confirmed.model_dump(mode="json")}
         return confirmed.model_dump(mode="json")
 
     @app.post("/api/claims/{claim_id}/fail")

@@ -24,6 +24,14 @@ def test_verify_accepts_matching_signature():
     verify_signature(payload, _sign(payload), SECRET)
 
 
+def test_verify_accepts_any_v1_during_rotation():
+    payload = b'{"id":"evt_1","type":"ping"}'
+    good = _sign(payload)
+    ts, v1 = good.split(",")[0].split("=", 1)[1], good.split("v1=", 1)[1]
+    header = f"t={ts},v1={'0'*64},v1={v1}"
+    verify_signature(payload, header, SECRET)
+
+
 def test_verify_rejects_mismatch_and_stale():
     payload = b'{"id":"evt_1"}'
     with pytest.raises(WebhookError, match="mismatch"):

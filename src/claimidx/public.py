@@ -63,7 +63,11 @@ def public_eval(cmd: str) -> str:
     raw = (cmd or "").strip()
     if not raw:
         return ""
-    if _EVAL_LOCAL.search(raw) or _HOSTY.search(raw) or _EMAIL.search(raw):
+    if _EVAL_LOCAL.search(raw) or _ABS_PATH.search(raw) or _HOSTY.search(raw) or _EMAIL.search(raw):
+        return ""
+    # `./...` is a portable Go package spec, not a tree path.
+    rel = re.sub(r"(?<=\s)\./\.\.\.(?=\s|$)", "", raw)
+    if re.search(r"(?:^|[\s=])(?:\.\.?[/\\]|~[/\\])", rel):
         return ""
     return raw[:200]
 

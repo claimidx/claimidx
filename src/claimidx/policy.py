@@ -109,6 +109,12 @@ def _norm_head(token: str) -> str:
 
 
 _ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.")
+ALLOWED_EVAL_ENV = {
+    "GOTOOLCHAIN",
+    "GOFLAGS",
+    "GO111MODULE",
+    "GOSUMDB",
+}
 _QUOTED = re.compile(r"""(?:'[^']*'|"[^"]*")""")
 
 
@@ -143,6 +149,9 @@ def eval_allowed(cmd: str, *, heads: set[str] | None = None) -> tuple[bool, str]
         return False, f"unparseable eval: {e}"
     if not parts:
         return False, "empty eval"
+    for key in _env:
+        if key not in ALLOWED_EVAL_ENV:
+            return False, f"eval env not allowlisted: {key}"
     head = _norm_head(parts[0])
     denied = {h.lower() for h in DENIED_EVAL_HEADS}
     allowed = {h.lower() for h in (heads or ALLOWED_EVAL_HEADS)}

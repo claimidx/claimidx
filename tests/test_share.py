@@ -150,50 +150,58 @@ def test_publish_preserves_id_and_force(tmp_path: Path):
 
 
 def test_api_confirm_replay(tmp_path: Path):
-    import sys
-
     app = create_app(str(tmp_path / "home.sqlite"))
     client = TestClient(app)
-    rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
     posted = client.post("/api/publish", json={
         "err": "x failed replay",
         "fix_k": "constraint",
         "fix_b": "ok",
         "eval": "python -c \"print(1)\"",
         "own": "did:claimidx:lucas",
-        "rt": rt,
+        "rt": "py@3.13",
     })
     cid = posted.json()["claim"]["id"]
     denied = client.post(f"/api/claims/{cid}/confirm")
     assert denied.status_code == 409
-    hint = client.post("/api/publish", json={
-        "err": "x failed tautology",
-        "fix_k": "constraint",
-        "fix_b": "ok",
-        "eval": "true",
-        "own": "did:claimidx:lucas",
-    })
-    hid = hint.json()["claim"]["id"]
-    taut = client.post(f"/api/claims/{hid}/confirm?replay=true")
-    assert taut.status_code == 200, taut.text
-    assert taut.json().get("recorded") is False
-    bare = client.post("/api/publish", json={
-        "err": "x failed replay bare rt",
-        "fix_k": "constraint",
-        "fix_b": "ok",
-        "eval": "python -c \"print(1)\"",
-        "own": "did:claimidx:lucas",
-    })
-    bid = bare.json()["claim"]["id"]
-    skipped = client.post(f"/api/claims/{bid}/confirm?replay=true")
-    assert skipped.status_code == 200, skipped.text
-    assert skipped.json()["held"] is True
-    assert skipped.json().get("recorded") is False
     ok = client.post(f"/api/claims/{cid}/confirm?replay=true")
     assert ok.status_code == 200, ok.text
     assert ok.json()["held"] is True
     assert ok.json().get("recorded") is True
-    assert ok.json()["replay"]["env"] == rt
+    assert "replay" not in ok.json()
+
+
+def test_api_publish_refuses_id_clobber(tmp_path: Path):
+    app = create_app(str(tmp_path / "home.sqlite"))
+    client = TestClient(app)
+    first = client.post("/api/publish", json={
+        "err": "id clobber one",
+        "fix_k": "constraint",
+        "fix_b": "a",
+        "eval": "true",
+        "own": "did:claimidx:lucas",
+        "id": "cix_aaaaaaaaaaaaaaaa",
+    })
+    assert first.status_code == 200, first.text
+    clash = client.post("/api/publish", json={
+        "err": "id clobber two",
+        "fix_k": "constraint",
+        "fix_b": "b",
+        "eval": "true",
+        "own": "did:claimidx:lucas",
+        "id": "cix_aaaaaaaaaaaaaaaa",
+    })
+    assert clash.status_code == 409
+    forced = client.post("/api/publish", json={
+        "err": "id clobber two",
+        "fix_k": "constraint",
+        "fix_b": "b",
+        "eval": "true",
+        "own": "did:claimidx:lucas",
+        "id": "cix_aaaaaaaaaaaaaaaa",
+        "force": True,
+    })
+    assert forced.status_code == 200, forced.text
+    assert forced.json()["claim"]["fix"]["b"] == "b"
 
 
 def test_api_reject(tmp_path: Path):

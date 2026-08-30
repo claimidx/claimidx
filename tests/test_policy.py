@@ -69,6 +69,11 @@ def test_eval_cargo_docker_and_env_prefix():
     assert eval_allowed("rustc --version")[0]
     assert eval_allowed("docker build -t cix .")[0]
     assert eval_allowed("GOTOOLCHAIN=local go build ./...")[0]
+    bad_env, env_why = eval_allowed("LD_PRELOAD=/tmp/x.so python -c pass")
+    assert not bad_env
+    assert "allowlisted" in env_why
+    npm_env, _ = eval_allowed("NPM_CONFIG_REGISTRY=http://evil.invalid npx tsc --noEmit")
+    assert not npm_env
     assert eval_allowed("python -c ssl.wrap_socket")[0]
     ok, reason = eval_allowed("mv foo bar")
     assert not ok and "not allowlisted" in reason
