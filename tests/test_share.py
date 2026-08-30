@@ -156,12 +156,23 @@ def test_api_confirm_replay(tmp_path: Path):
         "err": "x failed replay",
         "fix_k": "constraint",
         "fix_b": "ok",
-        "eval": "true",
+        "eval": "python -c \"print(1)\"",
         "own": "did:claimidx:lucas",
     })
     cid = posted.json()["claim"]["id"]
     denied = client.post(f"/api/claims/{cid}/confirm")
     assert denied.status_code == 409
+    hint = client.post("/api/publish", json={
+        "err": "x failed tautology",
+        "fix_k": "constraint",
+        "fix_b": "ok",
+        "eval": "true",
+        "own": "did:claimidx:lucas",
+    })
+    hid = hint.json()["claim"]["id"]
+    taut = client.post(f"/api/claims/{hid}/confirm?replay=true")
+    assert taut.status_code == 200, taut.text
+    assert taut.json().get("recorded") is False
     ok = client.post(f"/api/claims/{cid}/confirm?replay=true")
     assert ok.status_code == 200, ok.text
     assert ok.json()["held"] is True

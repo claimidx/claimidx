@@ -159,14 +159,14 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
         from .sandbox import replay
         result = replay(c.eval.cmd, c.eval.expect, cwd=getattr(ns, "cwd", None))
         replay_info = result.as_dict()
+        if result.is_hint():
+            if ns.fmt == "json":
+                print(json.dumps({"held": False, "replay": replay_info, "recorded": False}, default=str))
+            else:
+                print(json.dumps(replay_info), file=sys.stderr)
+                print("not recorded: eval is a hint or preconditions unmet", file=sys.stderr)
+            return 2
         if not result.held:
-            if (result.reason or "").startswith("eval-precondition"):
-                if ns.fmt == "json":
-                    print(json.dumps({"held": False, "replay": replay_info, "recorded": False}, default=str))
-                else:
-                    print(json.dumps(replay_info), file=sys.stderr)
-                    print("not recorded: eval preconditions unmet", file=sys.stderr)
-                return 2
             failed = store.fail(ns.id, resolve_owner(ns.own))
             if ns.fmt == "json":
                 print(json.dumps({"held": False, "replay": replay_info, "claim": json.loads(failed.model_dump_json())}, default=str))

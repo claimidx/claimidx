@@ -74,6 +74,11 @@ class ReplayResult:
             "stderr": self.stderr[-400:],
         }
 
+    def is_hint(self) -> bool:
+        """true/false builtins and unmet trees cannot mint nc."""
+        r = self.reason or ""
+        return r == "builtin" or r.startswith("eval-precondition")
+
 
 _TREE_MARKERS = {
     "npx": ("package.json", "tsconfig.json"),

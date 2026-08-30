@@ -211,9 +211,9 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             from .sandbox import replay
 
             result = replay(existing.eval.cmd, existing.eval.expect, cwd=args.get("cwd"))
+            if result.is_hint():
+                return {"id": existing.id, "st": existing.st, "held": False, "recorded": False, "replay": result.as_dict()}
             if not result.held:
-                if (result.reason or "").startswith("eval-precondition"):
-                    return {"id": existing.id, "st": existing.st, "held": False, "recorded": False, "replay": result.as_dict()}
                 c = store.fail(args["id"], resolve_owner(args.get("own")))
                 return {"id": c.id, "st": c.st, "nc": c.nc, "nf": c.nf, "replay": result.as_dict(), "held": False}
         c = store.confirm(args["id"], resolve_owner(args.get("own")))

@@ -72,10 +72,13 @@ def test_confirm_replay_json(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
     assert main(["--db", db, "--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'replay_mod'", "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install replay-mod", "--eval", "true"]) == 0
     cid = capsys.readouterr().out.strip()
-    assert main(["--db", db, "--fmt", "json", "confirm", "--replay", cid]) == 0
+    rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", cid])
+    assert rc == 2
     out = capsys.readouterr().out
-    assert '"held": true' in out
+    assert '"recorded": false' in out
     assert '"builtin"' in out
+    assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
+    assert '"nc": 0' in capsys.readouterr().out
 
 
 def test_seed_materialize_count():

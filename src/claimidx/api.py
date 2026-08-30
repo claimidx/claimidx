@@ -230,6 +230,8 @@ def create_app(db: str | None = None) -> FastAPI:
             from .sandbox import replay as run_eval
 
             result = run_eval(c.eval.cmd, c.eval.expect)
+            if result.is_hint():
+                return {"held": False, "recorded": False, "replay": result.as_dict()}
             if not result.held:
                 failed = store.fail(claim_id, actor)
                 return {"held": False, "replay": result.as_dict(), "claim": failed.model_dump(mode="json")}
