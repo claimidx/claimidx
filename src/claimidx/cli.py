@@ -175,7 +175,7 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
                 print(json.dumps(replay_info), file=sys.stderr)
                 print(_dumps(failed, ns.fmt))
             return 2
-    confirmed = store.confirm(ns.id, resolve_owner(ns.own))
+    confirmed = store.confirm(ns.id, resolve_owner(ns.own), replayed=bool(replay_info))
     from .home import maybe_share
 
     shared = maybe_share(store, confirmed)

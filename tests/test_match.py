@@ -98,6 +98,24 @@ def test_eval_proof_is_false_for_tautology_and_ranks_under_recipe():
     assert refine_eval("true", fix_k="patch", fix_b="await params", eco="npm") == "true"
 
 
+def test_nc_without_replay_and_omitted_runtime_warn():
+    from claimidx.match import hit_warn
+
+    c = _claim("TypeError: params is a Promise", eco="npm", dep=["next@15.0.0"])
+    c.nc = 2
+    c.nr = 0
+    c.rt = "node@20"
+    q = {"err": "TypeError: params is a Promise", "eco": "npm", "dep": ["next@15.0.0"]}
+    w = hit_warn(q, c)
+    assert "nc without replay" in w
+    assert any(x.startswith("rt omitted") for x in w)
+    c.nr = 2
+    q["rt"] = "node@20"
+    w2 = hit_warn(q, c)
+    assert "nc without replay" not in w2
+    assert not any(x.startswith("rt omitted") for x in w2)
+
+
 def test_fail_count_and_contested_surface_on_ask():
     from claimidx.match import hit_warn
 

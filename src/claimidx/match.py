@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from .fingerprint import classify, fingerprint, normalize_error
+from .fingerprint import classify, fingerprint, normalize_error, normalization_risk
 from .models import Claim
 from .public import eval_is_proof
 
@@ -79,6 +79,16 @@ def hit_warn(query: Claim | dict, claim: Claim) -> list[str]:
         warns.append(f"{d['name']} query={d['query']} claim={d['claim']}")
     if not eval_is_proof(claim.eval.cmd):
         warns.append("eval is not proof")
+    qerr = query.err if isinstance(query, Claim) else (query.get("err") or "")
+    risks = normalization_risk(qerr)
+    if risks:
+        warns.append("normalization_risk " + ",".join(risks) + "; replay")
+    qrt = (query.rt if isinstance(query, Claim) else (query.get("rt") or "")).strip()
+    crt = (claim.rt or "").strip()
+    if crt and not qrt:
+        warns.append("rt omitted; replay")
+    if int(claim.nc or 0) >= 1 and int(getattr(claim, "nr", 0) or 0) == 0:
+        warns.append("nc without replay")
     return warns
 
 
@@ -90,6 +100,7 @@ def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
         "age_days": round(age_days(claim), 1),
         "dep_drift": dep_drift(qdep, claim.dep),
         "eval_proof": eval_is_proof(claim.eval.cmd),
+        "nr": int(getattr(claim, "nr", 0) or 0),
         "warn": hit_warn(query, claim),
     }
 

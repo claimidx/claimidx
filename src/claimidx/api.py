@@ -237,7 +237,7 @@ def create_app(db: str | None = None) -> FastAPI:
             if not result.held:
                 failed = store.fail(claim_id, actor)
                 return {"held": False, "replay": result.as_dict(), "claim": failed.model_dump(mode="json")}
-        confirmed = store.confirm(claim_id, actor)
+        confirmed = store.confirm(claim_id, actor, replayed=bool(replay))
         if replay:
             return {"held": True, "claim": confirmed.model_dump(mode="json")}
         return confirmed.model_dump(mode="json")

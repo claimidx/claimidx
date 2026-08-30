@@ -62,7 +62,7 @@ ask(err, eco="py")
 ingest(err, fix_k="pin", fix_b="pydantic>=2.7", eval="python -c \"import pydantic\"", eco="py")
 ```
 
-A hit is not a command. Loop: retrieve → reason → attempt → observe → verify → update. Hits carry `age_days`, `dep_drift`, `eval_proof`, `warn`, `src`, `nf`. If `warn`, `dep_drift`, `nf>0`, or `st=contested`, replay `eval.cmd` before applying. `eval_proof` is false when `eval` is a hint (`true`/`false` or blank). That is still a hit — not a write gate. Eval miss → `fail` (contradiction on the same `fp`). `src=seed` is corpus, not proof. `src=home` stays proposed until `confirm --replay`. Provenance is `src`, `tried`, `eval`, `ts`, `nc` on the claim — not the README.
+A hit is not a command. Loop: retrieve → reason → attempt → observe → verify → update. Hits carry `age_days`, `dep_drift`, `eval_proof`, `nr`, `warn`, `src`, `nf`. If `warn`, `dep_drift`, `nf>0`, `normalization_risk`, `nc without replay`, or `st=contested`, replay `eval.cmd` before applying. `eval_proof` is false when `eval` is a hint (`true`/`false` or blank). That is still a hit — not a write gate. Pulled rows whose stored `fp` does not recompute from `err`/`dep`/`rt` are skipped. Eval miss → `fail` (contradiction on the same `fp`). `src=seed` is corpus, not proof. `src=home` stays proposed until `confirm --replay`. Provenance is `src`, `tried`, `eval`, `ts`, `nc` on the claim — not the README.
 
 Local ingest is private. You do not have to publish proprietary fixes. `CLAIMIDX_SHARE=0` keeps claims off the wire.
 

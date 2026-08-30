@@ -61,6 +61,7 @@ class Claim(BaseModel):
     st: Status = "proposed"
     nc: int = 0
     nf: int = 0
+    nr: int = 0  # confirms that ran confirm --replay and held
     own: str = "did:claimidx:anon"
     model: str = ""
     ts: datetime = Field(default_factory=utcnow)

@@ -67,7 +67,7 @@ proposed ──nc≥1──► confirmed ──stale──► stale
 
 `st` is a rank weight, not a write lock. Confirmed goes `stale` at `exp`, or 90 days after `ts`. Score already decays with age (`1 / (1 + days/45)`).
 
-Ask surfaces what the agent can act on: `age_days`, `dep_drift` (same package, different pin), `src`, `nf`, `warn`. Same package + different version is still a hit, ranked lower. Replay before applying if `warn`, `dep_drift`, `nf>0`, or `st=contested`. Do not spawn a second `proposed` row for the same `fp`. Contradiction is `fail` on that `fp`; a new pin is a new fingerprint.
+Ask surfaces what the agent can act on: `age_days`, `dep_drift` (same package, different pin), `src`, `nf`, `nr` (replay-held confirms), `eval_proof`, `warn`. Same package + different version is still a hit, ranked lower. Replay before applying if `warn`, `dep_drift`, `nf>0`, `normalization_risk`, `nc without replay`, or `st=contested`. `normalization_risk` fires when the query error had a path, URL, integer, hex, or non-module quoted token that `normalize_error` erased. Counter-only `confirm` still increments `nc`; `confirm --replay` that holds increments `nr`. Do not spawn a second `proposed` row for the same `fp`. Contradiction is `fail` on that `fp`; a new pin is a new fingerprint. Pulled ledger rows with a stored `fp` that does not recompute from the claimed fields are skipped.
 
 Provenance is on the claim: `src` (`seed` corpus / `home` harvested / `local`), `tried`, `eval`, `ts`, `nc`. Seed is not proof. Pulled home claims stay `proposed` until `confirm --replay`.
 

@@ -219,7 +219,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             if not result.held:
                 c = store.fail(args["id"], resolve_owner(args.get("own")))
                 return {"id": c.id, "st": c.st, "nc": c.nc, "nf": c.nf, "replay": result.as_dict(), "held": False}
-        c = store.confirm(args["id"], resolve_owner(args.get("own")))
+        c = store.confirm(args["id"], resolve_owner(args.get("own")), replayed=bool(args.get("replay")))
         from .home import maybe_share
 
         shared = maybe_share(store, c)

@@ -25,6 +25,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from .fingerprint import fingerprint
 from .match import hit_compact, rank
 from .models import Claim
 from .policy import PolicyError
@@ -144,6 +145,10 @@ def parse_ledger(text: str) -> tuple[list[Claim], list[str]]:
             raw = json.loads(line)
             raw["src"] = "home"
             claim = Claim.model_validate(raw)
+            got = fingerprint(err=claim.err, cls=claim.cls, eco=claim.eco, rt=claim.rt, dep=claim.dep)
+            if claim.fp != got:
+                skipped.append(f"L{i}: fp mismatch")
+                continue
             accepted.append(claim)
         except (json.JSONDecodeError, PolicyError, SecretError, ValueError) as e:
             skipped.append(f"L{i}: {type(e).__name__}: {e}")

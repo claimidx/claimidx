@@ -42,6 +42,29 @@ def _quote_token(m: re.Match[str]) -> str:
     return "<STR>"
 
 
+def normalization_risk(raw: str) -> list[str]:
+    """What normalize_error erases that can distinguish two failures.
+
+    earnest-penny: a false exact fingerprint can rank before replay.
+    """
+    s = raw or ""
+    flags: list[str] = []
+    if _URL.search(s):
+        flags.append("url")
+    if _PATH.search(s):
+        flags.append("path")
+    if _HEX.search(s):
+        flags.append("hex")
+    if _NUM.search(s):
+        flags.append("int")
+    for m in _QUOTED.finditer(s):
+        inner = m.group(2)
+        if not (_MODULE_NAME.fullmatch(inner) and len(inner) < 80):
+            flags.append("str")
+            break
+    return flags
+
+
 def normalize_error(raw: str) -> str:
     s = raw.strip()
     s = _URL.sub("<URL>", s)

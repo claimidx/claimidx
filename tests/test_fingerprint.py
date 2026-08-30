@@ -40,6 +40,16 @@ def test_tools_list_is_not_a_path():
     assert "<PATH>" not in normalize_error(err)
 
 
+def test_normalization_risk_flags_erased_tokens():
+    from claimidx.fingerprint import normalization_risk
+
+    assert "path" in normalization_risk("failed at /home/runner/app/src/page.tsx")
+    assert "url" in normalization_risk("see https://example.com/x")
+    assert "int" in normalization_risk("status 503 from upstream")
+    assert "str" in normalization_risk('Cannot read property "a long prose phrase here"')
+    assert normalization_risk("ModuleNotFoundError: No module named 'pydantic_core'") == []
+
+
 def test_fingerprint_stable_and_runtime_major():
     a = fingerprint(err="TypeError: params is a Promise", eco="npm", rt="node@20.18.2", dep=["next@15.0.0"])
     b = fingerprint(err="TypeError: params is a Promise", eco="npm", rt="node@20.11.1", dep=["next@15.0.0"])

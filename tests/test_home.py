@@ -68,6 +68,16 @@ def test_pull_from_local_file(tmp_path: Path):
     assert stored.st == "proposed"
 
 
+def test_parse_ledger_skips_fingerprint_mismatch():
+    import json
+
+    raw = json.loads(_line())
+    raw["fp"] = "ab" * 32
+    claims, skipped = parse_ledger(json.dumps(raw) + "\n")
+    assert claims == []
+    assert any("fp mismatch" in s for s in skipped)
+
+
 def test_propose_line_is_one_json_object():
     line = _line()
     assert "\n" not in line

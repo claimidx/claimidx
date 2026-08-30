@@ -162,16 +162,18 @@ class Store:
             c.refresh_status()
         return claims
 
-    def confirm(self, claim_id: str, actor: str = "did:claimidx:anon") -> Claim:
+    def confirm(self, claim_id: str, actor: str = "did:claimidx:anon", *, replayed: bool = False) -> Claim:
         c = self.get(claim_id)
         if not c:
             raise KeyError(claim_id)
         c.nc += 1
+        if replayed:
+            c.nr = int(getattr(c, "nr", 0) or 0) + 1
         if getattr(c, "src", "local") == "home":
             c.src = "local"
         c.refresh_status()
         self.put(c)
-        self._event(claim_id, "confirm", actor)
+        self._event(claim_id, "confirm-replay" if replayed else "confirm", actor)
         return c
 
     def reject(self, claim_id: str, actor: str = "did:claimidx:anon") -> Claim:

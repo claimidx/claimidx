@@ -512,7 +512,7 @@ def run(
             action = decision["action"]
             if not dry_run:
                 if action == "confirm":
-                    store.confirm(c.id, actor)
+                    store.confirm(c.id, actor, replayed=True)
                     changed.append(store.get(c.id))
                     seen.add(c.id)
                 elif action == "fail":
