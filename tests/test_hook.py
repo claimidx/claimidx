@@ -11,6 +11,16 @@ def test_extract_raw_error_line():
     assert event is None
 
 
+def test_extract_tool_result_field():
+    raw = json.dumps({
+        "hook_event_name": "PostToolUseFailure",
+        "tool_result": "ImportError: No module named 'cgi'\n",
+    })
+    err, event = extract_hook_err(raw)
+    assert event == "PostToolUseFailure"
+    assert err and "cgi" in err
+
+
 def test_extract_claude_failure_json():
     raw = json.dumps({
         "hook_event_name": "PostToolUseFailure",
@@ -90,6 +100,26 @@ def test_hook_cli_near_tie_surfaces_both(tmp_path, capsys, monkeypatch):
     assert "await params" in ctx and "await searchParams" in ctx
     assert "Do not execute fix.b" in ctx
     assert a in ctx and b in ctx
+
+
+def test_hook_install_refuses_to_wipe_bad_json(tmp_path, capsys, monkeypatch):
+    settings = tmp_path / "claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text("{not json", encoding="utf-8")
+    rc = main(["hook", "--install"])
+    assert rc == 2
+    assert settings.read_text(encoding="utf-8") == "{not json"
+    assert json.loads(capsys.readouterr().out)["status"] == "error"
+
+
+def test_hook_command_invokes_on_windows():
+    import os
+    from claimidx.hook import claude_hook_block, hook_command
+
+    if os.name != "nt":
+        return
+    assert hook_command().lstrip().startswith("&")
+    assert claude_hook_block()["hooks"][0].get("shell") == "powershell"
 
 
 def test_hook_install_merges_without_clobber(tmp_path, capsys, monkeypatch):

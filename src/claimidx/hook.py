@@ -38,7 +38,7 @@ def extract_hook_err(raw: str) -> tuple[str | None, str | None]:
     if isinstance(obj, dict):
         event = str(obj.get("hook_event_name") or obj.get("hookEventName") or "") or None
         blobs: list[str] = []
-        for key in ("tool_response", "error", "stderr", "output", "message", "content"):
+        for key in ("tool_response", "tool_result", "error", "stderr", "output", "message", "content", "result"):
             val = obj.get(key)
             if isinstance(val, str) and val.strip():
                 blobs.append(val)
@@ -95,7 +95,8 @@ def claude_context(event: str, dense: str) -> str:
 def hook_command() -> str:
     exe = sys.executable
     if os.name == "nt":
-        return f'"{exe}" -m claimidx hook'
+        # PowerShell treats a quoted path as a string, not an invocation.
+        return "& '" + exe.replace("'", "''") + "' -m claimidx hook"
     return f"{shlex.quote(exe)} -m claimidx hook"
 
 
@@ -107,10 +108,10 @@ def claude_settings_path() -> Path:
 
 
 def claude_hook_block() -> dict:
-    return {
-        "matcher": "Bash",
-        "hooks": [{"type": "command", "command": hook_command()}],
-    }
+    h: dict = {"type": "command", "command": hook_command()}
+    if os.name == "nt":
+        h["shell"] = "powershell"
+    return {"matcher": "Bash", "hooks": [h]}
 
 
 def settings_has_claimidx(data: dict) -> bool:
@@ -136,6 +137,10 @@ def merge_claude_hooks(data: dict) -> dict:
             if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
                 h["type"] = "command"
                 h["command"] = cmd
+                if os.name == "nt":
+                    h["shell"] = "powershell"
+                else:
+                    h.pop("shell", None)
                 found = True
     if not found:
         groups.append(claude_hook_block())
@@ -149,12 +154,19 @@ def install_claude_hook(path: Path | None = None) -> dict:
     target.parent.mkdir(parents=True, exist_ok=True)
     data: dict = {}
     if target.exists():
+        raw = target.read_text(encoding="utf-8")
         try:
-            loaded = json.loads(target.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict):
-                data = loaded
-        except (OSError, json.JSONDecodeError):
-            data = {}
+            loaded = json.loads(raw)
+        except json.JSONDecodeError as e:
+            return {
+                "path": str(target),
+                "status": "error",
+                "error": f"settings.json is not json: {e}",
+            }
+        except OSError as e:
+            return {"path": str(target), "status": "error", "error": str(e)}
+        if isinstance(loaded, dict):
+            data = loaded
     merged = merge_claude_hooks(data)
     target.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
     return {
