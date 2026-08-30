@@ -82,7 +82,7 @@ def cmd_hook(ns: argparse.Namespace) -> int:
     if getattr(ns, "install", False):
         rec = install_claude_hook()
         print(json.dumps(rec, indent=2))
-        return 0 if rec.get("status") == "installed" else 2
+        return 0 if rec.get("status") in {"installed", "present"} else 2
 
     raw = (getattr(ns, "err", None) or "").strip() or sys.stdin.read()
     err, event = extract_hook_err(raw)

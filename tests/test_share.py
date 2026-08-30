@@ -149,6 +149,37 @@ def test_publish_preserves_id_and_force(tmp_path: Path):
     assert second.json()["claim"]["fix"]["b"].startswith("still")
 
 
+def test_api_force_keeps_stored_cls(tmp_path: Path):
+    app = create_app(str(tmp_path / "home.sqlite"))
+    client = TestClient(app)
+    err = "TypeError: x is not a function"
+    first = client.post("/api/publish", json={
+        "err": err,
+        "cls": "other",
+        "eco": "npm",
+        "fix_k": "patch",
+        "fix_b": "await x()",
+        "eval": "true",
+        "own": "did:claimidx:harper",
+    })
+    assert first.status_code == 200, first.text
+    cid = first.json()["claim"]["id"]
+    assert first.json()["claim"]["cls"] == "other"
+    second = client.post("/api/publish", json={
+        "err": err,
+        "eco": "npm",
+        "fix_k": "patch",
+        "fix_b": "await x().catch(()=>{})",
+        "eval": "true",
+        "force": True,
+        "own": "did:claimidx:harper",
+    })
+    assert second.status_code == 200, second.text
+    assert second.json()["claim"]["id"] == cid
+    assert second.json()["claim"]["cls"] == "other"
+    assert "catch" in second.json()["claim"]["fix"]["b"]
+
+
 def test_api_confirm_replay(tmp_path: Path):
     app = create_app(str(tmp_path / "home.sqlite"))
     client = TestClient(app)

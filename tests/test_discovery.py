@@ -2,7 +2,9 @@ from fastapi.testclient import TestClient
 
 from claimidx.api import create_app
 from claimidx.discovery import ROUTES
+from claimidx.fingerprint import fingerprint, normalize_error
 from claimidx.mcp_server import TOOLS, handle
+from claimidx.models import Claim, EvalSpec, Fix
 from claimidx.store import Store
 
 
@@ -173,6 +175,53 @@ def test_mcp_ingest_schema_exposes_own():
     pub = next(t for t in TOOLS if t["name"] == "claimidx_publish")
     assert "own" in ingest["inputSchema"]["properties"]
     assert "own" in pub["inputSchema"]["properties"]
+
+
+def test_api_version_matches_package():
+    from claimidx import __version__
+    from claimidx.api import create_app
+
+    assert create_app().version == __version__
+
+
+def test_mcp_force_keeps_stored_cls(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLAIMIDX_SHARE", "0")
+    store = Store(tmp_path / "ix.sqlite")
+    err = "TypeError: x is not a function"
+    c = store.put(Claim(
+        fp=fingerprint(err=err, cls="other", eco="npm"),
+        cls="other",
+        err=normalize_error(err),
+        eco="npm",
+        fix=Fix(k="patch", b="await x()"),
+        eval=EvalSpec(cmd="true"),
+        own="did:claimidx:test",
+    ))
+    rec = handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 21,
+            "method": "tools/call",
+            "params": {
+                "name": "claimidx_ingest",
+                "arguments": {
+                    "err": err,
+                    "eco": "npm",
+                    "fix_k": "patch",
+                    "fix_b": "await x().catch(()=>{})",
+                    "eval": "true",
+                    "force": True,
+                    "own": "did:claimidx:test",
+                },
+            },
+        },
+        store,
+    )
+    assert rec.get("result", {}).get("isError") is not True
+    again = store.get(c.id)
+    assert again is not None
+    assert again.cls == "other"
+    assert "catch" in again.fix.b
 
 
 def test_mcp_ingest_honors_own(tmp_path, monkeypatch):

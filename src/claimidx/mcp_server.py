@@ -179,9 +179,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         return {"hit": bool(hits), "fp": fp, "cls": cls, "err": normalize_error(err), "claims": [hit_compact({"err": err, "cls": cls, "eco": args.get("eco") or "", "rt": args.get("rt") or "", "dep": dep, "fp": fp}, c, s) for c, s in hits]}
     if name == "claimidx_publish":
         err = args["err"]
-        cls = classify(err)
         dep = args.get("dep") or []
-        fp = fingerprint(err=err, cls=cls, eco=args.get("eco") or "", rt=args.get("rt") or "", dep=dep)
         from .policy import inspect_claim
 
         own = resolve_owner(args.get("own"))
@@ -189,7 +187,14 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             err=err, fix_k=args["fix_k"], fix_b=args["fix_b"], eval_cmd=args["eval"],
             note=args.get("note") or "", own=own,
         )
-        existing = store.by_fp(fp)
+        if args.get("force"):
+            cls, fp, existing = store.match_amend(
+                err=err, cls=None, eco=args.get("eco") or "", rt=args.get("rt") or "", dep=dep,
+            )
+        else:
+            cls = classify(err)
+            fp = fingerprint(err=err, cls=cls, eco=args.get("eco") or "", rt=args.get("rt") or "", dep=dep)
+            existing = store.by_fp(fp)
         if existing and not args.get("force"):
             return {"exists": True, "id": existing[0].id, "st": existing[0].st}
         extra = {"id": existing[0].id} if existing else {}

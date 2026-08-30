@@ -295,16 +295,17 @@ def install_grok_mcp(path: Path | None = None, *, own: str, agent: str = "") -> 
     return {"path": str(target), "status": "installed", "command": "claimidx-mcp"}
 
 
-def _load_json_object(target: Path, label: str) -> dict | tuple[dict, dict]:
+def _load_json_object(target: Path, label: str) -> tuple[dict | None, dict | None]:
+    """Return (data, None) or (None, error). A missing file is empty data."""
     if not target.exists():
-        return {}
+        return {}, None
     try:
         loaded = json.loads(target.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
-        return ({"path": str(target), "status": "error", "error": f"{label} is not json: {e}"},)
+        return None, {"path": str(target), "status": "error", "error": f"{label} is not json: {e}"}
     if not isinstance(loaded, dict):
-        return ({"path": str(target), "status": "error", "error": f"{label} is not a json object"},)
-    return loaded
+        return None, {"path": str(target), "status": "error", "error": f"{label} is not a json object"}
+    return loaded, None
 
 
 def install_opencode_mcp(path: Path | None = None, *, own: str, agent: str = "") -> dict:
@@ -314,10 +315,9 @@ def install_opencode_mcp(path: Path | None = None, *, own: str, agent: str = "")
     if not forced and not target.exists() and not target.parent.exists():
         return {"path": str(target), "status": "skip", "reason": "no opencode config dir"}
     target.parent.mkdir(parents=True, exist_ok=True)
-    loaded = _load_json_object(target, "opencode.json")
-    if isinstance(loaded, tuple):
-        return loaded[0]
-    data = loaded
+    data, err = _load_json_object(target, "opencode.json")
+    if err:
+        return err
     mcp = data.get("mcp")
     if mcp is None:
         mcp = {}
@@ -344,10 +344,9 @@ def install_vscode_mcp(path: Path | None = None, *, own: str, agent: str = "") -
     if not forced and not target.exists() and not target.parent.exists():
         return {"path": str(target), "status": "skip", "reason": "no vscode user dir"}
     target.parent.mkdir(parents=True, exist_ok=True)
-    loaded = _load_json_object(target, "mcp.json")
-    if isinstance(loaded, tuple):
-        return loaded[0]
-    data = loaded
+    data, err = _load_json_object(target, "mcp.json")
+    if err:
+        return err
     servers = data.get("servers")
     if servers is None:
         servers = {}

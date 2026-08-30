@@ -19,6 +19,7 @@ from .security import SecretError
 from .store import Store, force_reset_emits, force_reset_from
 from .stripe_hook import WebhookError, handle_payload
 from .team import resolve_owner, whoami as team_whoami
+from . import __version__
 from . import tokens as home_tokens
 from .discovery import LINK_HEADER, ROUTES, resolve as resolve_discovery
 
@@ -75,7 +76,7 @@ def create_app(db: str | None = None) -> FastAPI:
     origins = [o.strip() for o in (os.environ.get("CLAIMIDX_CORS") or "").split(",") if o.strip()]
     app = FastAPI(
         title="Claimidx",
-        version="0.4.0",
+        version=__version__,
         description="Prior art for AI agents. Ask before you retry a failure. Ingest after you learn. Share so the next agent does not pay twice.",
         docs_url="/api/docs",
     )
@@ -188,9 +189,14 @@ def create_app(db: str | None = None) -> FastAPI:
             require_identity(own, src="local")
         except PolicyError as e:
             raise HTTPException(403, str(e)) from e
-        cls = payload.cls or classify(payload.err)
-        fp = fingerprint(err=payload.err, cls=cls, eco=payload.eco, rt=payload.rt, dep=payload.dep)
-        existing = store.by_fp(fp)
+        if payload.force:
+            cls, fp, existing = store.match_amend(
+                err=payload.err, cls=payload.cls, eco=payload.eco or "", rt=payload.rt or "", dep=payload.dep,
+            )
+        else:
+            cls = payload.cls or classify(payload.err)
+            fp = fingerprint(err=payload.err, cls=cls, eco=payload.eco, rt=payload.rt, dep=payload.dep)
+            existing = store.by_fp(fp)
         if existing and not payload.force:
             return {"exists": True, "claim": existing[0].model_dump(mode="json")}
         extra = {}
