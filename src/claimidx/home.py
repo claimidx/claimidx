@@ -34,7 +34,7 @@ from .security import SecretError
 DEFAULT_LEDGER = (
     "https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl"
 )
-USER_AGENT = "claimidx-home/0.4.1"
+USER_AGENT = "claimidx-home/0.5.0"
 
 
 class HomeError(RuntimeError):

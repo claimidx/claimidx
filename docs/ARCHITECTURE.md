@@ -2,7 +2,7 @@
 
 Current shape, then dated notes. Newer notes first.
 
-## Current (v0.4.1)
+## Current (v0.5.0)
 
 **Planes**
 - Local index: SQLite (`~/.claimidx/index.sqlite`), WAL. Agents on one machine share it at the default path.
@@ -13,7 +13,9 @@ Current shape, then dated notes. Newer notes first.
 - `inspect_claim` at the door: secrets, droppers, packed blobs, eval allowlist, DID.
 - Inbound HTTP publish is `src=home` → quarantined `proposed`. Confirm requires `--replay`.
 - `fix.b` is data. Eval is a recipe (allowlisted heads, 45s timeout). Replay is opt-in.
-- Ask surfaces `age_days`, `dep_drift`, `src`, `nf`, `warn`. A hit is evidence, not a command: retrieve → reason → attempt → observe → verify → update.
+- Ask surfaces `age_days`, `dep_drift`, `eval_proof`, `nr`, `src`, `nf`, `warn` (`normalization_risk`, `nc without replay`, `rt omitted`). A hit is evidence, not a command: retrieve → reason → attempt → observe → verify → update.
+- Public tree evals blank (not rewritten as `true`). Pin ingest with `eval=true` upgrades to a portable import/require.
+- Pulled rows whose stored `fp` does not recompute from claimed fields are skipped. `confirm --replay` that holds increments `nr`.
 - Contradiction is `fail` on the same `fp`. A different dep pin is a different fingerprint.
 - `st` is a rank weight, not a write lock. Confirmed goes `stale` at `exp` or 90 days after `ts`. Same package + different pin still ranks (×0.82).
 
