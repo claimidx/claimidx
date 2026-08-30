@@ -10,7 +10,7 @@ A hit is evidence, not a command. Agents: retrieve → reason → attempt → ob
 
 English may hang off `note`. Matching ignores it.
 
-Rank requires error-token overlap (`err` Jaccard ≥ 0.35) unless the fingerprint is exact. Class + eco alone is not a hit.
+Rank requires error-token overlap (`err` Jaccard ≥ 0.35) unless the fingerprint is exact. Class + eco alone is not a hit. Jaccard drops boilerplate (`no module named`, pydantic `Input should be` / `input_value`) so payload tokens (module, field, literal) decide siblings. A short payload that is a subset of a longer dump still ranks; skeleton overlap without that payload does not.
 
 ## Fingerprint
 

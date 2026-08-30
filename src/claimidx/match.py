@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from .fingerprint import classify, fingerprint, normalize_error, normalization_risk, runtime_proof_key
@@ -123,18 +124,36 @@ _ERR_BOILER = {
     "modulenotfounderror", "importerror", "error", "no", "module", "named",
     "cannot", "find", "or", "its", "corresponding", "type", "declarations",
     "the", "a", "an", "from", "is", "not", "defined", "import", "name",
+    # schema-break skeleton (pydantic/zod). Payload is field/literal/type-tag.
+    "be", "for", "input", "should", "valid", "validation", "validationerror",
+    "pydantic", "pydantic.validationerror", "input_value", "input_type",
+    "value", "given", "got", "expected", "received", "required", "field",
+    "string", "n", "str", "url", "path", "hex",
 }
+_ERR_SPLIT = re.compile(r"[^a-z0-9_@./+-]+")
+
+
+def _err_tokens(raw: str) -> set[str]:
+    return {p for p in _ERR_SPLIT.split(normalize_error(raw).lower()) if p}
 
 
 def _err_sim(a: str, b: str) -> float:
-    ta, tb = set(normalize_error(a).lower().split()), set(normalize_error(b).lower().split())
+    ta, tb = _err_tokens(a), _err_tokens(b)
     if not ta or not tb:
         return 0.0
     da, db = ta - _ERR_BOILER, tb - _ERR_BOILER
     if da or db:
         if not da or not db:
             return 0.0
-        return len(da & db) / len(da | db)
+        inter = da & db
+        if not inter:
+            return 0.0
+        # A short payload ("Input should be thumbs_up") is a subset of a full
+        # dump; Jaccard against the dump falls under the floor. Skeleton
+        # overlap without that payload is not a subset and stays Jaccard.
+        if da <= db or db <= da:
+            return 1.0
+        return len(inter) / len(da | db)
     return len(ta & tb) / len(ta | tb)
 
 

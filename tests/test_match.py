@@ -156,6 +156,49 @@ def test_tautological_eval_scores_below_replayable():
     assert strong.score() > weak.score()
 
 
+def test_schema_payload_outranks_validation_skeleton():
+    q = (
+        "pydantic.ValidationError: 1 validation error for Reaction\n"
+        "emoji\n"
+        "  Input should be 'thumbs_up' [type=literal_error, input_value='thumbs_down', input_type=str]"
+    )
+    payload = _claim("Input should be 'thumbs_up'", eco="py", dep=["pydantic@2"])
+    payload.fix = Fix(k="patch", b="Literal thumbs_up")
+    skeleton = _claim(
+        "pydantic.ValidationError: 1 validation error for Reaction\n"
+        "user\n"
+        "  Input should be a valid string [type=string_type, input_value='@foo', input_type=str]",
+        eco="py",
+        dep=["pydantic@2"],
+    )
+    skeleton.fix = Fix(k="patch", b="coerce @foo")
+    qrow = {"err": q, "eco": "py", "dep": ["pydantic@2"]}
+    hits = rank(qrow, [skeleton, payload], k=2)
+    assert hits, "payload sibling must remain a hit"
+    assert hits[0][0].id == payload.id
+    assert similarity(qrow, skeleton) < similarity(qrow, payload)
+
+
+def test_disjoint_schema_literals_are_not_the_same_hit():
+    thumbs = _claim(
+        "pydantic.ValidationError: 1 validation error for Reaction\n"
+        "emoji\n"
+        "  Input should be 'thumbs_up' [type=literal_error, input_value='thumbs_down', input_type=str]",
+        eco="py",
+        dep=["pydantic@2"],
+    )
+    q = {
+        "err": (
+            "pydantic.ValidationError: 1 validation error for Reaction\n"
+            "user\n"
+            "  Input should be a valid string [type=string_type, input_value='@foo', input_type=str]"
+        ),
+        "eco": "py",
+        "dep": ["pydantic@2"],
+    }
+    assert rank(q, [thumbs]) == []
+
+
 def test_mcp_own_error_does_not_hit_tools_list():
     mcp = _claim(
         "Error: MCP error -32601: Method not found: tools/list",
