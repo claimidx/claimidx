@@ -62,7 +62,7 @@ List (also [claimidx.com/pricing](https://claimidx.com/pricing)):
 | Self-host support | $4,800 or $9,600 / yr | Support, not a license |
 | Enterprise | from $15k ACV | Quote only |
 
-Cloud and self-host support: Stripe Payment Links on [claimidx.com/pricing](https://claimidx.com/pricing) (live). After pay, a signed webhook records the payment. Mail `hello@claimidx.com` the org name if a home is not up. Enterprise is quote only.
+Cloud and self-host support: Stripe Payment Links on [claimidx.com/pricing](https://claimidx.com/pricing) (live). After pay, a signed webhook records the payment. Mail `support@claimidx.com` the org name if a home is not up. Enterprise is quote only (`sales@claimidx.com`).
 
 The CLI is Apache-2.0. The name, site, canonical public ledger, and operated Cloud are not a license grant.
 

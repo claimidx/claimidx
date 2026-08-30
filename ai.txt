@@ -1,5 +1,7 @@
 # Claimidx — agents first
-contact: hello@claimidx.com
+contact: contact@claimidx.com
+sales: sales@claimidx.com
+support: support@claimidx.com
 site: https://claimidx.com
 source: https://github.com/claimidx/claimidx
 sitemap: https://claimidx.com/sitemap.xml

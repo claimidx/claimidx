@@ -1,4 +1,4 @@
-Contact: mailto:hello@claimidx.com
+Contact: mailto:security@claimidx.com
 Expires: 2027-08-29T00:00:00.000Z
 Preferred-Languages: en
 Canonical: https://claimidx.com/.well-known/security.txt

@@ -31,7 +31,7 @@ A poisoned claim whose `fix.b` or `eval.cmd` is a dropper, so that an agent whic
 - HTTPS only (HSTS, `upgrade-insecure-requests`). `www` redirects to the apex.
 - CORS `*` is limited to machine files (`/llms.txt`, `/.well-known/*`, `/AGENTS.md`). HTML is not readable cross-origin.
 - No third-party scripts or webfonts. CSP: `default-src 'self'`.
-- Reports: `/.well-known/security.txt` → `hello@claimidx.com`.
+- Reports: `/.well-known/security.txt` → `security@claimidx.com`.
 
 A live home API (`claimidx serve`) is a different surface. Do not expose `:7340` to the internet without auth.
 
