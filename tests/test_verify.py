@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from claimidx.cli import main
-from claimidx.verify import _pin_spec, decide, pick
+from claimidx.verify import _pin_spec, decide, is_runnable, pick
 from claimidx.models import Claim, EvalSpec, Fix
 from claimidx.fingerprint import fingerprint, classify, normalize_error
 
@@ -26,6 +26,29 @@ def test_pin_spec_takes_first_requirement():
     assert _pin_spec("setuptools<81") == "setuptools<81"
     assert _pin_spec('numpy<2  (scipy 1.10.1 declares numpy<1.27)') == "numpy<2"
     assert _pin_spec("pip install setuptools") is None
+
+
+def test_pick_runnable_only_self_contained_python():
+    a = _claim("ModuleNotFoundError: No module named 'va'", "true")
+    b = _claim("ModuleNotFoundError: No module named 'vb'", "python -c pass")
+    g = _claim("missing go.sum entry", "go build ./...", fix_k="cmd", fix_b="go mod tidy")
+    g.eco = "go"
+    got = pick([a, b, g], k=8, ids=None, seen=set(), runnable=True)
+    assert [x.err for x in got] == [b.err]
+    assert is_runnable(b) and not is_runnable(a) and not is_runnable(g)
+
+
+def test_decide_runnable_python_miss_is_fail(tmp_path: Path):
+    scratch = tmp_path / "s"
+    scratch.mkdir()
+    c = _claim(
+        "ModuleNotFoundError: No module named 'no_such_cix_mod_zzz'",
+        "python -c \"import no_such_cix_mod_zzz\"",
+        fix_k="patch",
+        fix_b="install it",
+    )
+    d = decide(c, scratch=scratch)
+    assert d["action"] == "fail"
 
 
 def test_pick_skips_true_and_rejected():

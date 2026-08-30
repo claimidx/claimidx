@@ -89,7 +89,31 @@ def _today() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
-def pick(claims: list[Claim], *, k: int, ids: list[str] | None, seen: set[str]) -> list[Claim]:
+_RUNNABLE_HEADS = {"python", "python3"}
+_PIP_EDITABLE = re.compile(r"\bpip\b.+\binstall\b.*(\s-e\s|\s\.(?:\s|$))", re.I)
+
+
+def is_runnable(c: Claim) -> bool:
+    """Self-contained evals we can actually execute in an empty scratch dir."""
+    cmd = (c.eval.cmd or "").strip()
+    if not cmd or _TAUTOLOGY.match(cmd) or _WRAPPER.search(cmd):
+        return False
+    head = _head(cmd)
+    if head not in _RUNNABLE_HEADS:
+        return False
+    if re.search(r"\bpytest\b", cmd) or _PIP_EDITABLE.search(cmd):
+        return False
+    return True
+
+
+def pick(
+    claims: list[Claim],
+    *,
+    k: int,
+    ids: list[str] | None,
+    seen: set[str],
+    runnable: bool = False,
+) -> list[Claim]:
     if ids:
         by_id = {c.id: c for c in claims}
         return [by_id[i] for i in ids if i in by_id][:k]
@@ -97,15 +121,19 @@ def pick(claims: list[Claim], *, k: int, ids: list[str] | None, seen: set[str]) 
     for c in claims:
         if c.id in seen or c.st == "rejected":
             continue
-        head = _head(c.eval.cmd)
-        if head in {"true", "false"}:
-            continue
-        if _TAUTOLOGY.match((c.eval.cmd or "").strip()):
-            continue
-        if _WRAPPER.search(c.eval.cmd or ""):
-            continue
-        if not head:
-            continue
+        if runnable:
+            if not is_runnable(c):
+                continue
+        else:
+            head = _head(c.eval.cmd)
+            if head in {"true", "false"}:
+                continue
+            if _TAUTOLOGY.match((c.eval.cmd or "").strip()):
+                continue
+            if _WRAPPER.search(c.eval.cmd or ""):
+                continue
+            if not head:
+                continue
         wanted.append(c)
 
     def key(c: Claim):
@@ -211,6 +239,8 @@ def decide(c: Claim, *, scratch: Path) -> dict:
     if result.held:
         return {"action": "confirm", "reason": "held", "id": c.id, "replay": info}
     blob = (result.stderr or "") + " " + (result.stdout or "")
+    if is_runnable(c):
+        return {"action": "fail", "reason": "eval-miss", "id": c.id, "replay": info}
     if _MISSING.search(blob):
         return {"action": "skip", "reason": "missing-dep-or-tool", "id": c.id, "replay": info}
     return {"action": "fail", "reason": "eval-miss", "id": c.id, "replay": info}
@@ -250,6 +280,7 @@ def run(
     own: str | None = None,
     dry_run: bool = False,
     ledger: str | Path | None = None,
+    runnable: bool = False,
 ) -> dict:
     actor = resolve_owner(own)
     seen_st = load_seen()
@@ -257,7 +288,7 @@ def run(
     if seen_st.get("day") != day:
         seen_st = {"day": day, "ids": []}
     seen = set(seen_st.get("ids") or [])
-    chosen = pick(store.all(), k=k, ids=ids, seen=seen)
+    chosen = pick(store.all(), k=k, ids=ids, seen=seen, runnable=runnable)
     results = []
     changed: list[Claim] = []
     scratch_root = Path(tempfile.mkdtemp(prefix="cix-verify-"))
@@ -271,10 +302,11 @@ def run(
                 if action == "confirm":
                     store.confirm(c.id, actor)
                     changed.append(store.get(c.id))
+                    seen.add(c.id)
                 elif action == "fail":
                     store.fail(c.id, actor, note=decision.get("reason") or "verify eval-miss")
                     changed.append(store.get(c.id))
-                seen.add(c.id)
+                    seen.add(c.id)
             decision["st"] = (store.get(c.id).st if store.get(c.id) else c.st)
             results.append(decision)
         if not dry_run:
