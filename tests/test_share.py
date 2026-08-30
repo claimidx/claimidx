@@ -202,6 +202,10 @@ def test_api_publish_refuses_id_clobber(tmp_path: Path):
     })
     assert forced.status_code == 200, forced.text
     assert forced.json()["claim"]["fix"]["b"] == "b"
+    # no counters to wipe → no force_reset event
+    kinds = {e["kind"] for e in client.get("/api/events").json()}
+    assert "publish" in kinds
+    assert "force_reset" not in kinds
 
 
 def test_api_reject(tmp_path: Path):

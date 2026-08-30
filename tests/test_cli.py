@@ -144,6 +144,11 @@ def test_force_resets_nr_and_surfaces_previous(tmp_path: Path, capsys):
     assert shown.get("nr") == 0
     assert shown.get("nc") == 0
     assert shown.get("rt") == "py@3.9"
+    assert main(["--db", db, "--fmt", "json", "events", "-k", "20"]) == 0
+    evs = json.loads(capsys.readouterr().out)
+    wiped = [e for e in evs if e.get("kind") == "force_reset" and e.get("claim_id") == cid]
+    assert wiped, evs
+    assert wiped[0].get("detail") == {"nr": 1, "nc": 1, "nf": 0, "rt": rt}
 
 
 def test_confirm_replay_json(tmp_path: Path, capsys):

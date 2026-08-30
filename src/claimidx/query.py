@@ -107,6 +107,7 @@ def ingest(
     )
     store.put(claim)
     store.log("publish", claim.own, claim.id)
+    store.log_force_reset(claim.own, claim.id, reset)
     out: dict[str, Any] = {"exists": False, "id": claim.id, "st": claim.st, "fp": claim.fp, "own": claim.own, "nr": claim.nr}
     if force_reset_emits(reset):
         out["force_reset"] = reset

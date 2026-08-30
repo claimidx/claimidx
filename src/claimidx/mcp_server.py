@@ -202,6 +202,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         c = Claim(fp=fp, cls=cls, err=normalize_error(err), eco=args.get("eco") or "other", rt=args.get("rt") or "", dep=dep, tried=args.get("tried") or [], fix=Fix(k=args["fix_k"], b=args["fix_b"]), eval=EvalSpec(cmd=ev), own=own, note=args.get("note") or "", **extra)
         store.put(c)
         store.log("publish", c.own, c.id)
+        store.log_force_reset(c.own, c.id, reset)
         from .home import maybe_share
 
         shared = maybe_share(store, c)

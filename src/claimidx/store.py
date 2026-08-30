@@ -59,10 +59,19 @@ class Store:
                 """
                 CREATE TABLE IF NOT EXISTS events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    claim_id TEXT, kind TEXT, actor TEXT, ts TEXT
+                    claim_id TEXT, kind TEXT, actor TEXT, ts TEXT, detail TEXT
                 )
                 """
             )
+            self._migrate_events_detail(con)
+
+    def _migrate_events_detail(self, con: sqlite3.Connection) -> None:
+        row = con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='events'").fetchone()
+        if not row:
+            return
+        cols = {r[1] for r in con.execute("PRAGMA table_info(events)").fetchall()}
+        if "detail" not in cols:
+            con.execute("ALTER TABLE events ADD COLUMN detail TEXT")
 
     def _migrate_v01(self, con: sqlite3.Connection) -> None:
         """Lift the v0.1 denormalized claims table into json-blob v0.2+."""
@@ -257,8 +266,13 @@ class Store:
             by_st[c.st] = by_st.get(c.st, 0) + 1
         return {"n": len(claims), "status": by_st, "confirms": sum(c.nc for c in claims), "fails": sum(c.nf for c in claims)}
 
-    def log(self, kind: str, actor: str, claim_id: str = "") -> None:
-        self._event(claim_id, kind, actor)
+    def log(self, kind: str, actor: str, claim_id: str = "", detail: dict | None = None) -> None:
+        self._event(claim_id, kind, actor, detail)
+
+    def log_force_reset(self, actor: str, claim_id: str, reset: dict) -> None:
+        """Append the wiped hold. stdout/JSON force_reset is not the only record."""
+        if force_reset_emits(reset):
+            self.log("force_reset", actor, claim_id, detail=reset)
 
     def has_event(self, claim_id: str, kinds: tuple[str, ...] = ()) -> bool:
         if not kinds:
@@ -272,7 +286,7 @@ class Store:
         return row is not None
 
     def events(self, limit: int = 100, actor: str | None = None) -> list[dict]:
-        q = "SELECT claim_id, kind, actor, ts FROM events"
+        q = "SELECT claim_id, kind, actor, ts, detail FROM events"
         args: list = []
         if actor:
             q += " WHERE actor=?"
@@ -281,11 +295,25 @@ class Store:
         args.append(limit)
         with self._conn() as con:
             rows = con.execute(q, args).fetchall()
-        return [{"claim_id": r["claim_id"], "kind": r["kind"], "actor": r["actor"], "ts": r["ts"]} for r in rows]
+        out: list[dict] = []
+        for r in rows:
+            row = {"claim_id": r["claim_id"], "kind": r["kind"], "actor": r["actor"], "ts": r["ts"]}
+            raw = r["detail"] if "detail" in r.keys() else None
+            if raw:
+                try:
+                    row["detail"] = json.loads(raw)
+                except json.JSONDecodeError:
+                    row["detail"] = raw
+            out.append(row)
+        return out
 
-    def _event(self, claim_id: str, kind: str, actor: str) -> None:
+    def _event(self, claim_id: str, kind: str, actor: str, detail: dict | None = None) -> None:
+        blob = json.dumps(detail, default=str) if detail else None
         with self._conn() as con:
-            con.execute("INSERT INTO events(claim_id, kind, actor, ts) VALUES(?,?,?,?)", (claim_id, kind, actor, utcnow().isoformat()))
+            con.execute(
+                "INSERT INTO events(claim_id, kind, actor, ts, detail) VALUES(?,?,?,?,?)",
+                (claim_id, kind, actor, utcnow().isoformat(), blob),
+            )
 
     def export_jsonl(self, path: str | Path) -> int:
         path = Path(path)

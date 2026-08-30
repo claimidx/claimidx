@@ -76,6 +76,40 @@ def test_reject_is_terminal(tmp_path: Path):
     assert again is not None and again.st == "rejected"
 
 
+def test_force_reset_is_an_events_row(tmp_path: Path):
+    store = Store(tmp_path / "ix.sqlite")
+    c = store.put(_claim())
+    reset = {"nr": 1, "nc": 1, "nf": 0, "rt": "py@3.12"}
+    store.log_force_reset(c.own, c.id, reset)
+    store.log_force_reset(c.own, c.id, {"nr": 0, "nc": 0, "nf": 0, "rt": ""})
+    rows = [e for e in store.events() if e["kind"] == "force_reset"]
+    assert len(rows) == 1
+    assert rows[0]["claim_id"] == c.id
+    assert rows[0]["detail"] == reset
+
+
+def test_events_detail_migrates_from_legacy_table(tmp_path: Path):
+    import sqlite3
+
+    path = tmp_path / "legacy-events.sqlite"
+    con = sqlite3.connect(path)
+    con.execute(
+        "CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_id TEXT, kind TEXT, actor TEXT, ts TEXT)"
+    )
+    con.execute(
+        "INSERT INTO events(claim_id, kind, actor, ts) VALUES (?,?,?,?)",
+        ("spr_aaaaaaaaaaaaaaaa", "publish", "did:claimidx:test", "2026-08-30T00:00:00+00:00"),
+    )
+    con.commit()
+    con.close()
+    store = Store(path)
+    store.log("force_reset", "did:claimidx:test", "spr_aaaaaaaaaaaaaaaa", detail={"nr": 2, "nc": 2, "nf": 0, "rt": "py@3.12"})
+    kinds = {e["kind"]: e for e in store.events()}
+    assert kinds["publish"]["kind"] == "publish"
+    assert "detail" not in kinds["publish"]
+    assert kinds["force_reset"]["detail"] == {"nr": 2, "nc": 2, "nf": 0, "rt": "py@3.12"}
+
+
 def test_id_must_be_hex():
     import pytest
     from pydantic import ValidationError
