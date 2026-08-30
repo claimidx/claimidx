@@ -185,6 +185,7 @@ def test_pin_spec_takes_first_requirement():
     assert _pin_spec("pip install setuptools") == "setuptools"
     assert _pin_spec("pip install standard-imghdr  # PEP 594") == "standard-imghdr"
     assert _pin_spec("pandas<2.0 and numpy<2  (both pins are required)") == "pandas<2.0"
+    assert _pin_spec("markupsafe 2.1+ removed soft_unicode. Pin markupsafe<2.1 for Jinja2<3.1") == "markupsafe<2.1"
 
 
 def test_dep_pip_and_install_plan_overlay_pin():

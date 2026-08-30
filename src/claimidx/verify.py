@@ -71,12 +71,18 @@ def _pin_specs(fix_b: str) -> list[str]:
         count=1,
         flags=re.I,
     ).strip()
+    rest = line
     line = re.split(r"\s{2,}|\s+\(", line, maxsplit=1)[0].strip()
     out: list[str] = []
     for part in re.split(r"\s+and\s+|,\s*", line):
         token = part.strip().strip("\"'")
         if _PIN.fullmatch(token) and not token.lower().startswith("pip"):
             out.append(token)
+    if not out:
+        for m in re.finditer(r"[A-Za-z][A-Za-z0-9_.-]*[<>=!~]=?[^ \n,#]+", rest):
+            token = m.group(0).strip().strip("\"'")
+            if _PIN.fullmatch(token) and token not in out:
+                out.append(token)
     return out
 
 
