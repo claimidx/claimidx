@@ -11,3 +11,4 @@ build/
 *.sqlite
 .DS_Store
 INTERNAL/
+tmp-visual/
