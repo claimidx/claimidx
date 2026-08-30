@@ -73,6 +73,8 @@ nav {
   font-size: 0.78rem;
 }
 
+nav a[aria-current="page"] { color: var(--oxide); }
+
 .lede {
   padding: 3.2rem 0 2.2rem;
 }
@@ -247,6 +249,87 @@ footer p { margin: 0 0 0.35rem; }
 
 .fine a { color: var(--mute); }
 
+.plans {
+  margin: 2.6rem 0 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.plan {
+  padding: 1.15rem 1.1rem 1.2rem;
+  background: var(--claim);
+  border: 1px solid var(--rule);
+}
+
+.plan-featured {
+  border-color: var(--oxide);
+}
+
+.plan-kicker {
+  margin: 0 0 0.35rem;
+  color: var(--oxide);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.plan h2 {
+  margin: 0 0 0.45rem;
+}
+
+.price {
+  margin: 0 0 0.35rem;
+  font-family: Georgia, "Iowan Old Style", Palatino, serif;
+  font-size: 2rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.price span {
+  color: var(--mute);
+  font-family: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+.plan-who {
+  margin: 0 0 0.9rem;
+  color: var(--mute);
+  font-size: 0.84rem;
+}
+
+.plan ul {
+  margin: 0 0 1.1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.plan li {
+  position: relative;
+  padding: 0.28rem 0 0.28rem 1rem;
+  color: var(--mute);
+  font-size: 0.8rem;
+  border-top: 1px solid var(--rule);
+}
+
+.plan li:before {
+  content: "–";
+  position: absolute;
+  left: 0;
+  color: var(--oxide);
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.45rem 0;
+  color: var(--paper);
+  text-decoration-color: var(--oxide);
+}
+
+.btn:hover { color: var(--oxide); }
+
 ::selection {
   background: var(--oxide);
   color: var(--paper);
@@ -257,4 +340,5 @@ footer p { margin: 0 0 0.35rem; }
   .frame { width: calc(100% - 1.8rem); padding-top: 1.6rem; }
   .loop li { grid-template-columns: 2.4rem 1fr; }
   h1 { font-size: 2.55rem; }
+  nav { flex-wrap: wrap; gap: 0.7rem 1.15rem; }
 }

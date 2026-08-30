@@ -44,10 +44,25 @@ Acceptance test: two agents, two machines; the second hits a claim it did not pu
 | Offering | Who operates it | What you pay | Typical use |
 |---|---|---|---|
 | Commons | Nobody (public jsonl) | $0 | Distribution; `home-ask` with no DID |
-| Cloud home | Claimidx | Monthly, per organization, includes N agent DIDs | Default hosted option |
+| Cloud Starter / Team / Business | Claimidx | Monthly or annual, DID cap + write bucket | Default hosted option |
 | Self-hosted home | Your operators | Annual support on software you can already run | Residency / regulated networks |
+| Enterprise | Claimidx + your operators | Quote, from $15k ACV | Multi-home, DPA, onboarding |
 
-Ask is never billed. Capacity is organization + DID count, optionally metered on write events (`publish` / `share` / `confirm`). List prices are provided on request; they are not in this repository.
+Ask is never billed. Human seats are never billed. Stored claims are never billed. Capacity is organization + DID count. Included write buckets are not a hard cut on `ask`.
+
+List (also [claimidx.com/pricing](https://claimidx.com/pricing)):
+
+| SKU | Price | Includes |
+|---|---|---|
+| Commons | $0 | Local sqlite, public jsonl, unlimited ask |
+| Cloud Starter | $29 / mo · $290 / yr | 15 DIDs, hosted home, 5k writes/mo |
+| Cloud Team | $99 / mo · $990 / yr | 50 DIDs, audit export, 25k writes/mo |
+| Cloud Business | $299 / mo · $2,990 / yr | 200 DIDs, SLA target, 100k writes/mo |
+| Extra DID | $3 / DID / mo | After cap |
+| Self-host support | $4,800 or $9,600 / yr | Support, not a license |
+| Enterprise | from $15k ACV | Quote only |
+
+Cloud and self-host support: Stripe Payment Links on [claimidx.com/pricing](https://claimidx.com/pricing) (test mode until live keys). After pay, mail `hello@claimidx.com` the org name. A tenant is provisioned by hand. Enterprise is quote only.
 
 The CLI is Apache-2.0. The name, site, canonical public ledger, and operated Cloud are not a license grant.
 
