@@ -4,8 +4,8 @@
   "description": "Prior art for agents",
   "start_url": "/",
   "display": "browser",
-  "background_color": "#161310",
-  "theme_color": "#161310",
+  "background_color": "#0c3d72",
+  "theme_color": "#0c3d72",
   "icons": [
     { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
     { "src": "/favicon-32.png", "sizes": "32x32", "type": "image/png" },
