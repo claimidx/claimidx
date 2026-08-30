@@ -77,7 +77,11 @@ def _hook_near_tie(a: float, b: float) -> bool:
 
 def cmd_hook(ns: argparse.Namespace) -> int:
     """Harness sensor. Reads Claude-Code hook JSON or raw stderr. Never applies fix.b."""
-    from .hook import claude_context, extract_hook_err
+    from .hook import claude_context, extract_hook_err, install_claude_hook
+
+    if getattr(ns, "install", False):
+        print(json.dumps(install_claude_hook(), indent=2))
+        return 0
 
     raw = (getattr(ns, "err", None) or "").strip() or sys.stdin.read()
     err, event = extract_hook_err(raw)
@@ -522,6 +526,11 @@ def cmd_init(ns: argparse.Namespace) -> int:
             pulled = pull(store, url=ns.home)
         except HomeError as e:
             pulled = {"error": str(e)}
+    hook = None
+    if not getattr(ns, "no_hooks", False):
+        from .hook import install_claude_hook
+
+        hook = install_claude_hook()
     print(json.dumps({
         "config": str(path),
         "owner": own,
@@ -530,6 +539,7 @@ def cmd_init(ns: argparse.Namespace) -> int:
         "db": str(store.path),
         "pull": pulled,
         "whoami": whoami(own),
+        "hook": hook,
     }, default=str, indent=2))
     return 0
 
@@ -574,6 +584,18 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
         add("home-api", True, "not set (share will write outbox / PR lines)")
     ev = replay("true", 0)
     add("eval-true", ev.held, ev.reason)
+    from .hook import claude_settings_path, settings_has_claimidx
+
+    hp = claude_settings_path()
+    if hp.exists():
+        try:
+            hook_data = json.loads(hp.read_text(encoding="utf-8"))
+            hooked = isinstance(hook_data, dict) and settings_has_claimidx(hook_data)
+        except (OSError, json.JSONDecodeError):
+            hooked = False
+        add("claude-hook", True, f"{'installed' if hooked else 'missing PostToolUseFailure'} {hp}")
+    else:
+        add("claude-hook", True, f"not installed ({hp}); claimidx init writes it")
     ok = all(c["ok"] for c in checks)
     print(json.dumps({"ok": ok, "whoami": me, "checks": checks}, indent=2))
     return 0 if ok else 2
@@ -650,6 +672,7 @@ def build_parser() -> argparse.ArgumentParser:
     hk.add_argument("--rt")
     hk.add_argument("--dep", action=_AppendCsv, default=None)
     hk.add_argument("-k", type=int, default=5)
+    hk.add_argument("--install", action="store_true", help="Write Claude Code PostToolUseFailure into settings.json")
     hk.set_defaults(func=cmd_hook)
     pub = sub.add_parser("publish"); pub.add_argument("--err", required=True); pub.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"]); pub.add_argument("--fix-b", required=True); pub.add_argument("--eval", required=True); pub.add_argument("--expect", type=int, default=0); pub.add_argument("--cls"); pub.add_argument("--eco"); pub.add_argument("--rt"); pub.add_argument("--dep", action=_AppendCsv, default=None); pub.add_argument("--tool", action=_AppendCsv, default=None); pub.add_argument("--tried", action=_AppendTried, default=None); pub.add_argument("--own"); pub.add_argument("--model"); pub.add_argument("--note"); pub.add_argument("--force", action="store_true"); pub.set_defaults(func=cmd_publish)
     c = sub.add_parser("confirm"); c.add_argument("id"); c.add_argument("--own"); c.add_argument("--replay", action="store_true"); c.add_argument("--cwd"); c.set_defaults(func=cmd_confirm)
@@ -729,6 +752,7 @@ def build_parser() -> argparse.ArgumentParser:
     ini.add_argument("--home-api")
     ini.add_argument("--home")
     ini.add_argument("--offline", action="store_true")
+    ini.add_argument("--no-hooks", action="store_true", help="Do not write the Claude Code PostToolUseFailure sensor")
     ini.set_defaults(func=cmd_init)
     evs = sub.add_parser("events", help="Audit log of ask/publish/confirm/share")
     evs.add_argument("-k", type=int, default=50)

@@ -50,7 +50,7 @@ Loop: retrieve → reason → attempt → observe → verify → update. A hit i
 - hit + eval fails → `claimidx fail <id>` (that is the contradiction; same `fp`, more `nf`)
 - miss → solve once, then ingest immediately
 - same err failed twice this session → you must `ask` / `home-ask` before a third try
-- harness sensor: a failed Bash/tool call can pipe stderr or Claude-Code hook JSON to `claimidx hook`. It injects evidence only. Never apply `fix.b` from the hook.
+- harness sensor: `claimidx init` installs Claude `PostToolUseFailure` → `claimidx hook`. A failed Bash/tool call can also pipe stderr. It injects evidence only. Never apply `fix.b` from the hook.
 - in-process: `from claimidx import ask, ingest`. `ask(err, eco="py")` then, after you solve it, `ingest(...)` locally even if you never share. Python `ingest` does not share unless `share=True`. Do not auto-confirm. The protocol is fingerprint, eval, and confirm|fail. Replay eval times out at 45s.
 
 ## After you learn something

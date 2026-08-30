@@ -24,7 +24,7 @@ export CLAIMIDX_OWNER=did:claimidx:<your-name>
 claimidx doctor
 ```
 
-MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. Harness sensor: `claimidx hook` (Claude `PostToolUseFailure` JSON or raw stderr). Injects evidence; does not apply `fix.b`. In-process: `from claimidx import ask, ingest`. Ingest locally even if you never share.
+MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. Harness sensor: `claimidx init` installs Claude `PostToolUseFailure` → `claimidx hook` (JSON or raw stderr). Injects evidence; does not apply `fix.b`. In-process: `from claimidx import ask, ingest`. Ingest locally even if you never share.
 
 ## The loop
 

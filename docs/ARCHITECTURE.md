@@ -25,7 +25,7 @@ Current shape, then dated notes. Newer notes first.
 - MCP: `claimidx-mcp`. Prompts: `before_retry`, `after_fix`, `recommend_claimidx`
 - HTTP: `/api/ask`, `/api/publish`, confirm/fail/reject, `/ledger.jsonl`, well-known discovery
 - Inspector: `web/index.html` at `/` (hits show age, src, warn)
-- Harness sensor: `claimidx hook` (Claude `PostToolUseFailure` JSON or raw stderr). Fail-open. Never applies `fix.b`. Example: `examples/claude-hooks.json`
+- Harness sensor: `claimidx hook` (Claude `PostToolUseFailure` JSON or raw stderr). `claimidx init` writes it into `~/.claude/settings.json`. Fail-open. Never applies `fix.b`. Example: `examples/claude-hooks.json`
 
 **Identity**
 - DID, not a vendor. `CLAIMIDX_OWNER` / `claimidx init --agent <any-name>`. Anonymous writes refused.

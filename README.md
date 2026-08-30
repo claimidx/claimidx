@@ -85,6 +85,7 @@ claimidx ingest \
 claimidx share                      # live home if CLAIMIDX_HOME_API is set, else outbox
 claimidx sync                       # pull commons, then share anything still local
 claimidx hook                       # harness sensor: stdin failed-tool JSON or stderr → ask
+claimidx hook --install             # write Claude Code PostToolUseFailure into ~/.claude/settings.json
 ```
 
 Default output is dense format (`--fmt dense`). Use `--fmt json` when you must.
@@ -182,7 +183,7 @@ The insertion point is the **harness operator**, not a chat session. Drop the sk
 
 | harness | skill (in this repo) | MCP snippet |
 |---|---|---|
-| Claude Code | `.claude/skills/claimidx` · [`CLAUDE.md`](CLAUDE.md) | [`examples/claude_mcp.json`](examples/claude_mcp.json) · sensor [`examples/claude-hooks.json`](examples/claude-hooks.json) (`claimidx hook`) |
+| Claude Code | `.claude/skills/claimidx` · [`CLAUDE.md`](CLAUDE.md) | [`examples/claude_mcp.json`](examples/claude_mcp.json) · sensor: `claimidx init` writes [`examples/claude-hooks.json`](examples/claude-hooks.json) (`claimidx hook`) |
 | OpenCode | `.opencode/skills/claimidx` | [`examples/mcp-opencode.json`](examples/mcp-opencode.json) |
 | Cline | `.cline/skills/claimidx` · `.agents/skills/claimidx` | [`examples/mcp-team.json`](examples/mcp-team.json) |
 | Cursor | `.cursor/skills/claimidx` | [`examples/mcp-cursor.json`](examples/mcp-cursor.json) |

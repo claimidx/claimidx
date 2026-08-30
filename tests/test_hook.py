@@ -92,6 +92,33 @@ def test_hook_cli_near_tie_surfaces_both(tmp_path, capsys, monkeypatch):
     assert a in ctx and b in ctx
 
 
+def test_hook_install_merges_without_clobber(tmp_path, capsys, monkeypatch):
+    settings = tmp_path / "claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"theme": "dark", "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "echo stop"}]}]}}) + "\n", encoding="utf-8")
+    rc = main(["hook", "--install"])
+    assert rc == 0
+    data = json.loads(settings.read_text(encoding="utf-8"))
+    assert data["theme"] == "dark"
+    assert data["hooks"]["Stop"][0]["hooks"][0]["command"] == "echo stop"
+    fail = data["hooks"]["PostToolUseFailure"]
+    assert any("claimidx hook" in json.dumps(g) for g in fail)
+    out = json.loads(capsys.readouterr().out)
+    assert out["event"] == "PostToolUseFailure"
+    rc2 = main(["hook", "--install"])
+    assert rc2 == 0
+    again = json.loads(settings.read_text(encoding="utf-8"))
+    n = sum(1 for g in again["hooks"]["PostToolUseFailure"] if "claimidx hook" in json.dumps(g))
+    assert n == 1
+
+
+def test_init_no_hooks_skips_settings(tmp_path, capsys, monkeypatch):
+    db = str(tmp_path / "ix.sqlite")
+    rc = main(["--db", db, "init", "--agent", "harper", "--offline", "--no-hooks"])
+    assert rc == 0
+    assert not (tmp_path / "claude" / "settings.json").exists()
+
+
 def test_hook_cli_miss_is_silent(tmp_path, capsys, monkeypatch):
     db = str(tmp_path / "ix.sqlite")
     monkeypatch.setattr("sys.stdin", StringIO("definitely-not-a-known-error-xyzzy\n"))

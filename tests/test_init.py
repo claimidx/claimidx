@@ -24,4 +24,11 @@ def test_init_offline_seeds_and_writes_config(tmp_path: Path, capsys, monkeypatc
     assert main(["--db", db, "ls"]) == 0
     listed = capsys.readouterr().out
     assert "spr_a11c000000000001" in listed
+    hook = tmp_path / "claude" / "settings.json"
+    assert hook.exists()
+    import json
+    data = json.loads(hook.read_text(encoding="utf-8"))
+    blob = json.dumps(data)
+    assert "PostToolUseFailure" in blob
+    assert "claimidx hook" in blob
     assert main(["--db", db, "doctor"]) in (0, 2)

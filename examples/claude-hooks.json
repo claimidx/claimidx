@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "claimidx hook --eco py"
+            "command": "python -m claimidx hook"
           }
         ]
       }

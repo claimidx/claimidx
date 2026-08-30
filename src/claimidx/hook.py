@@ -1,13 +1,20 @@
 """Harness sensor: pull an error out of stdin (Claude Code hook JSON or raw stderr).
 
 Does not apply fix.b. Fail-open: no error / secrets / parse issues → empty.
+`claimidx init` writes a Claude Code PostToolUseFailure command into settings.json.
 """
 from __future__ import annotations
 
 import json
+import os
 import re
+import shlex
+import sys
+from pathlib import Path
 
 from .security import SecretError, reject_secrets
+
+_MARKER = "claimidx hook"
 
 _ERR_LINE = re.compile(
     r"Error|Exception|FAILED|FATAL|Traceback|ModuleNotFound|TypeError|"
@@ -83,3 +90,77 @@ def claude_context(event: str, dense: str) -> str:
         }
     }
     return json.dumps(payload, ensure_ascii=False)
+
+
+def hook_command() -> str:
+    exe = sys.executable
+    if os.name == "nt":
+        return f'"{exe}" -m claimidx hook'
+    return f"{shlex.quote(exe)} -m claimidx hook"
+
+
+def claude_settings_path() -> Path:
+    override = os.environ.get("CLAUDE_CONFIG_DIR")
+    if override:
+        return Path(override) / "settings.json"
+    return Path.home() / ".claude" / "settings.json"
+
+
+def claude_hook_block() -> dict:
+    return {
+        "matcher": "Bash",
+        "hooks": [{"type": "command", "command": hook_command()}],
+    }
+
+
+def settings_has_claimidx(data: dict) -> bool:
+    for group in (data.get("hooks") or {}).get("PostToolUseFailure") or []:
+        if not isinstance(group, dict):
+            continue
+        for h in group.get("hooks") or []:
+            if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
+                return True
+    return False
+
+
+def merge_claude_hooks(data: dict) -> dict:
+    out = dict(data or {})
+    hooks = dict(out.get("hooks") or {})
+    groups = list(hooks.get("PostToolUseFailure") or [])
+    cmd = hook_command()
+    found = False
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        for h in group.get("hooks") or []:
+            if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
+                h["type"] = "command"
+                h["command"] = cmd
+                found = True
+    if not found:
+        groups.append(claude_hook_block())
+    hooks["PostToolUseFailure"] = groups
+    out["hooks"] = hooks
+    return out
+
+
+def install_claude_hook(path: Path | None = None) -> dict:
+    target = path or claude_settings_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    data: dict = {}
+    if target.exists():
+        try:
+            loaded = json.loads(target.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                data = loaded
+        except (OSError, json.JSONDecodeError):
+            data = {}
+    merged = merge_claude_hooks(data)
+    target.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
+    return {
+        "path": str(target),
+        "command": hook_command(),
+        "event": "PostToolUseFailure",
+        "matcher": "Bash",
+        "status": "installed",
+    }
