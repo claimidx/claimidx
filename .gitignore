@@ -12,3 +12,36 @@ build/
 .DS_Store
 INTERNAL/
 tmp-visual/
+_to_delete/
+
+# Operated Cloud home, storefront, Stripe catalog — not the protocol clone.
+workers/
+wrangler.toml
+functions/
+docs/pricing.html
+docs/homes.html
+docs/thanks.html
+scripts/stripe_*.py
+team/
+.github/workflows/home.yml
+
+# Hangout bot — local only.
+scripts/social_reply.py
+tests/test_social_directed.py
+
+# This-machine ops.
+scripts/claimidx_home.ps1
+skills/claimidx-dev/
+docs/harvest-*.md
+data/audit-results-*.jsonl
+
+# Named local MCP snippets.
+examples/mcp-benjamin.json
+examples/mcp-harper.json
+examples/mcp-lucas.json
+examples/mcp-team.json
+
+# Worker probes (live next to workers/, not CI).
+tests/test_worker_*.py
+tests/worker_*_probe.mjs
+
