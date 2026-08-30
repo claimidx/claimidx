@@ -1,6 +1,13 @@
 from claimidx.fingerprint import classify, fingerprint, normalize_error
 
 
+def test_contraction_is_not_a_quoted_string():
+    s = normalize_error("FAILED: Can't locate revision identified by '0002'")
+    assert "Can't" in s or "Cant" in s
+    assert s.startswith("FAILED:")
+    assert "<STR>" not in s.split("locate")[0]
+
+
 def test_quoted_strings_keep_identifiers():
     s = normalize_error('TypeError: Cannot read property "foo" of undefined')
     assert "foo" in s

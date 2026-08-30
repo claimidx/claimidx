@@ -57,6 +57,45 @@ def test_fail_missing(tmp_path: Path, capsys):
     assert main(["--db", db, "fail", "spr_aaaaaaaaaaaaaaaa"]) == 1
 
 
+def test_ls_limit_alias(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    for n in range(3):
+        assert main(["--db", db, "--fmt", "id", "publish", "--err", f"ModuleNotFoundError: No module named 'lim{n}'", "--eco", "py", "--fix-k", "pin", "--fix-b", f"pip install lim{n}", "--eval", "true"]) == 0
+        capsys.readouterr()
+    assert main(["--db", db, "ls", "--limit", "1"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("module_not_found") == 1
+
+
+def test_fix_b_leading_dash(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    rc = main([
+        "--db", db, "--fmt", "id", "ingest",
+        "--err", "java.security.NoSuchAlgorithmException: PKCS12 not found",
+        "--eco", "other", "--fix-k", "config",
+        "--fix-b", "-Djavax.net.ssl.trustStore=cacerts",
+        "--eval", "true",
+    ])
+    assert rc == 0
+    cid = capsys.readouterr().out.strip()
+    assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
+    assert "-Djavax.net.ssl.trustStore=cacerts" in capsys.readouterr().out
+
+
+def test_force_keeps_explicit_cls(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    err = "TypeError: x is not a function"
+    assert main(["--db", db, "--fmt", "id", "ingest", "--err", err, "--eco", "npm", "--cls", "other", "--fix-k", "patch", "--fix-b", "await x()", "--eval", "true"]) == 0
+    first = capsys.readouterr().out.strip()
+    assert main(["--db", db, "--fmt", "id", "ingest", "--force", "--err", err, "--eco", "npm", "--fix-k", "patch", "--fix-b", "await x().catch(()=>{})", "--eval", "true"]) == 0
+    second = capsys.readouterr().out.strip()
+    assert first == second
+    assert main(["--db", db, "--fmt", "json", "show", first]) == 0
+    out = capsys.readouterr().out
+    assert '"cls": "other"' in out
+    assert "await x().catch" in out
+
+
 def test_force_publish_reuses_id(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
     assert main(["--db", db, "--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'force_mod'", "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install force-mod==1", "--eval", "true"]) == 0

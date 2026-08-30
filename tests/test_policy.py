@@ -100,6 +100,40 @@ def test_maven_compile_log_is_not_a_dropper():
     )
 
 
+def test_calledprocesserror_and_re_compile_are_not_droppers():
+    inspect_claim(
+        err="subprocess.CalledProcessError: Command '['mvn', 'compile']' returned non-zero exit status 1",
+        fix_k="patch",
+        fix_b="import re\npat = re.compile(r'^ok')\n# catching subprocess.CalledProcessError is the fix",
+        eval_cmd="true",
+        own="did:claimidx:test",
+    )
+
+
+def test_cmd_kind_allows_alembic_pnpm_bundle():
+    inspect_claim(
+        err="FAILED: Can't locate revision identified by '0002'",
+        fix_k="cmd",
+        fix_b="alembic merge 0002",
+        eval_cmd="true",
+        own="did:claimidx:test",
+    )
+    inspect_claim(
+        err="ERR_PNPM_PEER_DEP_ISSUES",
+        fix_k="cmd",
+        fix_b="pnpm install --lockfile-only",
+        eval_cmd="true",
+        own="did:claimidx:test",
+    )
+    inspect_claim(
+        err="Bundler could not find compatible versions",
+        fix_k="cmd",
+        fix_b="bundle lock",
+        eval_cmd="true",
+        own="did:claimidx:test",
+    )
+
+
 def test_cmd_kind_allows_git_head():
     inspect_claim(
         err="error: failed to push some refs",

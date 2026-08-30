@@ -149,6 +149,42 @@ class Store:
         claim.refresh_status()
         return claim
 
+    def match_amend(
+        self,
+        *,
+        err: str,
+        cls: str | None,
+        eco: str,
+        rt: str,
+        dep: list[str] | None,
+    ) -> tuple[str, str, list[Claim]]:
+        """Locate the row an ingest --force should overwrite.
+
+        Fingerprint includes cls. If --cls is omitted, classify() can move the
+        row to a new class (new fp, new id). Prefer the stored cls when the
+        rest of the slice matches.
+        """
+        from .fingerprint import classify, fingerprint, normalize_error
+
+        eco_fp = eco or ""
+        eco_store = eco or "other"
+        dep = list(dep or [])
+        chosen = cls or classify(err)
+        fp = fingerprint(err=err, cls=chosen, eco=eco_fp, rt=rt or "", dep=dep)
+        existing = self.by_fp(fp)
+        if existing or cls:
+            return chosen, fp, existing
+        nerr = normalize_error(err)
+        for c in self.all():
+            if (
+                c.err == nerr
+                and c.eco == eco_store
+                and (c.rt or "") == (rt or "")
+                and list(c.dep or []) == dep
+            ):
+                return c.cls, c.fp, [c]
+        return chosen, fp, []
+
     def by_fp(self, fp: str) -> list[Claim]:
         with self._conn() as con:
             rows = con.execute("SELECT json FROM claims WHERE fp=?", (fp,)).fetchall()

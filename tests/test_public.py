@@ -30,6 +30,10 @@ def test_public_eval_strips_project_paths():
     assert public_eval("uv run pytest -q tests/test_widget_flow.py") == ""
     assert public_eval("npx tsc --noEmit") == "npx tsc --noEmit"
     assert public_eval("true") == "true"
+    assert public_eval("python3 check.py") == "python3 check.py"
+    assert public_eval("node check.mjs") == "node check.mjs"
+    assert public_eval("node evals/mcp-protocol-version.mjs") == "node evals/mcp-protocol-version.mjs"
+    assert public_eval("python3 /home/runner/check.py") == ""
     # stripped tree recipe is empty, not rewritten as the tautology hint
     assert public_eval("uv run pytest -q tests/test_widget_flow.py") != "true"
 

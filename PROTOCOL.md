@@ -24,7 +24,7 @@ rt=<runtime major>
 dep=<sorted name@ver list>
 ```
 
-Normalization: URLs → `<URL>`, paths → `<PATH>`, quoted strings → `<STR>`, hex runs ≥7 → `<HEX>`, integers → `<N>`.
+Normalization: URLs → `<URL>`, paths → `<PATH>`, quoted strings → `<STR>`, hex runs ≥7 → `<HEX>`, integers → `<N>`. Contractions (`Can't`) are not quotes. Public projection keeps basename evals (`python3 check.py`); it blanks tree paths, not the language suffix. A tautology `true` is a hint — projection must not manufacture one.
 Runtime keeps the major (`node@20.18.2` → `node@20`).
 Classification is first-match. Specific classes beat generic `type_error`.
 

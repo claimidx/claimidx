@@ -74,9 +74,14 @@ def ingest(
     from .public import refine_eval
 
     eval = refine_eval(eval, fix_k=fix_k, fix_b=fix_b, dep=dep, eco=eco)
-    cls = classify(err)
-    fp = fingerprint(err=err, cls=cls, eco=eco or "", rt=rt or "", dep=dep)
-    existing = store.by_fp(fp)
+    if force:
+        cls, fp, existing = store.match_amend(
+            err=err, cls=None, eco=eco or "", rt=rt or "", dep=dep,
+        )
+    else:
+        cls = classify(err)
+        fp = fingerprint(err=err, cls=cls, eco=eco or "", rt=rt or "", dep=dep)
+        existing = store.by_fp(fp)
     if existing and not force:
         c = existing[0]
         return {"exists": True, "id": c.id, "st": c.st, "fp": c.fp}

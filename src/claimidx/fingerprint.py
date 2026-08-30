@@ -7,7 +7,10 @@ _PATH = re.compile(
     r"(?:[A-Za-z]:\\|\\\\|~[/\\]|/(?:home|Users|usr|var|tmp|opt|root|etc|app|src|private|opt)|(?:\./|\.\./))[^\s:'\"]+"
 )
 _URL = re.compile(r"https?://[^\s]+")
-_QUOTED = re.compile(r"(['\"])([^'\"]{1,200})\1")
+# Contractions (`Can't`) are not quotes. Single quotes only when not mid-word.
+_QUOTED = re.compile(
+    r"(?:(?<![A-Za-z])'([^']{1,200})'(?![A-Za-z])|\"([^\"]{1,200})\")"
+)
 _NUM = re.compile(r"\b\d+\b")
 _HEX = re.compile(r"\b[0-9a-f]{7,}\b", re.I)
 _WS = re.compile(r"\s+")
@@ -36,8 +39,8 @@ _MODULE_NAME = re.compile(r"^[A-Za-z0-9_@./=-]+$")
 
 
 def _quote_token(m: re.Match[str]) -> str:
-    inner = m.group(2)
-    if _MODULE_NAME.fullmatch(inner) and len(inner) < 80:
+    inner = m.group(1) if m.group(1) is not None else m.group(2)
+    if inner and _MODULE_NAME.fullmatch(inner) and len(inner) < 80:
         return inner
     return "<STR>"
 
@@ -58,8 +61,8 @@ def normalization_risk(raw: str) -> list[str]:
     if _NUM.search(s):
         flags.append("int")
     for m in _QUOTED.finditer(s):
-        inner = m.group(2)
-        if not (_MODULE_NAME.fullmatch(inner) and len(inner) < 80):
+        inner = m.group(1) if m.group(1) is not None else m.group(2)
+        if not (inner and _MODULE_NAME.fullmatch(inner) and len(inner) < 80):
             flags.append("str")
             break
     return flags

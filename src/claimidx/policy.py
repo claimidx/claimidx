@@ -38,10 +38,12 @@ _DROPPER_PAYLOAD = [
     re.compile(r"\b(reverse.?shell|bind.?shell)\b", re.I),
 ]
 # Code-shaped. Not applied to err/note: `:compile (default-compile)` is a Maven log.
+# call/popen/run require `(` so subprocess.CalledProcessError is documentation, not a dropper.
+# compile( skips re.compile and Maven `:compile (`.
 _DROPPER_CODE = [
     re.compile(r"\b(fromhex|fromcharcode|charcodeat)\b.{0,20}\b(exec|eval|compile)\b", re.I | re.S),
-    re.compile(r"\b(os\.system|subprocess\.(call|popen|run)|popen\()", re.I),
-    re.compile(r"\bexec\s*\(|\beval\s*\(|\bcompile\s*\("),
+    re.compile(r"\b(os\.system|subprocess\.(?:call|popen|run)\s*\(|popen\()", re.I),
+    re.compile(r"\bexec\s*\(|\beval\s*\(|(?<!re\.)(?<!:)\bcompile\s*\("),
 ]
 
 _LONG_B64 = re.compile(r"[A-Za-z0-9+/]{%d,}={0,2}" % MAX_BASE64_RUN)
@@ -53,6 +55,8 @@ ALLOWED_EVAL_HEADS = {
 # cmd-kind fix.b is data, but naive agents may run it. Wider than eval; still no shell.
 ALLOWED_CMD_HEADS = ALLOWED_EVAL_HEADS | {
     "git", "pip", "pip3", "bundle", "bundler", "composer", "make", "mvn", "gradle",
+    "alembic", "pnpm", "yarn", "yarnpkg", "apt-get", "apt", "keytool", "java", "javac",
+    "helm", "kubectl", "poetry", "pipenv", "corepack", "bun",
 }
 
 DENIED_EVAL_HEADS = {

@@ -111,9 +111,14 @@ def cmd_publish(ns: argparse.Namespace) -> int:
     except (PolicyError, SecretError) as e:
         print(str(e), file=sys.stderr)
         return 2
-    cls = ns.cls or classify(err)
-    fp = fingerprint(err=err, cls=cls, eco=ns.eco or "", rt=ns.rt or "", dep=ns.dep or [])
-    existing = store.by_fp(fp)
+    if ns.force:
+        cls, fp, existing = store.match_amend(
+            err=err, cls=ns.cls, eco=ns.eco or "", rt=ns.rt or "", dep=ns.dep or [],
+        )
+    else:
+        cls = ns.cls or classify(err)
+        fp = fingerprint(err=err, cls=cls, eco=ns.eco or "", rt=ns.rt or "", dep=ns.dep or [])
+        existing = store.by_fp(fp)
     if existing and not ns.force:
         print(f"exists {existing[0].id} fp={fp}", file=sys.stderr)
         print(_dumps(existing[0], ns.fmt))
@@ -289,10 +294,11 @@ def cmd_ls(ns: argparse.Namespace) -> int:
         claims = [c for c in claims if c.own == ns.own]
     claims.sort(key=lambda c: c.score(), reverse=True)
     if ns.fmt == "json":
-        print(json.dumps([c.model_dump(mode="json") for c in claims], default=str))
+        print(json.dumps([c.model_dump(mode="json") for c in claims[: ns.k]], default=str))
         return 0
+    claims = claims[: ns.k]
     print(f"{'id':20} {'st':10} {'nc':>3} {'nf':>3} {'cls':18} err")
-    for c in claims[: ns.k]:
+    for c in claims:
         print(f"{c.id:20} {c.st:10} {c.nc:3} {c.nf:3} {c.cls:18} {c.err[:60]}")
     return 0
 
@@ -581,6 +587,22 @@ class _AppendTried(argparse.Action):
         setattr(namespace, self.dest, acc)
 
 
+def _glue_dashed_opt(argv: list[str], opt: str) -> list[str]:
+    """`--fix-b -Dfoo` is a value, not a flag. argparse needs `--fix-b=-Dfoo`."""
+    out: list[str] = []
+    i = 0
+    n = len(argv)
+    while i < n:
+        a = argv[i]
+        if a == opt and i + 1 < n and argv[i + 1].startswith("-") and not argv[i + 1].startswith("--"):
+            out.append(opt + "=" + argv[i + 1])
+            i += 2
+            continue
+        out.append(a)
+        i += 1
+    return out
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="claimidx", description="Claimidx — prior art for agents. Ask before you burn tokens.")
     p.add_argument("--db", default=None, help="sqlite path (default: $CLAIMIDX_DB or ~/.claimidx/index.sqlite)")
@@ -612,7 +634,12 @@ def build_parser() -> argparse.ArgumentParser:
     vf.set_defaults(func=cmd_verify)
     rj = sub.add_parser("reject"); rj.add_argument("id"); rj.add_argument("--own"); rj.set_defaults(func=cmd_reject)
     s = sub.add_parser("show"); s.add_argument("id"); s.set_defaults(func=cmd_show)
-    ls = sub.add_parser("ls"); ls.add_argument("--st"); ls.add_argument("--eco"); ls.add_argument("--own"); ls.add_argument("-k", type=int, default=50); ls.set_defaults(func=cmd_ls)
+    ls = sub.add_parser("ls")
+    ls.add_argument("--st")
+    ls.add_argument("--eco")
+    ls.add_argument("--own")
+    ls.add_argument("-k", "--limit", dest="k", type=int, default=50, help="max rows (also --limit)")
+    ls.set_defaults(func=cmd_ls)
     fp = sub.add_parser("fp"); fp.add_argument("--err", required=True); fp.add_argument("--cls"); fp.add_argument("--eco"); fp.add_argument("--rt"); fp.add_argument("--dep", action=_AppendCsv, default=None); fp.set_defaults(func=cmd_fp)
     st = sub.add_parser("stats"); st.set_defaults(func=cmd_stats)
     sd = sub.add_parser("seed"); sd.add_argument("--path"); sd.set_defaults(func=cmd_seed)
@@ -689,9 +716,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ns = build_parser().parse_args(argv)
+    raw = list(argv) if argv is not None else sys.argv[1:]
+    raw = _glue_dashed_opt(raw, "--fix-b")
+    ns = build_parser().parse_args(raw)
     try:
         return int(ns.func(ns))
+    except BrokenPipeError:
+        return 0
+    except OSError as e:
+        if getattr(e, "errno", None) == 32:
+            return 0
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     except (PolicyError, SecretError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
