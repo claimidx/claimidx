@@ -94,7 +94,8 @@ def test_eval_proof_is_false_for_tautology_and_ranks_under_recipe():
     assert any("eval is not proof" in w for w in meta["warn"])
     hits = rank(q, [hint, proof], k=2)
     assert hits[0][0].eval.cmd == "npx tsc --noEmit"
-    assert refine_eval("true", fix_k="pin", fix_b="pydantic>=2.7", eco="py") == 'python -c "import pydantic"'
+    rng = refine_eval("true", fix_k="pin", fix_b="pydantic>=2.7", eco="py")
+    assert "importlib.metadata" in rng and eval_is_proof(rng) is True
     assert refine_eval("true", fix_k="patch", fix_b="await params", eco="npm") == "true"
 
 

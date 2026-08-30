@@ -48,11 +48,38 @@ def test_refine_eval_exact_pin_checks_version_not_import():
     ok, why = eval_allowed(py)
     assert ok, why
     rng = refine_eval("true", fix_k="pin", fix_b="pydantic>=2.7", eco="py")
-    assert rng == 'python -c "import pydantic"'
+    assert "importlib.metadata" in rng
+    assert "import pydantic" not in rng
+    assert "(2, 7, 0)" in rng
+    ok, why = eval_allowed(rng)
+    assert ok, why
     npm = refine_eval("true", fix_k="pin", fix_b="left-pad@1.3.0", eco="npm")
     assert "1.3.0" in npm and "package.json" in npm
     ok, why = eval_allowed(npm)
     assert ok, why
+
+
+def test_refine_eval_range_pin_checks_interval_not_import():
+    from claimidx.policy import eval_allowed
+    from claimidx.sandbox import replay
+
+    rng = refine_eval("true", fix_k="pin", fix_b="pydantic>=2.7,<3", eco="py")
+    assert "importlib.metadata" in rng
+    assert "import pydantic" not in rng
+    assert "(2, 7, 0)" in rng and "(3, 0, 0)" in rng
+    assert eval_is_proof(rng) is True
+    ok, why = eval_allowed(rng)
+    assert ok, why
+    held = replay(rng)
+    assert held.ran and held.held, held.as_dict()
+    miss = refine_eval("true", fix_k="pin", fix_b="pydantic>=99", eco="py")
+    missed = replay(miss)
+    assert missed.ran and not missed.held, missed.as_dict()
+    # non-numeric / already-proof recipes are not rewritten
+    tilde = refine_eval("true", fix_k="pin", fix_b="pydantic~=2.7", eco="py")
+    assert tilde == 'python -c "import pydantic"'
+    given = refine_eval('python -c "import pydantic"', fix_k="pin", fix_b="pydantic>=2.7,<3", eco="py")
+    assert given == 'python -c "import pydantic"'
 
 
 def test_public_fix_body_keeps_pins_flags_and_relative_paths():

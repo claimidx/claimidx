@@ -117,6 +117,58 @@ def _exact_pin(raw: str) -> tuple[str, str] | None:
     return None
 
 
+def _version_triple(raw: str) -> tuple[int, int, int] | None:
+    """Numeric X / X.Y / X.Y.Z only. Pre-releases and local tags are not a pin check."""
+    s = (raw or "").strip()
+    if not re.fullmatch(r"\d+(?:\.\d+){0,2}", s):
+        return None
+    parts = [int(p) for p in s.split(".")] + [0, 0]
+    return parts[0], parts[1], parts[2]
+
+
+def _range_pin(raw: str) -> tuple[str, list[tuple[str, tuple[int, int, int]]]] | None:
+    """Name + numeric range clauses. None for exact, unversioned, or non-numeric specs."""
+    s = _pin_line(raw)
+    if not s or s.startswith("@"):
+        return None
+    m = re.match(r"^([A-Za-z0-9_.-]+)(?:\[[^\]]*\])?\s*(.*)$", s)
+    if not m:
+        return None
+    name, rest = m.group(1), (m.group(2) or "").strip()
+    if not rest:
+        return None
+    clauses: list[tuple[str, tuple[int, int, int]]] = []
+    while rest:
+        rest = rest.lstrip(",").strip()
+        if not rest:
+            break
+        cm = re.match(r"(==|!=|<=|>=|<|>)\s*([A-Za-z0-9_.+-]+)", rest)
+        if not cm:
+            return None
+        trip = _version_triple(cm.group(2))
+        if trip is None:
+            return None
+        clauses.append((cm.group(1), trip))
+        rest = rest[cm.end() :].strip()
+    if not clauses:
+        return None
+    if len(clauses) == 1 and clauses[0][0] == "==":
+        return None
+    return name, clauses
+
+
+def _py_range_eval(name: str, clauses: list[tuple[str, tuple[int, int, int]]]) -> str | None:
+    """Stdlib-only interval check. Unparseable installed versions miss, they do not pass."""
+    if not re.match(r"^[A-Za-z0-9._-]+$", name):
+        return None
+    conds = " and ".join(f"(v{op}{trip})" for op, trip in clauses)
+    return (
+        'python -c "from importlib.metadata import version as V;'
+        "t=lambda s:tuple(int(x) for x in (s.split('.')+['0','0'])[:3]);"
+        f"v=t(V({name!r}));raise SystemExit(not ({conds}))\""
+    )
+
+
 def refine_eval(
     cmd: str,
     *,
@@ -128,8 +180,10 @@ def refine_eval(
     """If the agent passed a tautology, upgrade a pin into a portable import/require.
 
     An exact pin (`pkg==1.2.3` / `pkg@1.2.3`) must check that version, not
-    merely that some build of `pkg` imports. A range stays an import/require.
-    Never refuses. Never invents a tree recipe. A remaining `true` is still a valid local hint.
+    merely that some build of `pkg` imports. A numeric range (`pkg>=1.2,<2`)
+    must check the interval the same way. Non-numeric markers stay an
+    import/require. Never refuses. Never invents a tree recipe. A remaining
+    `true` is still a valid local hint.
     """
     raw = (cmd or "").strip() or "true"
     if eval_is_proof(raw):
@@ -154,6 +208,16 @@ def refine_eval(
                 'python -c "from importlib.metadata import version; '
                 f'raise SystemExit(version({name!r})!={ver!r})"'
             )
+    rng = _range_pin(pin_src) if pin_src else None
+    if not rng and not _pkg_token(pin_src):
+        for d in dep or []:
+            rng = _range_pin(d)
+            if rng:
+                break
+    if rng and eco not in {"npm", "node"}:
+        generated = _py_range_eval(rng[0], rng[1])
+        if generated:
+            return generated
     token = _pkg_token(pin_src) if pin_src else ""
     if not token:
         for d in dep or []:
