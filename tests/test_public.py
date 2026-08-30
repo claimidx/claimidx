@@ -30,6 +30,25 @@ def test_public_eval_strips_project_paths():
     assert public_eval("uv run pytest -q tests/test_widget_flow.py") == ""
     assert public_eval("npx tsc --noEmit") == "npx tsc --noEmit"
     assert public_eval("true") == "true"
+    # stripped tree recipe is empty, not rewritten as the tautology hint
+    assert public_eval("uv run pytest -q tests/test_widget_flow.py") != "true"
+
+
+def test_refine_eval_exact_pin_checks_version_not_import():
+    from claimidx.policy import eval_allowed
+
+    py = refine_eval("true", fix_k="pin", fix_b="pydantic==2.7.0", eco="py")
+    assert "importlib.metadata" in py
+    assert "2.7.0" in py
+    assert "import pydantic" not in py
+    ok, why = eval_allowed(py)
+    assert ok, why
+    rng = refine_eval("true", fix_k="pin", fix_b="pydantic>=2.7", eco="py")
+    assert rng == 'python -c "import pydantic"'
+    npm = refine_eval("true", fix_k="pin", fix_b="left-pad@1.3.0", eco="npm")
+    assert "1.3.0" in npm and "package.json" in npm
+    ok, why = eval_allowed(npm)
+    assert ok, why
 
 
 def test_public_fix_body_keeps_pins_flags_and_relative_paths():

@@ -19,8 +19,10 @@ from .models import Claim, EvalSpec, Fix
 from .team import agent_slug
 
 _EMAIL = re.compile(r"\b\S+@\S+\.\S+\b")
+# Tree paths only. A basename recipe (`python3 check.py`, `node check.mjs`) is portable
+# when fix.b is the script; blanking those as `true` manufactured fake proof.
 _EVAL_LOCAL = re.compile(
-    r"(?:tests[/\\]|[A-Za-z]:[/\\]|/(?:home|Users|Users)/|\\\\|\.py\b)",
+    r"(?:tests[/\\]|[A-Za-z]:[/\\]|/(?:home|Users|usr|var|tmp|root|etc)/|\\\\|(?:\.{1,2})?[/\\][^\s]+)",
     re.I,
 )
 _HOSTY = re.compile(
@@ -86,6 +88,35 @@ def _pkg_token(raw: str) -> str:
     return s.strip()
 
 
+def _pin_line(raw: str) -> str:
+    s = (raw or "").strip().splitlines()[0] if raw else ""
+    s = re.split(r"\s+#", s, maxsplit=1)[0].strip()
+    return re.sub(
+        r"^(?:pip3?|uv|python3?\s+-m\s+pip)\s+install\s+",
+        "",
+        s,
+        count=1,
+        flags=re.I,
+    ).strip()
+
+
+def _exact_pin(raw: str) -> tuple[str, str] | None:
+    """Name + exact version, or None for a range / unversioned pin."""
+    s = _pin_line(raw)
+    if not s:
+        return None
+    if s.startswith("@"):
+        m = re.fullmatch(r"(@[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@([A-Za-z0-9_.+-]+)", s)
+        return (m.group(1), m.group(2)) if m else None
+    m = re.fullmatch(r"([A-Za-z0-9_.-]+)==([A-Za-z0-9_.+-]+)", s)
+    if m:
+        return m.group(1), m.group(2)
+    m = re.fullmatch(r"([A-Za-z0-9_.-]+)@([A-Za-z0-9_.+-]+)", s)
+    if m:
+        return m.group(1), m.group(2)
+    return None
+
+
 def refine_eval(
     cmd: str,
     *,
@@ -96,12 +127,34 @@ def refine_eval(
 ) -> str:
     """If the agent passed a tautology, upgrade a pin into a portable import/require.
 
+    An exact pin (`pkg==1.2.3` / `pkg@1.2.3`) must check that version, not
+    merely that some build of `pkg` imports. A range stays an import/require.
     Never refuses. Never invents a tree recipe. A remaining `true` is still a valid local hint.
     """
     raw = (cmd or "").strip() or "true"
     if eval_is_proof(raw):
         return raw
-    token = _pkg_token(fix_b) if (fix_k or "") == "pin" else ""
+    pin_src = fix_b if (fix_k or "") == "pin" else ""
+    exact = _exact_pin(pin_src) if pin_src else None
+    if not exact and not _pkg_token(pin_src):
+        for d in dep or []:
+            exact = _exact_pin(d)
+            if exact:
+                break
+    eco = (eco or "").lower()
+    if exact:
+        name, ver = exact
+        if eco in {"npm", "node"} or name.startswith("@"):
+            import json as _json
+
+            req = _json.dumps(name + "/package.json")
+            return f"node -e \"if(require({req}).version!=={_json.dumps(ver)}) process.exit(1)\""
+        if re.match(r"^[A-Za-z0-9._-]+$", name):
+            return (
+                'python -c "from importlib.metadata import version; '
+                f'raise SystemExit(version({name!r})!={ver!r})"'
+            )
+    token = _pkg_token(pin_src) if pin_src else ""
     if not token:
         for d in dep or []:
             token = _pkg_token(d)
@@ -109,7 +162,6 @@ def refine_eval(
                 break
     if not token:
         return raw
-    eco = (eco or "").lower()
     if eco in {"npm", "node"} or token.startswith("@"):
         import json as _json
 
