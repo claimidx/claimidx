@@ -215,11 +215,9 @@ def create_app(db: str | None = None) -> FastAPI:
                 src="home",
                 **extra,
             )
-            store.put(c)
+            store.publish(c, own, reset)
         except (PolicyError, SecretError, ValueError) as e:
             raise HTTPException(400, str(e)) from e
-        store.log("publish", own, c.id)
-        store.log_force_reset(own, c.id, reset)
         body = {"exists": False, "claim": c.model_dump(mode="json")}
         if force_reset_emits(reset):
             body["force_reset"] = reset

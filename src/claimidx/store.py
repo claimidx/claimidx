@@ -274,6 +274,17 @@ class Store:
         if force_reset_emits(reset):
             self.log("force_reset", actor, claim_id, detail=reset)
 
+    def publish(self, claim: Claim, actor: str, reset: dict | None = None) -> Claim:
+        """Record a wipe first, then replace, then log publish.
+
+        Two commits: an events row for a wipe that did not land is
+        conservative; a wipe with no record is the fail-quiet shape.
+        """
+        self.log_force_reset(actor, claim.id, reset or {})
+        self.put(claim)
+        self.log("publish", actor, claim.id)
+        return claim
+
     def has_event(self, claim_id: str, kinds: tuple[str, ...] = ()) -> bool:
         if not kinds:
             return False

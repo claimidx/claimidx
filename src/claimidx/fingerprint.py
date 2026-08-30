@@ -37,6 +37,16 @@ _CLASS_RULES: list[tuple[str, re.Pattern[str]]] = [
 
 _MODULE_NAME = re.compile(r"^[A-Za-z0-9_@./=-]+$")
 
+# Closed vocabulary. Adding a token requires the scanner in the same commit.
+PLACEHOLDERS: tuple[str, ...] = ("<STR>", "<URL>", "<PATH>", "<HEX>", "<N>")
+_PLACEHOLDER_RISK = {
+    "<STR>": "str",
+    "<URL>": "url",
+    "<PATH>": "path",
+    "<HEX>": "hex",
+    "<N>": "int",
+}
+
 
 def _quote_token(m: re.Match[str]) -> str:
     inner = m.group(1) if m.group(1) is not None else m.group(2)
@@ -48,28 +58,28 @@ def _quote_token(m: re.Match[str]) -> str:
 def normalization_risk(raw: str) -> list[str]:
     """What normalize_error erases that can distinguish two failures.
 
-    Content-based: already-canonical queries that contain the placeholders
-    (`<STR>`, `<URL>`, `<PATH>`, `<HEX>`, `<N>`) carry the same flags as a
-    raw query that would produce them.
+    Content-based: already-canonical queries that contain PLACEHOLDERS
+    carry the same flags as a raw query that would produce them.
     """
     s = raw or ""
     flags: list[str] = []
-    if _URL.search(s) or "<URL>" in s:
+    if _URL.search(s):
         flags.append("url")
-    if _PATH.search(s) or "<PATH>" in s:
+    if _PATH.search(s):
         flags.append("path")
-    if _HEX.search(s) or "<HEX>" in s:
+    if _HEX.search(s):
         flags.append("hex")
-    if _NUM.search(s) or "<N>" in s:
+    if _NUM.search(s):
         flags.append("int")
-    if "<STR>" in s:
-        flags.append("str")
-    else:
+    if "str" not in flags:
         for m in _QUOTED.finditer(s):
             inner = m.group(1) if m.group(1) is not None else m.group(2)
             if not (inner and _MODULE_NAME.fullmatch(inner) and len(inner) < 80):
                 flags.append("str")
                 break
+    for tok, name in _PLACEHOLDER_RISK.items():
+        if tok in s and name not in flags:
+            flags.append(name)
     return flags
 
 

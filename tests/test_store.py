@@ -76,6 +76,27 @@ def test_reject_is_terminal(tmp_path: Path):
     assert again is not None and again.st == "rejected"
 
 
+def test_force_reset_event_commits_before_replace(tmp_path: Path):
+    store = Store(tmp_path / "ix.sqlite")
+    c = store.put(_claim())
+    reset = {"nr": 1, "nc": 2, "nf": 0, "rt": "py@3.12"}
+
+    def boom(claim):
+        raise RuntimeError("crash after event")
+
+    store.put = boom  # type: ignore[method-assign]
+    import pytest
+
+    with pytest.raises(RuntimeError, match="crash after event"):
+        store.publish(c, c.own, reset)
+    rows = [e for e in Store(tmp_path / "ix.sqlite").events() if e["kind"] == "force_reset"]
+    assert len(rows) == 1
+    assert rows[0]["detail"] == reset
+    shown = Store(tmp_path / "ix.sqlite").get(c.id)
+    assert shown is not None
+    assert shown.fix.b.startswith("const")
+
+
 def test_force_reset_is_an_events_row(tmp_path: Path):
     store = Store(tmp_path / "ix.sqlite")
     c = store.put(_claim())

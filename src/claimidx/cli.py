@@ -156,9 +156,7 @@ def cmd_publish(ns: argparse.Namespace) -> int:
         model=ns.model or "", note=ns.note or "",
         **extra,
     )
-    store.put(claim)
-    store.log("publish", claim.own, claim.id)
-    store.log_force_reset(claim.own, claim.id, reset)
+    store.publish(claim, claim.own, reset)
     from .home import maybe_share
 
     shared = maybe_share(store, claim)

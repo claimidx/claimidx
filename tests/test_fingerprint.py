@@ -47,6 +47,23 @@ def test_tools_list_is_not_a_path():
     assert "<PATH>" not in normalize_error(err)
 
 
+def test_placeholder_vocabulary_is_closed():
+    import re
+
+    from claimidx.fingerprint import PLACEHOLDERS, _PLACEHOLDER_RISK, normalize_error, normalization_risk
+
+    assert PLACEHOLDERS == ("<STR>", "<URL>", "<PATH>", "<HEX>", "<N>")
+    assert tuple(_PLACEHOLDER_RISK) == PLACEHOLDERS
+    raw = 'see https://example.com/x failed at /tmp/z got deadbeef "a long prose phrase here" status 503'
+    out = normalize_error(raw)
+    emitted = set(re.findall(r"<[A-Z]+>", out))
+    assert emitted <= set(PLACEHOLDERS)
+    assert emitted == {"<STR>", "<URL>", "<PATH>", "<HEX>", "<N>"}
+    flags = set(normalization_risk(out))
+    for tok in emitted:
+        assert _PLACEHOLDER_RISK[tok] in flags
+
+
 def test_normalization_risk_flags_erased_tokens():
     from claimidx.fingerprint import normalization_risk
 
