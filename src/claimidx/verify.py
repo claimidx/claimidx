@@ -65,6 +65,79 @@ def _pin_spec(fix_b: str) -> str | None:
     return None
 
 
+def _pkg_name(spec: str) -> str:
+    return re.split(r"[<>=!~\[]", spec, maxsplit=1)[0].strip()
+
+
+def _replay_py(py: Path, cmd: str, expect: int):
+    old = os.environ.get("CLAIMIDX_PYTHON")
+    os.environ["CLAIMIDX_PYTHON"] = str(py)
+    try:
+        return replay(cmd, expect)
+    finally:
+        if old is None:
+            os.environ.pop("CLAIMIDX_PYTHON", None)
+        else:
+            os.environ["CLAIMIDX_PYTHON"] = old
+
+
+def harness(c: Claim, scratch: Path) -> dict:
+    """Two-state pin replay: broken (unpinned) then fixed (pin). Confirm only if eval discriminates."""
+    spec = _pin_spec(c.fix.b) if c.fix.k == "pin" else None
+    if not spec or _head(c.eval.cmd) not in _RUNNABLE_HEADS:
+        return {"action": "fail", "reason": "harness-no-repro", "id": c.id}
+    name = _pkg_name(spec)
+    if not name:
+        return {"action": "fail", "reason": "harness-no-repro", "id": c.id}
+    venv = scratch / "venv"
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "venv", str(venv)],
+            check=True,
+            capture_output=True,
+            timeout=60,
+        )
+    except (subprocess.SubprocessError, OSError) as e:
+        return {"action": "fail", "reason": f"harness-venv:{e}", "id": c.id}
+    py = _venv_python(venv)
+    pip = [str(py), "-m", "pip", "install", "--disable-pip-version-check", "-q"]
+    try:
+        br = subprocess.run(pip + [name], capture_output=True, text=True, timeout=120)
+    except (subprocess.SubprocessError, OSError) as e:
+        return {"action": "fail", "reason": f"harness-broken-install:{e}", "id": c.id}
+    if br.returncode != 0:
+        return {
+            "action": "fail",
+            "reason": "harness-broken-install",
+            "id": c.id,
+            "stderr": (br.stderr or "")[-300:],
+        }
+    broken = _replay_py(py, c.eval.cmd, c.eval.expect)
+    try:
+        fx = subprocess.run(pip + [spec], capture_output=True, text=True, timeout=120)
+    except (subprocess.SubprocessError, OSError) as e:
+        return {"action": "fail", "reason": f"harness-pin-install:{e}", "id": c.id}
+    if fx.returncode != 0:
+        return {
+            "action": "fail",
+            "reason": "harness-pin-install",
+            "id": c.id,
+            "stderr": (fx.stderr or "")[-300:],
+        }
+    fixed = _replay_py(py, c.eval.cmd, c.eval.expect)
+    out = {
+        "id": c.id,
+        "broken": broken.as_dict(),
+        "fixed": fixed.as_dict(),
+        "applied": spec,
+    }
+    if (not broken.held) and fixed.held:
+        return {**out, "action": "confirm", "reason": "harness-discriminates"}
+    if broken.held and fixed.held:
+        return {**out, "action": "fail", "reason": "harness-no-discriminate"}
+    return {**out, "action": "fail", "reason": "harness-eval-miss"}
+
+
 def _seen_path() -> Path:
     return Path(os.environ.get("CLAIMIDX_VERIFY_SEEN") or (Path.home() / ".claimidx" / "verify-seen.json"))
 
@@ -281,6 +354,7 @@ def run(
     dry_run: bool = False,
     ledger: str | Path | None = None,
     runnable: bool = False,
+    harness_mode: bool = False,
 ) -> dict:
     actor = resolve_owner(own)
     seen_st = load_seen()
@@ -288,7 +362,13 @@ def run(
     if seen_st.get("day") != day:
         seen_st = {"day": day, "ids": []}
     seen = set(seen_st.get("ids") or [])
-    chosen = pick(store.all(), k=k, ids=ids, seen=seen, runnable=runnable)
+    chosen = pick(
+        store.all(),
+        k=k,
+        ids=ids,
+        seen=seen,
+        runnable=runnable or harness_mode,
+    )
     results = []
     changed: list[Claim] = []
     scratch_root = Path(tempfile.mkdtemp(prefix="cix-verify-"))
@@ -296,7 +376,7 @@ def run(
         for c in chosen:
             work = scratch_root / c.id
             work.mkdir()
-            decision = decide(c, scratch=work)
+            decision = harness(c, work) if harness_mode else decide(c, scratch=work)
             action = decision["action"]
             if not dry_run:
                 if action == "confirm":

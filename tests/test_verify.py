@@ -1,7 +1,8 @@
 from pathlib import Path
 
 from claimidx.cli import main
-from claimidx.verify import _pin_spec, decide, is_runnable, pick
+from claimidx.sandbox import ReplayResult
+from claimidx.verify import _pin_spec, decide, harness, is_runnable, pick
 from claimidx.models import Claim, EvalSpec, Fix
 from claimidx.fingerprint import fingerprint, classify, normalize_error
 
@@ -20,6 +21,55 @@ def _claim(err: str, eval_cmd: str, *, fix_k="pin", fix_b="demo==1", st="propose
         st=st,
         own="did:claimidx:test",
     )
+
+
+def test_harness_confirms_when_eval_discriminates(tmp_path: Path, monkeypatch):
+    replays = iter(
+        [
+            ReplayResult(True, True, 1, 0, False, "eval-miss"),
+            ReplayResult(True, True, 0, 0, True, "held"),
+        ]
+    )
+    monkeypatch.setattr("claimidx.verify.replay", lambda *a, **k: next(replays))
+
+    class R:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    monkeypatch.setattr("claimidx.verify.subprocess.run", lambda *a, **k: R())
+    c = _claim("ModuleNotFoundError: No module named 'demo'", "python -c \"import demo\"", fix_k="pin", fix_b="demo<2")
+    d = harness(c, tmp_path / "h")
+    assert d["action"] == "confirm"
+    assert d["reason"] == "harness-discriminates"
+
+
+def test_harness_fails_when_eval_holds_without_pin(tmp_path: Path, monkeypatch):
+    replays = iter(
+        [
+            ReplayResult(True, True, 0, 0, True, "held"),
+            ReplayResult(True, True, 0, 0, True, "held"),
+        ]
+    )
+    monkeypatch.setattr("claimidx.verify.replay", lambda *a, **k: next(replays))
+
+    class R:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    monkeypatch.setattr("claimidx.verify.subprocess.run", lambda *a, **k: R())
+    c = _claim("ModuleNotFoundError: No module named 'demo'", "python -c \"import demo\"", fix_k="pin", fix_b="demo<2")
+    d = harness(c, tmp_path / "h")
+    assert d["action"] == "fail"
+    assert d["reason"] == "harness-no-discriminate"
+
+
+def test_harness_fails_without_pin(tmp_path: Path):
+    c = _claim("TypeError: x", "python -c pass", fix_k="patch", fix_b="await x")
+    d = harness(c, tmp_path / "h")
+    assert d["action"] == "fail"
+    assert d["reason"] == "harness-no-repro"
 
 
 def test_pin_spec_takes_first_requirement():
