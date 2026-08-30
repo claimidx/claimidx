@@ -133,11 +133,11 @@ def test_force_resets_nr_and_surfaces_previous(tmp_path: Path, capsys):
     ])
     assert rc == 0
     captured = capsys.readouterr()
-    assert "force reset nr=1" in captured.err
+    assert f"force reset nr=1 nc=1 nf=0 rt={rt}" in captured.err
     out = json.loads(captured.out)
     assert out["id"] == cid
     assert out.get("nr") == 0
-    assert out.get("force_reset") == {"nr": 1, "nc": 1, "nf": 0}
+    assert out.get("force_reset") == {"nr": 1, "nc": 1, "nf": 0, "rt": rt}
     assert out.get("rt") == "py@3.9"
     assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
     shown = json.loads(capsys.readouterr().out)

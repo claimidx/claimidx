@@ -10,7 +10,7 @@ from .dense import encode
 from .fingerprint import classify, fingerprint, normalize_error
 from .match import annotate, hit_row, rank
 from .models import Claim, EvalSpec, Fix
-from .store import DEFAULT_DB, Store, force_reset_from
+from .store import DEFAULT_DB, Store, force_reset_emits, force_reset_from
 from .policy import PolicyError
 from .security import SecretError
 from .team import activity, load_roster, resolve_owner, whoami
@@ -156,16 +156,16 @@ def cmd_publish(ns: argparse.Namespace) -> int:
     from .home import maybe_share
 
     shared = maybe_share(store, claim)
-    if any(reset.values()):
+    if force_reset_emits(reset):
         print(
-            f"force reset nr={reset['nr']} nc={reset['nc']} nf={reset['nf']}",
+            f"force reset nr={reset['nr']} nc={reset['nc']} nf={reset['nf']} rt={reset.get('rt') or ''}",
             file=sys.stderr,
         )
     if ns.fmt == "json":
         payload = json.loads(claim.model_dump_json())
         if shared:
             payload["share"] = shared
-        if any(reset.values()):
+        if force_reset_emits(reset):
             payload["force_reset"] = reset
         print(json.dumps(payload, default=str))
     else:

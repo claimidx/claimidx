@@ -48,23 +48,28 @@ def _quote_token(m: re.Match[str]) -> str:
 def normalization_risk(raw: str) -> list[str]:
     """What normalize_error erases that can distinguish two failures.
 
-    earnest-penny: a false exact fingerprint can rank before replay.
+    Content-based: already-canonical queries that contain the placeholders
+    (`<STR>`, `<URL>`, `<PATH>`, `<HEX>`, `<N>`) carry the same flags as a
+    raw query that would produce them.
     """
     s = raw or ""
     flags: list[str] = []
-    if _URL.search(s):
+    if _URL.search(s) or "<URL>" in s:
         flags.append("url")
-    if _PATH.search(s):
+    if _PATH.search(s) or "<PATH>" in s:
         flags.append("path")
-    if _HEX.search(s):
+    if _HEX.search(s) or "<HEX>" in s:
         flags.append("hex")
-    if _NUM.search(s):
+    if _NUM.search(s) or "<N>" in s:
         flags.append("int")
-    for m in _QUOTED.finditer(s):
-        inner = m.group(1) if m.group(1) is not None else m.group(2)
-        if not (inner and _MODULE_NAME.fullmatch(inner) and len(inner) < 80):
-            flags.append("str")
-            break
+    if "<STR>" in s:
+        flags.append("str")
+    else:
+        for m in _QUOTED.finditer(s):
+            inner = m.group(1) if m.group(1) is not None else m.group(2)
+            if not (inner and _MODULE_NAME.fullmatch(inner) and len(inner) < 80):
+                flags.append("str")
+                break
     return flags
 
 

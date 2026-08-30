@@ -16,7 +16,7 @@ from .models import Claim, EvalSpec, Fix
 from .policy import PolicyError, require_identity
 from .public import refine_eval
 from .security import SecretError
-from .store import Store
+from .store import Store, force_reset_emits, force_reset_from
 from .stripe_hook import WebhookError, handle_payload
 from .team import resolve_owner, whoami as team_whoami
 from . import tokens as home_tokens
@@ -200,8 +200,6 @@ def create_app(db: str | None = None) -> FastAPI:
         elif existing:
             extra["id"] = existing[0].id
             if payload.force:
-                from .store import force_reset_from
-
                 reset = force_reset_from(existing[0])
         try:
             c = Claim(
@@ -216,7 +214,7 @@ def create_app(db: str | None = None) -> FastAPI:
             raise HTTPException(400, str(e)) from e
         store.log("publish", own, c.id)
         body = {"exists": False, "claim": c.model_dump(mode="json")}
-        if any(reset.values()):
+        if force_reset_emits(reset):
             body["force_reset"] = reset
         return body
 

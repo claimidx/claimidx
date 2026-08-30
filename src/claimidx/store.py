@@ -14,13 +14,18 @@ def _default_db() -> Path:
 DEFAULT_DB = _default_db()
 
 
-def force_reset_from(old: Claim) -> dict[str, int]:
+def force_reset_from(old: Claim) -> dict[str, int | str]:
     """Counters a --force overwrite discards. The new row starts at 0."""
     return {
         "nr": int(getattr(old, "nr", 0) or 0),
         "nc": int(old.nc or 0),
         "nf": int(old.nf or 0),
+        "rt": (old.rt or ""),
     }
+
+
+def force_reset_emits(reset: dict) -> bool:
+    return bool(int(reset.get("nr") or 0) or int(reset.get("nc") or 0) or int(reset.get("nf") or 0))
 
 
 class Store:

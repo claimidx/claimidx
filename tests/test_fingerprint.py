@@ -55,6 +55,11 @@ def test_normalization_risk_flags_erased_tokens():
     assert "int" in normalization_risk("status 503 from upstream")
     assert "str" in normalization_risk('Cannot read property "a long prose phrase here"')
     assert normalization_risk("ModuleNotFoundError: No module named 'pydantic_core'") == []
+    assert "str" in normalization_risk("Input should be thumbs_up input_value=<STR>")
+    assert "url" in normalization_risk("see <URL>")
+    assert "path" in normalization_risk("failed at <PATH>")
+    assert "hex" in normalization_risk("got <HEX>")
+    assert "int" in normalization_risk("status <N> from upstream")
 
 
 def test_fingerprint_stable_and_runtime_major():

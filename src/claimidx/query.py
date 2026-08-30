@@ -10,7 +10,7 @@ from typing import Any
 from .fingerprint import classify, fingerprint, normalize_error
 from .match import hit_row, rank
 from .models import Claim, EvalSpec, Fix
-from .store import DEFAULT_DB, Store, force_reset_from
+from .store import DEFAULT_DB, Store, force_reset_emits, force_reset_from
 from .team import resolve_owner
 
 
@@ -86,7 +86,7 @@ def ingest(
         c = existing[0]
         return {"exists": True, "id": c.id, "st": c.st, "fp": c.fp}
     extra: dict[str, Any] = {}
-    reset: dict[str, int] = {}
+    reset: dict[str, int | str] = {}
     if existing:
         extra["id"] = existing[0].id
         if force:
@@ -108,7 +108,7 @@ def ingest(
     store.put(claim)
     store.log("publish", claim.own, claim.id)
     out: dict[str, Any] = {"exists": False, "id": claim.id, "st": claim.st, "fp": claim.fp, "own": claim.own, "nr": claim.nr}
-    if any(reset.values()):
+    if force_reset_emits(reset):
         out["force_reset"] = reset
     if share:
         from .home import maybe_share

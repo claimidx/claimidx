@@ -12,7 +12,7 @@ from pathlib import Path
 from .fingerprint import classify, fingerprint, normalize_error
 from .match import hit_compact, rank
 from .models import Claim, EvalSpec, Fix
-from .store import Store
+from .store import Store, force_reset_emits, force_reset_from
 from .team import resolve_owner, whoami as team_whoami
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -195,8 +195,6 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         extra = {"id": existing[0].id} if existing else {}
         reset = {}
         if existing and args.get("force"):
-            from .store import force_reset_from
-
             reset = force_reset_from(existing[0])
         from .public import refine_eval
 
@@ -210,7 +208,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         out = {"exists": False, "id": c.id, "fp": c.fp, "st": c.st, "own": c.own, "nr": c.nr}
         if shared:
             out["share"] = shared
-        if any(reset.values()):
+        if force_reset_emits(reset):
             out["force_reset"] = reset
         return out
     if name == "claimidx_confirm":

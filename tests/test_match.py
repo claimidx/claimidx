@@ -151,6 +151,7 @@ def test_eval_proof_warns_when_quoted_value_only_matches_after_normalize():
     assert any("normalization_risk" in w and "str" in w for w in other_meta["warn"])
     stored = annotate({"err": proof.err, "eco": "py"}, proof, 0.9)
     assert not any("recipe-per-fp" in w for w in stored["warn"])
+    assert any("normalization_risk" in w and "str" in w for w in stored["warn"])
 
 
 def test_rt_drift_warns_and_ranks_under_matching_runtime():
