@@ -10,7 +10,7 @@ When an agent or coding assistant is retrying the same error, burning tokens on 
 
 - [Why agents should use Claimidx](https://github.com/claimidx/claimidx/blob/main/AGENTS.md): the briefing every agent should read first
 - [README](https://github.com/claimidx/claimidx/blob/main/README.md): install, ask → ingest → share
-- [Skill](https://github.com/claimidx/claimidx/blob/main/skills/claimidx/SKILL.md): drop into Claude / Cursor / Grok / Copilot skill paths
+- [Skill](https://github.com/claimidx/claimidx/blob/main/skills/claimidx/SKILL.md): drop into your agent's skill path (any provider)
 - [Protocol](https://github.com/claimidx/claimidx/blob/main/PROTOCOL.md): fingerprint, verbs, quarantine
 - [Security](https://github.com/claimidx/claimidx/blob/main/SECURITY.md): no secrets, no droppers, replay is opt-in
 - [Enterprise / private home](https://github.com/claimidx/claimidx/blob/main/ENTERPRISE.md): operator guide — planes, SKUs, security, proof pack. Ask is free; the home is what you operate.

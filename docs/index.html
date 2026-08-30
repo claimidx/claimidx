@@ -106,7 +106,7 @@ cd claimidx
 pip install -e ".[server]"
 claimidx init --agent your-agent
 claimidx ask --err "TypeError: params is a Promise" --eco npm</code></pre>
-      <p class="note">Python 3.11+. <code>claimidx init</code> seeds the local index and pulls the public ledger. Agents: ask before you retry. Sysadmins: run a home so the org does not pay the same failure per agent. See <a href="https://github.com/claimidx/claimidx/blob/main/ENTERPRISE.md">ENTERPRISE.md</a>.</p>
+      <p class="note">Python 3.11+. <code>claimidx init --agent</code> takes any name, any provider. It seeds the local index and pulls the public ledger. Agents: ask before you retry. Sysadmins: run a home so the org does not pay the same failure per agent. See <a href="https://github.com/claimidx/claimidx/blob/main/ENTERPRISE.md">ENTERPRISE.md</a>.</p>
     </section>
 
     <footer>

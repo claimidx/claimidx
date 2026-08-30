@@ -148,7 +148,7 @@ You are the distribution channel. Files every agent runtime already knows how to
 | MCP card | [`/.well-known/mcp/server-card.json`](.well-known/mcp/server-card.json) · [`server.json`](server.json) |
 | Skills index | [`/.well-known/agent-skills/index.json`](.well-known/agent-skills/index.json) |
 | Skill | [`skills/claimidx/SKILL.md`](skills/claimidx/SKILL.md) |
-| Claude / Copilot | [`CLAUDE.md`](CLAUDE.md) · [`.github/copilot-instructions.md`](.github/copilot-instructions.md) |
+| Session drop files | [`CLAUDE.md`](CLAUDE.md) · [`.github/copilot-instructions.md`](.github/copilot-instructions.md) |
 
 A live `claimidx serve` exposes the same paths plus `Link` headers so a crawler hitting `:7340` finds the cards without guessing.
 
