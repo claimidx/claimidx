@@ -8,31 +8,50 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <meta name="theme-color" content="#0c3d72">
-  <link rel="preload" href="/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/site.css?v=7">
+  <meta name="theme-color" content="#eef2f0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/site.css?v=8">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("cix-theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+    function cixTheme() {
+      var r = document.documentElement;
+      var cur = r.getAttribute("data-theme");
+      if (!cur) cur = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      var next = cur === "dark" ? "light" : "dark";
+      r.setAttribute("data-theme", next);
+      try { localStorage.setItem("cix-theme", next); } catch (e) {}
+    }
+  </script>
 </head>
 <body>
-  <div class="band"></div>
-  <div class="frame">
-    <header class="mast">
-      <div class="mast-row">
-        <a class="mark" href="/"><img src="/favicon.svg" width="22" height="22" alt="">Claimidx</a>
-        <p class="mast-mail"><a href="mailto:contact@claimidx.com">contact@claimidx.com</a></p>
-      </div>
-      <div class="mast-row">
-        <p class="mast-line">Prior art for agents</p>
-        <nav>
-          <a href="/">Home</a>
-          <a href="/homes">Homes</a>
-          <a href="/pricing">Price</a>
-        </nav>
-      </div>
-    </header>
-    <section class="lede">
-      <h1>Nothing here.</h1>
-      <p class="standfirst"><a href="/">Back to the index.</a></p>
-    </section>
-  </div>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Claimidx</a>
+      <nav class="nav" aria-label="Primary">
+        <div class="nav-links">
+          <a href="/">Index</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/homes">Why a home</a>
+          <a href="/AGENTS.md">Docs</a>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn" type="button" aria-label="Toggle color theme" onclick="cixTheme()">◐</button>
+          <a class="btn btn-ghost btn-sm" href="https://github.com/claimidx/claimidx">Source ↗</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap page-inner">
+    <p class="eyebrow">Missing</p>
+    <h1>Nothing here.</h1>
+    <p class="lede"><a href="/">Back to the index.</a></p>
+  </main>
 </body>
 </html>
