@@ -362,10 +362,13 @@ def test_decide_skips_local_pip_without_pyproject(tmp_path: Path):
 
 
 def test_verify_confirms_python_c(tmp_path: Path, capsys, monkeypatch):
+    import sys
+
     monkeypatch.setenv("CLAIMIDX_VERIFY_SEEN", str(tmp_path / "seen.json"))
     db = str(tmp_path / "ix.sqlite")
     err = "ModuleNotFoundError: No module named 'vok'"
-    assert main(["--db", db, "--fmt", "id", "publish", "--err", err, "--eco", "py", "--fix-k", "patch", "--fix-b", "pass", "--eval", "python -c pass"]) == 0
+    rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
+    assert main(["--db", db, "--fmt", "id", "publish", "--err", err, "--eco", "py", "--rt", rt, "--fix-k", "patch", "--fix-b", "pass", "--eval", "python -c pass"]) == 0
     cid = capsys.readouterr().out.strip()
     rc = main(["--db", db, "--fmt", "json", "verify", "--id", cid, "-k", "1"])
     out = capsys.readouterr().out
@@ -380,7 +383,9 @@ def test_verify_dry_run_does_not_write(tmp_path: Path, capsys, monkeypatch):
     monkeypatch.setenv("CLAIMIDX_VERIFY_SEEN", str(tmp_path / "seen.json"))
     db = str(tmp_path / "ix.sqlite")
     err = "ModuleNotFoundError: No module named 'vdry'"
-    assert main(["--db", db, "--fmt", "id", "publish", "--err", err, "--eco", "py", "--fix-k", "patch", "--fix-b", "pass", "--eval", "python -c pass"]) == 0
+    import sys
+    rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
+    assert main(["--db", db, "--fmt", "id", "publish", "--err", err, "--eco", "py", "--rt", rt, "--fix-k", "patch", "--fix-b", "pass", "--eval", "python -c pass"]) == 0
     cid = capsys.readouterr().out.strip()
     assert main(["--db", db, "--fmt", "json", "verify", "--dry-run", "--id", cid]) == 0
     capsys.readouterr()

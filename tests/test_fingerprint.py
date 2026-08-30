@@ -62,3 +62,17 @@ def test_fingerprint_stable_and_runtime_major():
     b = fingerprint(err="TypeError: params is a Promise", eco="npm", rt="node@20.11.1", dep=["next@15.0.0"])
     c = fingerprint(err="TypeError: params is a Promise", eco="npm", rt="node@18.20.0", dep=["next@15.0.0"])
     assert a == b and a != c and len(a) == 64
+    py_a = fingerprint(err="ModuleNotFoundError: No module named 'x'", eco="py", rt="py@3.12")
+    py_b = fingerprint(err="ModuleNotFoundError: No module named 'x'", eco="py", rt="py@3.9")
+    assert py_a == py_b
+
+
+def test_runtime_proof_key_keeps_python_minor():
+    from claimidx.fingerprint import runtime_proof_key
+
+    assert runtime_proof_key("py@3.12") == "py@3.12"
+    assert runtime_proof_key("python@3.12.1") == "py@3.12"
+    assert runtime_proof_key("py@3.9") != runtime_proof_key("py@3.12")
+    assert runtime_proof_key("node@20.18.2") == "node@20"
+    assert runtime_proof_key("node@18") != runtime_proof_key("node@20")
+    assert runtime_proof_key("") == ""

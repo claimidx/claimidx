@@ -20,7 +20,7 @@ from pathlib import Path
 
 from .models import Claim
 from .policy import eval_allowed, split_eval, _norm_head
-from .sandbox import replay
+from .sandbox import ReplayResult, observe_env, replay, replay_records_hold
 from .store import Store
 from .team import resolve_owner
 
@@ -378,6 +378,21 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
             return {"action": "skip", "reason": "timeout", "id": c.id}
         held = proc.returncode == c.eval.expect
         if held:
+            probe = ReplayResult(
+                True, True, proc.returncode, c.eval.expect, True, "held-pin",
+                env=observe_env([str(py)]),
+            )
+            ok, why = replay_records_hold(c.rt, probe, c.eval.cmd)
+            if not ok:
+                return {
+                    "action": "skip",
+                    "reason": why,
+                    "id": c.id,
+                    "rc": proc.returncode,
+                    "stderr": (proc.stderr or "")[-300:],
+                    "applied": spec,
+                    "replay": probe.as_dict(),
+                }
             return {
                 "action": "confirm",
                 "reason": "held-pin",
@@ -385,6 +400,7 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
                 "rc": proc.returncode,
                 "stderr": (proc.stderr or "")[-300:],
                 "applied": spec,
+                "replay": probe.as_dict(),
             }
         if not _eval_targets_pin(c.eval.cmd, [_pkg_name(spec)]):
             return {
@@ -441,6 +457,9 @@ def decide(c: Claim, *, scratch: Path) -> dict:
     if not result.ran:
         return {"action": "skip", "reason": result.reason, "id": c.id, "replay": info}
     if result.held:
+        ok, why = replay_records_hold(c.rt, result, cmd)
+        if not ok:
+            return {"action": "skip", "reason": why, "id": c.id, "replay": info}
         return {"action": "confirm", "reason": "held", "id": c.id, "replay": info}
     blob = (result.stderr or "") + " " + (result.stdout or "")
     if is_runnable(c):

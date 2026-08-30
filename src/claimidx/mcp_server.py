@@ -213,7 +213,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         if getattr(existing, "src", "local") == "home" and not args.get("replay"):
             raise ValueError("quarantine: home claims require confirm with replay=true")
         if args.get("replay"):
-            from .sandbox import replay
+            from .sandbox import replay, replay_records_hold
 
             result = replay(existing.eval.cmd, existing.eval.expect, cwd=args.get("cwd"))
             if result.is_hint():
@@ -221,6 +221,12 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             if not result.held:
                 c = store.fail(args["id"], resolve_owner(args.get("own")))
                 return {"id": c.id, "st": c.st, "nc": c.nc, "nf": c.nf, "replay": result.as_dict(), "held": False}
+            ok, why = replay_records_hold(existing.rt, result, existing.eval.cmd)
+            if not ok:
+                return {
+                    "id": existing.id, "st": existing.st, "held": True, "recorded": False,
+                    "reason": why, "replay": result.as_dict(),
+                }
         c = store.confirm(args["id"], resolve_owner(args.get("own")), replayed=bool(args.get("replay")))
         from .home import maybe_share
 

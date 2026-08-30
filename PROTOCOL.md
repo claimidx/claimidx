@@ -37,7 +37,7 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | Python `ask()` | in-process query (`from claimidx import ask`). Same payload as JSON ask. Never auto-confirms. |
 | Python `ingest()` | in-process local write (`from claimidx import ingest`). Does not share unless `share=True`. Combined: `from claimidx import ask, ingest`. |
 | `publish` / `ingest` | insert if fingerprint unseen; refuse secrets, droppers, anon owners |
-| `confirm` | `nc += 1`; maybe `confirmed`. Home claims require `--replay` (HTTP: `?replay=true`). |
+| `confirm` | `nc += 1`; maybe `confirmed`. Home claims require `--replay` (HTTP: `?replay=true`). `confirm --replay` that holds increments `nr` only when python/node evals observe the executing runtime (`ReplayResult.env`, e.g. `py@3.12`) and it matches claim.rt at proof grain (Python major.minor, Node major). Empty claim.rt cannot mint `nr` for those heads. |
 | `fail` | `nf += 1`; maybe `contested`. This is the contradiction on the same `fp`. Different pin → different `fp` (ingest a sibling). |
 | `verify` | batch replay. Confirm if the eval held. Fail only on a proven miss. Skip builtin `true`/`false`, missing trees, missing interpreters, and evals that cannot prove the pin. `--harness` is two-state pin replay: confirm only if unpinned misses and the pin holds. `--cwd` via a scratch dir. |
 | `reject` | `st=rejected`; omitted from `/ledger.jsonl` |
@@ -67,7 +67,7 @@ proposed ──nc≥1──► confirmed ──stale──► stale
 
 `st` is a rank weight, not a write lock. Confirmed goes `stale` at `exp`, or 90 days after `ts`. Score already decays with age (`1 / (1 + days/45)`).
 
-Ask surfaces what the agent can act on: `age_days`, `dep_drift` (same package, different pin), `src`, `nf`, `nr` (replay-held confirms), `eval_proof`, `warn`. Same package + different version is still a hit, ranked lower. Replay before applying if `warn`, `dep_drift`, `nf>0`, `normalization_risk`, `nc without replay`, or `st=contested`. `normalization_risk` fires when the query error had a path, URL, integer, hex, or non-module quoted token that `normalize_error` erased. Counter-only `confirm` still increments `nc`; `confirm --replay` that holds increments `nr`. Do not spawn a second `proposed` row for the same `fp`. Contradiction is `fail` on that `fp`; a new pin is a new fingerprint. Pulled ledger rows with a stored `fp` that does not recompute from the claimed fields are skipped.
+Ask surfaces what the agent can act on: `age_days`, `dep_drift` (same package, different pin), `rt_drift` (proof-grain runtime differs; fingerprint still keeps Python major only), `src`, `nf`, `nr` (replay-held confirms), `eval_proof`, `warn`. Same package + different version is still a hit, ranked lower. Replay before applying if `warn`, `dep_drift`, `rt_drift`, `nf>0`, `normalization_risk`, `nc without replay`, or `st=contested`. `normalization_risk` fires when the query error had a path, URL, integer, hex, or non-module quoted token that `normalize_error` erased. Counter-only `confirm` still increments `nc`; `confirm --replay` that holds increments `nr` only when python/node env matches claim.rt. Do not spawn a second `proposed` row for the same `fp`. Contradiction is `fail` on that `fp`; a new pin is a new fingerprint. Pulled ledger rows with a stored `fp` that does not recompute from the claimed fields are skipped.
 
 Provenance is on the claim: `src` (`seed` corpus / `home` harvested / `local`), `tried`, `eval`, `ts`, `nc`. Seed is not proof. Pulled home claims stay `proposed` until `confirm --replay`.
 

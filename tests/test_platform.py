@@ -23,6 +23,7 @@ def test_replay_python_print():
     result = replay('python -c "print(1)"', 0)
     assert result.held, result.as_dict()
     assert result.ran
+    assert result.env == f"py@{sys.version_info.major}.{sys.version_info.minor}"
 
 
 def test_replay_true_builtin_everywhere():

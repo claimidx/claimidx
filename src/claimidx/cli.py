@@ -162,7 +162,7 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
         return 2
     replay_info = None
     if getattr(ns, "replay", False):
-        from .sandbox import replay
+        from .sandbox import replay, replay_records_hold
         result = replay(c.eval.cmd, c.eval.expect, cwd=getattr(ns, "cwd", None))
         replay_info = result.as_dict()
         if result.is_hint():
@@ -179,6 +179,14 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
             else:
                 print(json.dumps(replay_info), file=sys.stderr)
                 print(_dumps(failed, ns.fmt))
+            return 2
+        ok, why = replay_records_hold(c.rt, result, c.eval.cmd)
+        if not ok:
+            if ns.fmt == "json":
+                print(json.dumps({"held": True, "replay": replay_info, "recorded": False, "reason": why}, default=str))
+            else:
+                print(json.dumps(replay_info), file=sys.stderr)
+                print(f"not recorded: {why}", file=sys.stderr)
             return 2
     confirmed = store.confirm(ns.id, resolve_owner(ns.own), replayed=bool(replay_info))
     from .home import maybe_share

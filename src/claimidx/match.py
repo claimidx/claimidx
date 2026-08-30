@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from .fingerprint import classify, fingerprint, normalize_error, normalization_risk
+from .fingerprint import classify, fingerprint, normalize_error, normalization_risk, runtime_proof_key
 from .models import Claim
 from .public import eval_is_proof
 
@@ -35,6 +35,15 @@ def _split_dep(raw: str) -> tuple[str, str]:
 def _dep_names(items: list[str] | None) -> set[str]:
     """Package names only. next@15.0 and next@15.2 are the same prior-art env."""
     return {n for n, _ in (_split_dep(x) for x in (items or [])) if n}
+
+
+def rt_drift(query_rt: str | None, claim_rt: str | None) -> dict[str, str] | None:
+    """Different proof-grain runtimes. Empty if either side omitted."""
+    qk = runtime_proof_key(query_rt or "")
+    ck = runtime_proof_key(claim_rt or "")
+    if qk and ck and qk != ck:
+        return {"query": (query_rt or "").strip(), "claim": (claim_rt or "").strip()}
+    return None
 
 
 def dep_drift(query_dep: list[str] | None, claim_dep: list[str] | None) -> list[dict[str, str]]:
@@ -87,6 +96,9 @@ def hit_warn(query: Claim | dict, claim: Claim) -> list[str]:
     crt = (claim.rt or "").strip()
     if crt and not qrt:
         warns.append("rt omitted; replay")
+    drifted = rt_drift(qrt, crt)
+    if drifted:
+        warns.append(f"rt query={drifted['query']} claim={drifted['claim']}")
     if int(claim.nc or 0) >= 1 and int(getattr(claim, "nr", 0) or 0) == 0:
         warns.append("nc without replay")
     return warns
@@ -94,11 +106,13 @@ def hit_warn(query: Claim | dict, claim: Claim) -> list[str]:
 
 def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
     qdep = query.dep if isinstance(query, Claim) else (query.get("dep") or [])
+    qrt = (query.rt if isinstance(query, Claim) else (query.get("rt") or "")).strip()
     return {
         "sim": round(sim, 4),
         "score": round(claim.score(), 4),
         "age_days": round(age_days(claim), 1),
         "dep_drift": dep_drift(qdep, claim.dep),
+        "rt_drift": rt_drift(qrt, claim.rt) or {},
         "eval_proof": eval_is_proof(claim.eval.cmd),
         "nr": int(getattr(claim, "nr", 0) or 0),
         "warn": hit_warn(query, claim),
@@ -131,28 +145,33 @@ _ERR_FLOOR = 0.35
 
 def similarity(query: Claim | dict, cand: Claim) -> float:
     if isinstance(query, Claim):
-        qfp, qcls, qerr, qeco, qdep = query.fp, query.cls, query.err, query.eco, query.dep
+        qfp, qcls, qerr, qeco, qdep, qrt = query.fp, query.cls, query.err, query.eco, query.dep, query.rt
     else:
         qerr = query.get("err") or ""
         qcls = query.get("cls") or classify(qerr)
         qeco = query.get("eco") or ""
         qdep = query.get("dep") or []
-        qfp = query.get("fp") or fingerprint(err=qerr, cls=qcls, eco=qeco, rt=query.get("rt") or "", dep=qdep)
+        qrt = query.get("rt") or ""
+        qfp = query.get("fp") or fingerprint(err=qerr, cls=qcls, eco=qeco, rt=qrt, dep=qdep)
     if qfp == cand.fp:
-        return 1.0
-    err = _err_sim(qerr, cand.err)
-    if err < _ERR_FLOOR:
-        return 0.0
-    qn, cn = _dep_names(qdep), _dep_names(cand.dep)
-    if qn and cn and qn.isdisjoint(cn):
-        return 0.0
-    s = 0.0
-    s += 0.45 * err
-    s += 0.20 * (1.0 if qcls and qcls == cand.cls else 0.0)
-    s += 0.15 * (1.0 if qeco and qeco == cand.eco else 0.0)
-    s += 0.20 * _jaccard(qdep, cand.dep)
-    # Same package, different pin: still a hit (agent sees dep_drift), ranked lower.
-    if dep_drift(qdep, cand.dep):
+        s = 1.0
+    else:
+        err = _err_sim(qerr, cand.err)
+        if err < _ERR_FLOOR:
+            return 0.0
+        qn, cn = _dep_names(qdep), _dep_names(cand.dep)
+        if qn and cn and qn.isdisjoint(cn):
+            return 0.0
+        s = 0.0
+        s += 0.45 * err
+        s += 0.20 * (1.0 if qcls and qcls == cand.cls else 0.0)
+        s += 0.15 * (1.0 if qeco and qeco == cand.eco else 0.0)
+        s += 0.20 * _jaccard(qdep, cand.dep)
+        # Same package, different pin: still a hit (agent sees dep_drift), ranked lower.
+        if dep_drift(qdep, cand.dep):
+            s *= 0.82
+    # Fingerprint keeps Python major only; proof grain is minor. Still a hit.
+    if rt_drift(qrt, cand.rt):
         s *= 0.82
     return s
 

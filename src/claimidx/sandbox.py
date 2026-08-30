@@ -9,6 +9,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 
+from .fingerprint import runtime_proof_key
 from .policy import eval_allowed, split_eval, _norm_head
 
 
@@ -61,6 +62,7 @@ class ReplayResult:
     reason: str
     stdout: str = ""
     stderr: str = ""
+    env: str = ""  # observed executing runtime, e.g. py@3.12 / node@20
 
     def as_dict(self) -> dict:
         return {
@@ -72,6 +74,7 @@ class ReplayResult:
             "reason": self.reason,
             "stdout": self.stdout[-400:],
             "stderr": self.stderr[-400:],
+            "env": self.env,
         }
 
     def is_hint(self) -> bool:
@@ -98,6 +101,97 @@ _TREE_MARKERS = {
     "make": ("Makefile", "makefile"),
 }
 _LOCAL_PIP = re.compile(r"\bpip\b.+\binstall\b.*(\s-e\s|\s\.(?:\s|$))", re.I)
+_ENV_HEADS = {"python", "python3", "node"}
+
+
+def observe_env(argv: list[str]) -> str:
+    """Executing runtime of a resolved eval argv. Empty if not python/node."""
+    if not argv:
+        return ""
+    exe = argv[0]
+    base = os.path.basename(exe).lower()
+    if base.endswith(".exe"):
+        base = base[:-4]
+    if base in {"python", "python3", "pythonw"}:
+        return _observe_py(exe)
+    if base == "node":
+        return _observe_node(exe)
+    return ""
+
+
+def _observe_py(exe: str) -> str:
+    try:
+        if os.path.exists(exe) and os.path.exists(sys.executable) and os.path.samefile(exe, sys.executable):
+            v = sys.version_info
+            return f"py@{v.major}.{v.minor}"
+    except OSError:
+        pass
+    try:
+        proc = subprocess.run(
+            [exe, "-c", "import sys; print('%d.%d' % sys.version_info[:2])"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    ver = (proc.stdout or "").strip()
+    if re.fullmatch(r"\d+\.\d+", ver):
+        return f"py@{ver}"
+    return ""
+
+
+def _observe_node(exe: str) -> str:
+    try:
+        proc = subprocess.run(
+            [exe, "-p", "process.versions.node"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    ver = (proc.stdout or "").strip()
+    m = re.match(r"(\d+)", ver)
+    if m:
+        return f"node@{m.group(1)}"
+    return ""
+
+
+def _eval_needs_env(cmd: str) -> bool:
+    try:
+        _, parts = split_eval(cmd)
+    except ValueError:
+        return False
+    if not parts:
+        return False
+    return _norm_head(parts[0]) in _ENV_HEADS
+
+
+def replay_records_hold(claim_rt: str, result: ReplayResult, cmd: str = "") -> tuple[bool, str]:
+    """Whether a held replay may mint nr.
+
+    Python/node evals observe the executing interpreter. That env is
+    required: claim.rt must be set and match at runtime_proof_key grain.
+    Other heads keep prior confirm-replay behavior.
+    """
+    if result.is_hint() or not result.held:
+        return False, result.reason
+    if not _eval_needs_env(cmd):
+        return True, "held"
+    observed = (result.env or "").strip()
+    if not observed:
+        return False, "hold requires observed env"
+    declared = (claim_rt or "").strip()
+    if not declared:
+        return False, f"hold requires rt matching observed env ({observed})"
+    if runtime_proof_key(declared) != runtime_proof_key(observed):
+        return False, f"hold env mismatch: claim.rt={declared} observed={observed}"
+    return True, "held"
 
 
 def _precondition(head: str, cwd: str | None, cmd: str = "") -> str | None:
@@ -135,6 +229,7 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
     if missing:
         return ReplayResult(True, False, None, expect, False, missing)
     argv = resolve_argv(parts)
+    observed = observe_env(argv)
     env = os.environ.copy()
     env.update(extra_env)
     try:
@@ -149,12 +244,13 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
             env=env,
         )
     except subprocess.TimeoutExpired:
-        return ReplayResult(True, True, 124, expect, False, "timeout")
+        return ReplayResult(True, True, 124, expect, False, "timeout", env=observed)
     except OSError as e:
-        return ReplayResult(True, False, None, expect, False, f"exec-error:{e}")
+        return ReplayResult(True, False, None, expect, False, f"exec-error:{e}", env=observed)
     held = proc.returncode == expect
     return ReplayResult(
         True, True, proc.returncode, expect, held,
         "held" if held else "eval-miss",
         proc.stdout or "", proc.stderr or "",
+        observed,
     )

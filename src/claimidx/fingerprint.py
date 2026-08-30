@@ -90,6 +90,27 @@ def _canon_list(items: list[str] | None) -> str:
     return ",".join(sorted({i.strip().lower() for i in (items or []) if i.strip()}))
 
 
+def runtime_proof_key(rt: str) -> str:
+    """Grain at which a hold is keyed.
+
+    Fingerprint still collapses Python to major (`py@3`). Holds do not:
+    Python is major.minor (`py@3.12`), Node is major (`node@20`).
+    """
+    s = (rt or "").strip().lower()
+    if not s:
+        return ""
+    m = re.match(r"^(?:py|python)@(\d+)(?:\.(\d+))?", s)
+    if m:
+        major, minor = m.group(1), m.group(2)
+        if minor is None:
+            return f"py@{major}"
+        return f"py@{major}.{minor}"
+    m = re.match(r"^(?:node|nodejs)@(\d+)", s)
+    if m:
+        return f"node@{m.group(1)}"
+    return s
+
+
 def fingerprint_material(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> str:
     nerr = normalize_error(err)
     cls = cls or classify(err)

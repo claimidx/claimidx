@@ -1,7 +1,13 @@
+import json
+import sys
 from pathlib import Path
 
 from claimidx.cli import main
 from claimidx.seed_data import materialize
+
+
+def _py_rt() -> str:
+    return f"py@{sys.version_info.major}.{sys.version_info.minor}"
 
 
 def test_seed_ask_confirm_roundtrip(tmp_path: Path, capsys):
@@ -150,6 +156,54 @@ def test_exists_still_rejects_bad_eval(tmp_path: Path, capsys):
     assert rc == 2
     err_out = capsys.readouterr().err
     assert "eval" in err_out.lower() or "denied" in err_out.lower() or "head" in err_out.lower()
+
+
+def test_confirm_replay_python_hold_requires_matching_rt(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    err = "ModuleNotFoundError: No module named 'holdenv'"
+    eval_cmd = 'python -c "print(1)"'
+    assert main([
+        "--db", db, "--fmt", "id", "publish",
+        "--err", err, "--eco", "py", "--fix-k", "constraint", "--fix-b", "ok",
+        "--eval", eval_cmd,
+    ]) == 0
+    empty_id = capsys.readouterr().out.strip()
+    rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", empty_id])
+    assert rc == 2
+    empty_out = json.loads(capsys.readouterr().out)
+    assert empty_out["held"] is True
+    assert empty_out["recorded"] is False
+    assert empty_out["replay"]["env"].startswith("py@")
+    assert "hold requires rt" in empty_out["reason"]
+    assert main(["--db", db, "--fmt", "json", "show", empty_id]) == 0
+    assert '"nr": 0' in capsys.readouterr().out or '"nc": 0' in capsys.readouterr().out
+
+    rt = _py_rt()
+    assert main([
+        "--db", db, "--fmt", "id", "publish",
+        "--err", "ModuleNotFoundError: No module named 'holdok'", "--eco", "py",
+        "--rt", rt, "--fix-k", "constraint", "--fix-b", "ok", "--eval", eval_cmd,
+    ]) == 0
+    ok_id = capsys.readouterr().out.strip()
+    rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", ok_id])
+    assert rc == 0
+    ok_out = json.loads(capsys.readouterr().out)
+    assert ok_out["held"] is True
+    assert ok_out["replay"]["env"] == rt
+    assert ok_out.get("nr") == 1 or ok_out.get("claim", {}).get("nr") == 1 or '"nr": 1' in json.dumps(ok_out)
+
+    assert main([
+        "--db", db, "--fmt", "id", "publish",
+        "--err", "ModuleNotFoundError: No module named 'holdmiss'", "--eco", "py",
+        "--rt", "py@3.0", "--fix-k", "constraint", "--fix-b", "ok", "--eval", eval_cmd,
+    ]) == 0
+    miss_id = capsys.readouterr().out.strip()
+    rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", miss_id])
+    assert rc == 2
+    miss_out = json.loads(capsys.readouterr().out)
+    assert miss_out["held"] is True
+    assert miss_out["recorded"] is False
+    assert "hold env mismatch" in miss_out["reason"]
 
 
 def test_confirm_replay_missing_tree_not_recorded(tmp_path: Path, capsys):

@@ -150,14 +150,18 @@ def test_publish_preserves_id_and_force(tmp_path: Path):
 
 
 def test_api_confirm_replay(tmp_path: Path):
+    import sys
+
     app = create_app(str(tmp_path / "home.sqlite"))
     client = TestClient(app)
+    rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
     posted = client.post("/api/publish", json={
         "err": "x failed replay",
         "fix_k": "constraint",
         "fix_b": "ok",
         "eval": "python -c \"print(1)\"",
         "own": "did:claimidx:lucas",
+        "rt": rt,
     })
     cid = posted.json()["claim"]["id"]
     denied = client.post(f"/api/claims/{cid}/confirm")
@@ -173,9 +177,23 @@ def test_api_confirm_replay(tmp_path: Path):
     taut = client.post(f"/api/claims/{hid}/confirm?replay=true")
     assert taut.status_code == 200, taut.text
     assert taut.json().get("recorded") is False
+    bare = client.post("/api/publish", json={
+        "err": "x failed replay bare rt",
+        "fix_k": "constraint",
+        "fix_b": "ok",
+        "eval": "python -c \"print(1)\"",
+        "own": "did:claimidx:lucas",
+    })
+    bid = bare.json()["claim"]["id"]
+    skipped = client.post(f"/api/claims/{bid}/confirm?replay=true")
+    assert skipped.status_code == 200, skipped.text
+    assert skipped.json()["held"] is True
+    assert skipped.json().get("recorded") is False
     ok = client.post(f"/api/claims/{cid}/confirm?replay=true")
     assert ok.status_code == 200, ok.text
     assert ok.json()["held"] is True
+    assert ok.json().get("recorded") is True
+    assert ok.json()["replay"]["env"] == rt
 
 
 def test_api_reject(tmp_path: Path):

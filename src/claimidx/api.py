@@ -229,7 +229,7 @@ def create_app(db: str | None = None) -> FastAPI:
         except PolicyError as e:
             raise HTTPException(403, str(e)) from e
         if replay:
-            from .sandbox import replay as run_eval
+            from .sandbox import replay as run_eval, replay_records_hold
 
             result = run_eval(c.eval.cmd, c.eval.expect)
             if result.is_hint():
@@ -237,9 +237,12 @@ def create_app(db: str | None = None) -> FastAPI:
             if not result.held:
                 failed = store.fail(claim_id, actor)
                 return {"held": False, "replay": result.as_dict(), "claim": failed.model_dump(mode="json")}
+            ok, why = replay_records_hold(c.rt, result, c.eval.cmd)
+            if not ok:
+                return {"held": True, "recorded": False, "reason": why, "replay": result.as_dict()}
         confirmed = store.confirm(claim_id, actor, replayed=bool(replay))
         if replay:
-            return {"held": True, "claim": confirmed.model_dump(mode="json")}
+            return {"held": True, "recorded": True, "replay": result.as_dict(), "claim": confirmed.model_dump(mode="json")}
         return confirmed.model_dump(mode="json")
 
     @app.post("/api/claims/{claim_id}/fail")

@@ -99,6 +99,25 @@ def test_eval_proof_is_false_for_tautology_and_ranks_under_recipe():
     assert refine_eval("true", fix_k="patch", fix_b="await params", eco="npm") == "true"
 
 
+def test_rt_drift_warns_and_ranks_under_matching_runtime():
+    from claimidx.match import annotate, hit_warn, rank, rt_drift
+
+    err = "ModuleNotFoundError: No module named 'demo_rt'"
+    c = _claim(err, eco="py", dep=["demo@1"])
+    c.rt = "py@3.12"
+    q = {"err": err, "eco": "py", "dep": ["demo@1"], "rt": "py@3.9"}
+    assert rt_drift("py@3.9", "py@3.12") == {"query": "py@3.9", "claim": "py@3.12"}
+    w = hit_warn(q, c)
+    assert any(x.startswith("rt query=py@3.9") for x in w)
+    meta = annotate(q, c, 0.9)
+    assert meta["rt_drift"]["query"] == "py@3.9"
+    same = {"err": err, "eco": "py", "dep": ["demo@1"], "rt": "py@3.12"}
+    hits = rank(same, [c], k=1)
+    drifted = rank(q, [c], k=1)
+    assert hits and drifted
+    assert drifted[0][1] < hits[0][1]
+
+
 def test_nc_without_replay_and_omitted_runtime_warn():
     from claimidx.match import hit_warn
 
