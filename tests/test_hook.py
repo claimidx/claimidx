@@ -143,6 +143,32 @@ def test_hook_command_invokes_on_windows():
     assert claude_hook_block()["hooks"][0].get("shell") == "powershell"
 
 
+def test_cursor_mcp_refuses_non_object(tmp_path):
+    from claimidx.hook import install_cursor_mcp
+
+    path = tmp_path / "mcp.json"
+    path.write_text("[]\n", encoding="utf-8")
+    rec = install_cursor_mcp(path, own="did:claimidx:test")
+    assert rec["status"] == "error"
+    assert path.read_text(encoding="utf-8") == "[]\n"
+
+
+def test_grok_mcp_appends_without_clobber(tmp_path, monkeypatch):
+    from claimidx.hook import install_grok_mcp
+
+    monkeypatch.setenv("CLAIMIDX_GROK_CONFIG", str(tmp_path / "config.toml"))
+    path = tmp_path / "config.toml"
+    path.write_text("[ui]\nfoo = 1\n", encoding="utf-8")
+    rec = install_grok_mcp(path, own="did:claimidx:test", agent="test")
+    assert rec["status"] == "installed"
+    text = path.read_text(encoding="utf-8")
+    assert "[ui]" in text and "foo = 1" in text
+    assert "[mcp_servers.claimidx]" in text
+    rec2 = install_grok_mcp(path, own="did:claimidx:other")
+    assert rec2["status"] == "present"
+    assert "did:claimidx:other" not in path.read_text(encoding="utf-8")
+
+
 def test_hook_install_merges_without_clobber(tmp_path, capsys, monkeypatch):
     settings = tmp_path / "claude" / "settings.json"
     settings.parent.mkdir(parents=True)

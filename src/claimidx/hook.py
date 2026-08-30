@@ -1,7 +1,8 @@
 """Harness sensor: pull an error out of stdin (Claude Code hook JSON or raw stderr).
 
 Does not apply fix.b. Fail-open: no error / secrets / parse issues → empty.
-`claimidx init` writes a Claude Code PostToolUseFailure command into settings.json.
+`claimidx init` writes Claude PostToolUseFailure and, when those configs exist,
+Cursor/Grok MCP (`claimidx-mcp`). Never writes home URLs or tokens.
 """
 from __future__ import annotations
 
@@ -191,4 +192,94 @@ def install_claude_hook(path: Path | None = None) -> dict:
         "event": "PostToolUseFailure",
         "matcher": "Bash",
         "status": "installed",
+    }
+
+
+def _toml_str(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def mcp_owner_env(own: str, agent: str = "") -> dict[str, str]:
+    env = {"CLAIMIDX_OWNER": own}
+    if agent:
+        env["CLAIMIDX_AGENT"] = agent
+    return env
+
+
+def cursor_mcp_path() -> Path:
+    override = os.environ.get("CLAIMIDX_CURSOR_MCP")
+    if override:
+        return Path(override)
+    return Path.home() / ".cursor" / "mcp.json"
+
+
+def grok_config_path() -> Path:
+    override = os.environ.get("CLAIMIDX_GROK_CONFIG")
+    if override:
+        return Path(override)
+    return Path.home() / ".grok" / "config.toml"
+
+
+def _json_mcp_block(own: str, agent: str) -> dict:
+    return {"command": "claimidx-mcp", "args": [], "env": mcp_owner_env(own, agent)}
+
+
+def install_cursor_mcp(path: Path | None = None, *, own: str, agent: str = "") -> dict:
+    """Merge claimidx into Cursor mcp.json. Skip if Cursor is not installed."""
+    target = path or cursor_mcp_path()
+    forced = bool(os.environ.get("CLAIMIDX_CURSOR_MCP"))
+    if not forced and not target.exists() and not target.parent.exists():
+        return {"path": str(target), "status": "skip", "reason": "no cursor config dir"}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    data: dict = {}
+    if target.exists():
+        try:
+            loaded = json.loads(target.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            return {"path": str(target), "status": "error", "error": f"mcp.json is not json: {e}"}
+        if not isinstance(loaded, dict):
+            return {"path": str(target), "status": "error", "error": "mcp.json is not a json object"}
+        data = loaded
+    servers = data.get("mcpServers")
+    if servers is None:
+        servers = {}
+        data["mcpServers"] = servers
+    if not isinstance(servers, dict):
+        return {"path": str(target), "status": "error", "error": "mcpServers is not an object"}
+    existing = servers.get("claimidx")
+    if isinstance(existing, dict) and existing.get("command") == "claimidx-mcp":
+        return {"path": str(target), "status": "present", "command": "claimidx-mcp"}
+    servers["claimidx"] = _json_mcp_block(own, agent)
+    target.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return {"path": str(target), "status": "installed", "command": "claimidx-mcp"}
+
+
+def install_grok_mcp(path: Path | None = None, *, own: str, agent: str = "") -> dict:
+    """Append [mcp_servers.claimidx] to Grok config.toml if missing. Do not rewrite the file."""
+    target = path or grok_config_path()
+    forced = bool(os.environ.get("CLAIMIDX_GROK_CONFIG"))
+    if not forced and not target.exists():
+        return {"path": str(target), "status": "skip", "reason": "no grok config"}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    text = target.read_text(encoding="utf-8") if target.exists() else ""
+    if "[mcp_servers.claimidx]" in text:
+        return {"path": str(target), "status": "present", "command": "claimidx-mcp"}
+    block = (
+        "\n[mcp_servers.claimidx]\n"
+        'command = "claimidx-mcp"\n'
+        "\n[mcp_servers.claimidx.env]\n"
+        f"CLAIMIDX_OWNER = {_toml_str(own)}\n"
+    )
+    if agent:
+        block += f"CLAIMIDX_AGENT = {_toml_str(agent)}\n"
+    target.write_text((text.rstrip() + "\n" if text.strip() else "") + block.lstrip("\n"), encoding="utf-8")
+    return {"path": str(target), "status": "installed", "command": "claimidx-mcp"}
+
+
+def install_harness(*, own: str, agent: str = "") -> dict:
+    """Claude failure hook plus Cursor/Grok MCP when those configs exist."""
+    return {
+        "claude": install_claude_hook(),
+        "cursor": install_cursor_mcp(own=own, agent=agent),
+        "grok": install_grok_mcp(own=own, agent=agent),
     }

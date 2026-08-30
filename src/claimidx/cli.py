@@ -535,10 +535,12 @@ def cmd_init(ns: argparse.Namespace) -> int:
         except HomeError as e:
             pulled = {"error": str(e)}
     hook = None
+    harness = None
     if not getattr(ns, "no_hooks", False):
-        from .hook import install_claude_hook
+        from .hook import install_harness
 
-        hook = install_claude_hook()
+        harness = install_harness(own=own, agent=agent)
+        hook = (harness or {}).get("claude")
     print(json.dumps({
         "config": str(path),
         "owner": own,
@@ -548,6 +550,7 @@ def cmd_init(ns: argparse.Namespace) -> int:
         "pull": pulled,
         "whoami": whoami(own),
         "hook": hook,
+        "harness": harness,
     }, default=str, indent=2))
     return 0
 
@@ -592,7 +595,7 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
         add("home-api", True, "not set (share will write outbox / PR lines)")
     ev = replay("true", 0)
     add("eval-true", ev.held, ev.reason)
-    from .hook import claude_settings_path, settings_has_claimidx
+    from .hook import claude_settings_path, cursor_mcp_path, grok_config_path, settings_has_claimidx
 
     hp = claude_settings_path()
     if hp.exists():
@@ -604,6 +607,25 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
         add("claude-hook", True, f"{'installed' if hooked else 'missing PostToolUseFailure'} {hp}")
     else:
         add("claude-hook", True, f"not installed ({hp}); claimidx init writes it")
+    cp = cursor_mcp_path()
+    if cp.exists():
+        try:
+            cur = json.loads(cp.read_text(encoding="utf-8"))
+            has = isinstance(cur, dict) and isinstance(cur.get("mcpServers"), dict) and "claimidx" in cur["mcpServers"]
+        except (OSError, json.JSONDecodeError):
+            has = False
+        add("cursor-mcp", True, f"{'installed' if has else 'missing claimidx'} {cp}")
+    else:
+        add("cursor-mcp", True, f"skip ({cp})")
+    gp = grok_config_path()
+    if gp.exists():
+        try:
+            has = "[mcp_servers.claimidx]" in gp.read_text(encoding="utf-8")
+        except OSError:
+            has = False
+        add("grok-mcp", True, f"{'installed' if has else 'missing claimidx'} {gp}")
+    else:
+        add("grok-mcp", True, f"skip ({gp})")
     ok = all(c["ok"] for c in checks)
     print(json.dumps({"ok": ok, "whoami": me, "checks": checks}, indent=2))
     return 0 if ok else 2
@@ -760,7 +782,7 @@ def build_parser() -> argparse.ArgumentParser:
     ini.add_argument("--home-api")
     ini.add_argument("--home")
     ini.add_argument("--offline", action="store_true")
-    ini.add_argument("--no-hooks", action="store_true", help="Do not write the Claude Code PostToolUseFailure sensor")
+    ini.add_argument("--no-hooks", action="store_true", help="Do not write Claude hook or Cursor/Grok MCP")
     ini.set_defaults(func=cmd_init)
     evs = sub.add_parser("events", help="Audit log of ask/publish/confirm/share")
     evs.add_argument("-k", type=int, default=50)

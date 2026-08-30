@@ -32,3 +32,52 @@ def test_init_offline_seeds_and_writes_config(tmp_path: Path, capsys, monkeypatc
     assert "PostToolUseFailure" in blob
     assert "claimidx hook" in blob
     assert main(["--db", db, "doctor"]) in (0, 2)
+
+
+def test_init_wires_cursor_and_grok_mcp(tmp_path: Path, capsys, monkeypatch):
+    import json
+
+    monkeypatch.setenv("CLAIMIDX_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    cursor = tmp_path / "cursor" / "mcp.json"
+    grok = tmp_path / "grok" / "config.toml"
+    monkeypatch.setenv("CLAIMIDX_CURSOR_MCP", str(cursor))
+    monkeypatch.setenv("CLAIMIDX_GROK_CONFIG", str(grok))
+    grok.parent.mkdir(parents=True)
+    grok.write_text("[cli]\ntheme = \"dark\"\n", encoding="utf-8")
+    db = str(tmp_path / "ix.sqlite")
+    rc = main(["--db", db, "init", "--agent", "wiretest", "--offline"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["harness"]["cursor"]["status"] == "installed"
+    assert out["harness"]["grok"]["status"] == "installed"
+    cur = json.loads(cursor.read_text(encoding="utf-8"))
+    assert cur["mcpServers"]["claimidx"]["command"] == "claimidx-mcp"
+    assert cur["mcpServers"]["claimidx"]["env"]["CLAIMIDX_OWNER"] == "did:claimidx:wiretest"
+    assert "HOME_API" not in json.dumps(cur)
+    text = grok.read_text(encoding="utf-8")
+    assert "[cli]" in text and "theme" in text
+    assert "[mcp_servers.claimidx]" in text
+    assert "did:claimidx:wiretest" in text
+    assert "HOME_API" not in text
+    rc2 = main(["--db", db, "init", "--agent", "wiretest", "--offline"])
+    assert rc2 == 0
+    again = json.loads(capsys.readouterr().out)
+    assert again["harness"]["cursor"]["status"] == "present"
+    assert again["harness"]["grok"]["status"] == "present"
+
+
+def test_init_skips_cursor_when_dir_absent(tmp_path: Path, capsys, monkeypatch):
+    import json
+
+    monkeypatch.setenv("CLAIMIDX_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.delenv("CLAIMIDX_CURSOR_MCP", raising=False)
+    monkeypatch.delenv("CLAIMIDX_GROK_CONFIG", raising=False)
+    monkeypatch.setattr("claimidx.hook.cursor_mcp_path", lambda: tmp_path / "no-cursor" / "mcp.json")
+    monkeypatch.setattr("claimidx.hook.grok_config_path", lambda: tmp_path / "no-grok" / "config.toml")
+    rc = main(["--db", str(tmp_path / "ix.sqlite"), "init", "--agent", "skipwire", "--offline"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["harness"]["cursor"]["status"] == "skip"
+    assert out["harness"]["grok"]["status"] == "skip"
