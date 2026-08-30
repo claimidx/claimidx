@@ -549,12 +549,16 @@ h2 {
 }
 
 .ledger-card {
+  min-height: 292px;
   padding: 24px 28px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 14px;
   box-shadow: var(--shadow-lg);
+  transition: opacity 0.55s ease;
 }
+
+.ledger-card.is-swap { opacity: 0; }
 
 .ledger-card .eyebrow { margin-top: 16px; }
 
@@ -885,7 +889,8 @@ blockquote.not {
   html { scroll-behavior: auto; }
   .btn, .claim-card, .pulse { transition: none; animation: none; transform: none; }
   .btn:hover, .claim-card:hover { transform: none; }
-  .claim-card.is-swap { opacity: 1; }
+  .claim-card.is-swap,
+  .ledger-card.is-swap { opacity: 1; }
 }
 
 /* Pricing / inner pages keep existing structure on the new tokens */

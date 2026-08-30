@@ -113,7 +113,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="/site.css?v=9">
+  <link rel="stylesheet" href="/site.css?v=10">
   <script>
     (function () {
       try {
@@ -139,27 +139,27 @@
       });
     }
     var CIX_CLAIMS = [
-      {id:"spr_a11c000000000001",eco:"npm",err:"TypeError: params is a Promise",nc:11,dep:"next@15",rt:"node@20"},
-      {id:"spr_a11c000000000007",eco:"browser",err:"browserType.launch: Executable doesn't exist at <PATH>",nc:12,dep:"playwright@1.48",rt:"node@20"},
-      {id:"spr_a11c000000000004",eco:"py",err:"ValidationError: url Field required [type=missing]",nc:12,dep:"pydantic@2.8",rt:"py@3.12"},
-      {id:"spr_a11c000000000049",eco:"ci",err:"error: failed to push some refs to",nc:9,dep:"",rt:""},
-      {id:"spr_a11c00000000003a",eco:"mcp",err:"Unexpected token in JSON at position <N>",nc:12,dep:"",rt:"node@20"},
-      {id:"spr_a11c00000000003b",eco:"other",err:"The term <STR> is not recognized as the name of a cmdlet",nc:13,dep:"",rt:"windows"},
-      {id:"spr_a11c000000000006",eco:"npm",err:"Cannot find module @/lib/utils or its corresponding type declarations.",nc:8,dep:"typescript@5",rt:"node@20"},
-      {id:"spr_a11c000000000003",eco:"py",err:"ModuleNotFoundError: No module named pydantic_core",nc:6,dep:"pydantic@2.9",rt:"py@3.12"},
-      {id:"spr_a11c00000000005e",eco:"ci",err:"Permission denied (publickey)",nc:9,dep:"",rt:""},
-      {id:"spr_a11c000000000039",eco:"mcp",err:"Error: spawn npx ENOENT",nc:10,dep:"",rt:"node@20"},
-      {id:"spr_a11c000000000022",eco:"other",err:"The token <STR> is not a valid statement separator in this version.",nc:12,dep:"",rt:"windows"},
-      {id:"spr_a11c000000000002",eco:"npm",err:"TypeError: searchParams is a Promise",nc:7,dep:"next@15",rt:"node@20"},
-      {id:"cix_42bd7e542b66a4fa",eco:"py",err:"ImportError: cannot import name cached_download from huggingface_hub",nc:3,dep:"huggingface-hub@1.29",rt:"py@3.12"},
-      {id:"spr_a11c000000000048",eco:"ci",err:"fatal: not a git repository (or any of the parent directories): .git",nc:8,dep:"",rt:""},
-      {id:"spr_a11c000000000040",eco:"mcp",err:"Error: MCP error -<N>: Invalid params",nc:7,dep:"",rt:"node@20"},
-      {id:"spr_a11c000000000047",eco:"other",err:"Activate.ps1 cannot be loaded because running scripts is disabled on this system",nc:11,dep:"",rt:"windows"},
-      {id:"spr_a11c000000000005",eco:"npm",err:"npm ERR! ERESOLVE unable to resolve dependency tree",nc:6,dep:"react@19",rt:"node@20"},
-      {id:"cix_5e3965fdc7fed2d5",eco:"py",err:"ModuleNotFoundError: No module named pkg_resources",nc:3,dep:"setuptools@84",rt:"py@3.12"},
-      {id:"spr_a11c000000000051",eco:"ci",err:"fatal: Unable to create <STR>: File exists.",nc:8,dep:"",rt:""},
-      {id:"spr_a11c00000000004f",eco:"mcp",err:"Error: MCP error -<N>: Invalid Request",nc:5,dep:"",rt:"node@20"},
-      {id:"spr_a11c000000000064",eco:"other",err:"Unable to locate credentials",nc:6,dep:"boto3",rt:""}
+      {id:"spr_a11c000000000001",eco:"npm",err:"TypeError: params is a Promise",nc:11,dep:"next@15",rt:"node@20",fix:"const { slug } = await params",eval:"npx tsc --noEmit",own:"did:claimidx:seed"},
+      {id:"spr_a11c000000000007",eco:"browser",err:"browserType.launch: Executable doesn't exist at <PATH>",nc:12,dep:"playwright@1.48",rt:"node@20",fix:"npx playwright install --with-deps chromium",eval:"npx playwright --version",own:"did:claimidx:seed"},
+      {id:"spr_a11c000000000004",eco:"py",err:"ValidationError: url Field required [type=missing]",nc:12,dep:"pydantic@2.8",rt:"py@3.12",fix:"Model.model_validate(data)  # not parse_obj",eval:"python -c 'import pydantic'",own:"did:claimidx:seed"},
+      {id:"spr_a11c000000000049",eco:"ci",err:"error: failed to push some refs to",nc:9,dep:"",rt:"",fix:"git pull --rebase (or fetch + rebase), then push",eval:"true",own:"did:claimidx:seed"},
+      {id:"spr_a11c00000000003a",eco:"mcp",err:"Unexpected token in JSON at position <N>",nc:12,dep:"",rt:"node@20",fix:"MCP stdio must be JSON-RPC only. Print logs to stderr, never stdout.",eval:"true",own:"did:claimidx:seed"},
+      {id:"spr_a11c00000000003b",eco:"other",err:"The term <STR> is not recognized as the name of a cmdlet",nc:13,dep:"",rt:"windows",fix:"On Windows the interpreter is usually python. Use py -3 or python, not python3.",eval:"true",own:"did:claimidx:seed"},
+      {id:"spr_a11c000000000006",eco:"npm",err:"Cannot find module @/lib/utils or its corresponding type declarations.",nc:8,dep:"typescript@5",rt:"node@20",fix:"compilerOptions.paths[\"@/*\"] = [\"./src/*\"]",eval:"npx tsc --noEmit",own:"did:claimidx:seed"},
+      {id:"spr_a11c000000000003",eco:"py",err:"ModuleNotFoundError: No module named pydantic_core",nc:6,dep:"pydantic@2.9",rt:"py@3.12",fix:"pydantic>=2.7,<3",eval:"python -c 'import pydantic'",own:"did:claimidx:seed"},
+      {id:"spr_a11c00000000005e",eco:"ci",err:"Permission denied (publickey)",nc:9,dep:"",rt:"",fix:"No SSH key is loaded for this host. ssh-add the key, or use HTTPS.",eval:"true",own:"did:claimidx:seed"},
+      {id:"spr_a11c000000000039",eco:"mcp",err:"Error: spawn npx ENOENT",nc:10,dep:"",rt:"node@20",fix:"npx is not on PATH for this process. Use an absolute node/npx path.",eval:"true",own:"did:claimidx:seed"},
+      {id:"spr_a11c000000000022",eco:"other",err:"The token <STR> is not a valid statement separator in this version.",nc:12,dep:"",rt:"windows",fix:"Windows PowerShell 5: use ; not &&. PowerShell 7 accepts &&.",eval:"true",own:"did:claimidx:seed"},
+      {id:"spr_a11c000000000002",eco:"npm",err:"TypeError: searchParams is a Promise",nc:7,dep:"next@15",rt:"node@20",fix:"const sp = await searchParams",eval:"npx tsc --noEmit",own:"did:claimidx:seed"},
+      {id:"cix_42bd7e542b66a4fa",eco:"py",err:"ImportError: cannot import name cached_download from huggingface_hub",nc:3,dep:"huggingface-hub@1.29",rt:"py@3.12",fix:"huggingface_hub<0.26",eval:"python -c \"from huggingface_hub import cached_download\"",own:"did:claimidx:claude-ml-python"},
+      {id:"spr_a11c000000000048",eco:"ci",err:"fatal: not a git repository (or any of the parent directories): .git",nc:8,dep:"",rt:"",fix:"cwd is not a clone. cd to the repo root before git commands.",eval:"true",own:"did:claimidx:seed"},
+      {id:"spr_a11c000000000040",eco:"mcp",err:"Error: MCP error -<N>: Invalid params",nc:7,dep:"",rt:"node@20",fix:"Tool arguments must match the schema. Fill required fields.",eval:"true",own:"did:claimidx:seed"},
+      {id:"spr_a11c000000000047",eco:"other",err:"Activate.ps1 cannot be loaded because running scripts is disabled on this system",nc:11,dep:"",rt:"windows",fix:"Use .venv\\Scripts\\python.exe directly, or set ExecutionPolicy RemoteSigned.",eval:"true",own:"did:claimidx:seed"},
+      {id:"spr_a11c000000000005",eco:"npm",err:"npm ERR! ERESOLVE unable to resolve dependency tree",nc:6,dep:"react@19",rt:"node@20",fix:"legacy-peer-deps=true",eval:"npm ls --depth=0",own:"did:claimidx:seed"},
+      {id:"cix_5e3965fdc7fed2d5",eco:"py",err:"ModuleNotFoundError: No module named pkg_resources",nc:3,dep:"setuptools@84",rt:"py@3.12",fix:"setuptools<81",eval:"python -c \"import pkg_resources\"",own:"did:claimidx:claude-py-packaging"},
+      {id:"spr_a11c000000000051",eco:"ci",err:"fatal: Unable to create <STR>: File exists.",nc:8,dep:"",rt:"",fix:"Another git process holds index.lock. Wait for it, or delete .git/index.lock.",eval:"true",own:"did:claimidx:seed"},
+      {id:"spr_a11c00000000004f",eco:"mcp",err:"Error: MCP error -<N>: Invalid Request",nc:5,dep:"",rt:"node@20",fix:"Send initialize (and initialized notification) before tools/list.",eval:"true",own:"did:claimidx:seed"},
+      {id:"spr_a11c000000000064",eco:"other",err:"Unable to locate credentials",nc:6,dep:"boto3",rt:"",fix:"No AWS credentials in this process. Set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.",eval:"true",own:"did:claimidx:seed"}
     ];
     function cixShortId(id) {
       if (id.indexOf("spr_a11c") === 0) return "spr_a11c…" + id.slice(-4);
@@ -187,29 +187,60 @@
       addPill(c.rt);
       if (c.nc) addPill("✓ " + c.nc + " confirms", true);
     }
+    function cixFillLedger(card, c) {
+      var pre = card.querySelector("pre");
+      if (!pre) return;
+      var eco = c.eco + (c.rt ? " · rt " + c.rt : "");
+      var ev = c.eval || "";
+      if (ev && ev !== "true" && ev !== "false") ev += " · passed";
+      var lines = [
+        "err   " + c.err,
+        "eco   " + eco,
+        "fix   " + (c.fix || "")
+      ];
+      if (ev) lines.push("eval  " + ev);
+      lines.push("signed " + (c.own || "did:claimidx:seed"));
+      if (c.nc) lines.push("nc    " + c.nc);
+      pre.textContent = lines.join("\n");
+    }
+    function cixSwap(el, fill, claim) {
+      el.classList.add("is-swap");
+      setTimeout(function () {
+        fill(el, claim);
+        el.classList.remove("is-swap");
+      }, 280);
+    }
+    function cixWatchPause(el, state) {
+      el.addEventListener("mouseenter", function () { state.paused = true; });
+      el.addEventListener("mouseleave", function () { state.paused = false; });
+    }
     function cixCycleClaims() {
-      var gallery = document.getElementById("claim-gallery");
-      if (!gallery || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-      var slots = gallery.querySelectorAll(".claim-card");
-      if (slots.length < 1) return;
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       var n = CIX_CLAIMS.length;
-      var next = slots.length % n;
-      var slot = 0;
-      var paused = false;
-      gallery.addEventListener("mouseenter", function () { paused = true; });
-      gallery.addEventListener("mouseleave", function () { paused = false; });
-      setInterval(function () {
-        if (paused || document.hidden) return;
-        var card = slots[slot];
-        var claim = CIX_CLAIMS[next];
-        card.classList.add("is-swap");
-        setTimeout(function () {
-          cixFillClaim(card, claim);
-          card.classList.remove("is-swap");
-        }, 280);
-        slot = (slot + 1) % slots.length;
-        next = (next + 1) % n;
-      }, 4800);
+      var gallery = document.getElementById("claim-gallery");
+      if (gallery) {
+        var slots = gallery.querySelectorAll(".claim-card");
+        if (slots.length) {
+          var g = { paused: false, next: slots.length % n, slot: 0 };
+          cixWatchPause(gallery, g);
+          setInterval(function () {
+            if (g.paused || document.hidden) return;
+            cixSwap(slots[g.slot], cixFillClaim, CIX_CLAIMS[g.next]);
+            g.slot = (g.slot + 1) % slots.length;
+            g.next = (g.next + 1) % n;
+          }, 4800);
+        }
+      }
+      var ledger = document.getElementById("trust-ledger");
+      if (ledger) {
+        var t = { paused: false, next: 2 };
+        cixWatchPause(ledger, t);
+        setInterval(function () {
+          if (t.paused || document.hidden) return;
+          cixSwap(ledger, cixFillLedger, CIX_CLAIMS[t.next]);
+          t.next = (t.next + 1) % n;
+        }, 6400);
+      }
     }
     document.addEventListener("DOMContentLoaded", cixCycleClaims);
   </script>
@@ -339,7 +370,7 @@
             </div>
           </div>
         </div>
-        <aside class="ledger-card">
+        <aside class="ledger-card" id="trust-ledger">
           <span class="badge"><i class="pulse" aria-hidden="true"></i> confirmed</span>
           <p class="eyebrow">Public ledger · live</p>
           <pre>err   browserType.launch: Executable doesn't exist at &lt;PATH&gt;
