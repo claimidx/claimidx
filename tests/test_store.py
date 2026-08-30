@@ -76,23 +76,64 @@ def test_reject_is_terminal(tmp_path: Path):
     assert again is not None and again.st == "rejected"
 
 
-def test_force_reset_event_commits_before_replace(tmp_path: Path):
-    store = Store(tmp_path / "ix.sqlite")
+def test_force_reset_event_is_atomic_with_replace(tmp_path: Path):
+    import pytest
+
+    path = tmp_path / "ix.sqlite"
+    store = Store(path)
     c = store.put(_claim())
     reset = {"nr": 1, "nc": 2, "nf": 0, "rt": "py@3.12"}
 
-    def boom(claim):
-        raise RuntimeError("crash after event")
+    def boom(con, claim):
+        raise RuntimeError("crash during replace")
 
-    store.put = boom  # type: ignore[method-assign]
-    import pytest
-
-    with pytest.raises(RuntimeError, match="crash after event"):
+    store._upsert = boom  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="crash during replace"):
         store.publish(c, c.own, reset)
-    rows = [e for e in Store(tmp_path / "ix.sqlite").events() if e["kind"] == "force_reset"]
+    fresh = Store(path)
+    rows = [e for e in fresh.events() if e["kind"] == "force_reset"]
+    assert rows == []
+    shown = fresh.get(c.id)
+    assert shown is not None
+    assert shown.fix.b.startswith("const")
+    assert shown.nc == 0
+
+
+def test_force_reset_lands_with_replace(tmp_path: Path):
+    store = Store(tmp_path / "ix.sqlite")
+    c = store.put(_claim())
+    c.nc = 2
+    store.put(c)
+    nxt = _claim()
+    nxt.id = c.id
+    nxt.fix = Fix(k="patch", b="const { slug } = await params // rewritten")
+    reset = {"nr": 0, "nc": 2, "nf": 0, "rt": "node@20"}
+    store.publish(nxt, c.own, reset)
+    rows = [e for e in store.events() if e["kind"] == "force_reset"]
     assert len(rows) == 1
     assert rows[0]["detail"] == reset
-    shown = Store(tmp_path / "ix.sqlite").get(c.id)
+    shown = store.get(c.id)
+    assert shown is not None
+    assert shown.fix.b.endswith("rewritten")
+    assert shown.nc == 0
+    kinds = [e["kind"] for e in store.events()]
+    assert kinds.count("publish") >= 1
+
+
+def test_force_reset_not_logged_when_inspect_refuses(tmp_path: Path):
+    import pytest
+    from claimidx.policy import PolicyError
+
+    store = Store(tmp_path / "ix.sqlite")
+    c = store.put(_claim())
+    bad = _claim()
+    bad.id = c.id
+    bad.own = "did:claimidx:anon"
+    reset = {"nr": 1, "nc": 1, "nf": 0, "rt": "node@20"}
+    with pytest.raises(PolicyError, match="anonymous"):
+        store.publish(bad, c.own, reset)
+    assert [e for e in store.events() if e["kind"] == "force_reset"] == []
+    shown = store.get(c.id)
     assert shown is not None
     assert shown.fix.b.startswith("const")
 

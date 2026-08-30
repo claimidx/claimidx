@@ -138,7 +138,7 @@ class Store:
                 (claim.id, claim.fp, claim.cls, claim.eco, payload, claim.nc, claim.nf, claim.st, claim.ts.isoformat()),
             )
 
-    def put(self, claim: Claim) -> Claim:
+    def _prepare_write(self, claim: Claim) -> Claim:
         from .policy import inspect_claim, quarantine
 
         inspect_claim(
@@ -148,19 +148,40 @@ class Store:
         )
         quarantine(claim)
         claim.refresh_status()
+        return claim
+
+    def _upsert(self, con: sqlite3.Connection, claim: Claim) -> None:
         payload = claim.model_dump_json()
+        con.execute(
+            """
+            INSERT INTO claims(id, fp, cls, eco, json, nc, nf, st, ts)
+            VALUES(?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(id) DO UPDATE SET
+                fp=excluded.fp, cls=excluded.cls, eco=excluded.eco,
+                json=excluded.json, nc=excluded.nc, nf=excluded.nf,
+                st=excluded.st, ts=excluded.ts
+            """,
+            (claim.id, claim.fp, claim.cls, claim.eco, payload, claim.nc, claim.nf, claim.st, claim.ts.isoformat()),
+        )
+
+    def _insert_event(
+        self,
+        con: sqlite3.Connection,
+        claim_id: str,
+        kind: str,
+        actor: str,
+        detail: dict | None = None,
+    ) -> None:
+        blob = json.dumps(detail, default=str) if detail else None
+        con.execute(
+            "INSERT INTO events(claim_id, kind, actor, ts, detail) VALUES(?,?,?,?,?)",
+            (claim_id, kind, actor, utcnow().isoformat(), blob),
+        )
+
+    def put(self, claim: Claim) -> Claim:
+        self._prepare_write(claim)
         with self._conn() as con:
-            con.execute(
-                """
-                INSERT INTO claims(id, fp, cls, eco, json, nc, nf, st, ts)
-                VALUES(?,?,?,?,?,?,?,?,?)
-                ON CONFLICT(id) DO UPDATE SET
-                    fp=excluded.fp, cls=excluded.cls, eco=excluded.eco,
-                    json=excluded.json, nc=excluded.nc, nf=excluded.nf,
-                    st=excluded.st, ts=excluded.ts
-                """,
-                (claim.id, claim.fp, claim.cls, claim.eco, payload, claim.nc, claim.nf, claim.st, claim.ts.isoformat()),
-            )
+            self._upsert(con, claim)
         return claim
 
     def get(self, claim_id: str) -> Claim | None:
@@ -275,14 +296,18 @@ class Store:
             self.log("force_reset", actor, claim_id, detail=reset)
 
     def publish(self, claim: Claim, actor: str, reset: dict | None = None) -> Claim:
-        """Record a wipe first, then replace, then log publish.
+        """Replace the row and record the wipe in one sqlite transaction.
 
-        Two commits: an events row for a wipe that did not land is
-        conservative; a wipe with no record is the fail-quiet shape.
+        A force_reset event without the new row would say the hold was
+        wiped when it was not. Inspect refuses before any write.
         """
-        self.log_force_reset(actor, claim.id, reset or {})
-        self.put(claim)
-        self.log("publish", actor, claim.id)
+        reset = reset or {}
+        self._prepare_write(claim)
+        with self._conn() as con:
+            if force_reset_emits(reset):
+                self._insert_event(con, claim.id, "force_reset", actor, reset)
+            self._upsert(con, claim)
+            self._insert_event(con, claim.id, "publish", actor)
         return claim
 
     def has_event(self, claim_id: str, kinds: tuple[str, ...] = ()) -> bool:
@@ -319,12 +344,8 @@ class Store:
         return out
 
     def _event(self, claim_id: str, kind: str, actor: str, detail: dict | None = None) -> None:
-        blob = json.dumps(detail, default=str) if detail else None
         with self._conn() as con:
-            con.execute(
-                "INSERT INTO events(claim_id, kind, actor, ts, detail) VALUES(?,?,?,?,?)",
-                (claim_id, kind, actor, utcnow().isoformat(), blob),
-            )
+            self._insert_event(con, claim_id, kind, actor, detail)
 
     def export_jsonl(self, path: str | Path) -> int:
         path = Path(path)
