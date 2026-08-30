@@ -1,14 +1,15 @@
 :root {
-  --ink: #0e0c0a;
-  --paper: #f4eee4;
-  --mute: #a3988c;
-  --rule: #2a2420;
-  --oxide: #e06a2b;
-  --oxide-hot: #f07a3a;
-  --claim: #161310;
-  --card: #191512;
-  --edge: #4a4038;
-  --ok: #d4c4b0;
+  --ink: #09090b;
+  --paper: #fafafa;
+  --mute: #a1a1aa;
+  --rule: #27272a;
+  --oxide: #f97316;
+  --oxide-hot: #fb923c;
+  --claim: #111113;
+  --card: #18181b;
+  --edge: #3f3f46;
+  --ok: #d4d4d8;
+  --radius: 8px;
 }
 
 * { box-sizing: border-box; }
@@ -23,10 +24,10 @@ html {
 
 body {
   margin: 0;
-  font-family: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+  font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   font-weight: 400;
   line-height: 1.55;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 a {
@@ -46,10 +47,10 @@ a:hover { color: var(--oxide); }
 
 .top {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding-bottom: 2rem;
+  padding-bottom: 1.6rem;
   border-bottom: 1px solid var(--rule);
 }
 
@@ -123,6 +124,7 @@ h1 {
   background: var(--card);
   border: 1px solid var(--edge);
   border-left: 3px solid var(--oxide);
+  border-radius: var(--radius);
 }
 
 .claim figcaption {
@@ -235,6 +237,7 @@ h2 {
   padding: 1rem 1.05rem;
   background: var(--card);
   border: 1px solid var(--edge);
+  border-radius: var(--radius);
 }
 
 .note {
@@ -269,6 +272,7 @@ footer p { margin: 0 0 0.35rem; }
   padding: 1.2rem 1.15rem 1.25rem;
   background: var(--card);
   border: 1px solid var(--edge);
+  border-radius: var(--radius);
 }
 
 .split h2 { margin: 0 0 0.4rem; font-size: 1.25rem; }
@@ -282,7 +286,7 @@ footer p { margin: 0 0 0.35rem; }
 .split .btn { width: auto; min-width: 10.5rem; }
 
 .page-pricing .frame {
-  width: min(72rem, calc(100% - 2.6rem));
+  width: min(68rem, calc(100% - 2.6rem));
 }
 
 .trust {
@@ -323,6 +327,7 @@ footer p { margin: 0 0 0.35rem; }
   padding: 0.2rem;
   border: 1px solid var(--edge);
   background: var(--claim);
+  border-radius: 999px;
 }
 
 .bill-bar label {
@@ -331,6 +336,7 @@ footer p { margin: 0 0 0.35rem; }
   font-size: 0.82rem;
   cursor: pointer;
   user-select: none;
+  border-radius: 999px;
 }
 
 .bill-bar label small {
@@ -374,26 +380,28 @@ footer p { margin: 0 0 0.35rem; }
   padding: 1.45rem 1.3rem 1.35rem;
   background: var(--card);
   border: 1px solid var(--edge);
+  border-radius: var(--radius);
 }
 
 .plan-featured {
   border: 2px solid var(--oxide);
-  background: #201812;
+  background: #1c1410;
   position: relative;
-  padding-top: 0;
+  box-shadow: 0 0 0 1px var(--oxide);
 }
 
 .badge {
-  display: block;
-  width: calc(100% + 2.6rem);
-  margin: 0 -1.3rem 1rem;
-  padding: 0.45rem 0.5rem;
+  display: inline-block;
+  width: auto;
+  margin: 0 0 0.65rem;
+  padding: 0.28rem 0.55rem;
   background: var(--oxide);
   color: var(--ink);
   font-size: 0.62rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   text-align: center;
+  border-radius: 999px;
 }
 
 .plan-kicker {
@@ -485,9 +493,11 @@ footer p { margin: 0 0 0.35rem; }
   background: var(--oxide);
   color: var(--ink);
   text-decoration: none;
-  font-size: 0.84rem;
-  letter-spacing: 0.03em;
-  font-weight: 500;
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
+  font-weight: 600;
+  border-radius: var(--radius);
+  border: 0;
 }
 
 .btn:hover {
@@ -521,6 +531,7 @@ footer p { margin: 0 0 0.35rem; }
   margin-top: 1.2rem;
   padding: 1.15rem 1.25rem;
   border: 1px solid var(--edge);
+  border-radius: var(--radius);
 }
 
 .freeband h2 { margin: 0; }
@@ -588,15 +599,67 @@ footer p { margin: 0 0 0.35rem; }
 }
 
 @media (min-width: 880px) {
-  .plans { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .addons { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .frame {
+    width: min(64rem, calc(100% - 4rem));
+    padding-top: 1.8rem;
+  }
+  .page-pricing .frame {
+    width: min(70rem, calc(100% - 4rem));
+  }
+  h1 {
+    font-size: clamp(2.9rem, 4.1vw, 3.55rem);
+    line-height: 1.02;
+    letter-spacing: -0.04em;
+  }
+  .lede {
+    padding: 3.2rem 0 2.4rem;
+    max-width: 40rem;
+  }
+  .page-pricing .lede { max-width: none; }
+  .plans,
+  .addons { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
   .freeband { grid-template-columns: 8rem 1fr auto; align-items: center; }
   .split { grid-template-columns: 1fr 1fr; }
-  .plan-featured { transform: translateY(-0.55rem); }
+  .loop {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0 1.6rem;
+    border-top: 1px solid var(--rule);
+  }
+  .loop li {
+    display: block;
+    padding: 1.4rem 0 1.6rem;
+    border-bottom: 0;
+  }
+  .loop .n { display: block; margin-bottom: 0.7rem; }
+  .faq dl {
+    display: grid;
+    grid-template-columns: 11rem 1fr;
+    column-gap: 1.6rem;
+    row-gap: 0;
+  }
+  .faq dt {
+    margin: 0;
+    padding: 1.05rem 0 1.05rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  .faq dd {
+    margin: 0;
+    padding: 1.05rem 0;
+  }
+  .hero-cta .btn { min-width: 12.5rem; }
+  .action { display: flex; gap: 0.7rem; max-width: none; }
+  .action .btn { width: auto; min-width: 12.5rem; }
 }
 
 @media (max-width: 879px) {
-  .plan-featured { order: -1; }
+  .plan-featured { order: -1; padding-top: 0; }
+  .badge {
+    display: block;
+    width: calc(100% + 2.6rem);
+    margin: 0 -1.3rem 1rem;
+    padding: 0.45rem 0.5rem;
+  }
 }
 
 @media (max-width: 640px) {
