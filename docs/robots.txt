@@ -4,6 +4,7 @@ Allow: /
 Disallow: /harvest-
 Disallow: /HANDOFF_PROTOCOL.md
 Disallow: /PROJECT_OVERVIEW.md
+Disallow: /ARCHITECTURE.md
 
 User-agent: Bingbot
 Allow: /
