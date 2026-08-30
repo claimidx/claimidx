@@ -7,6 +7,7 @@ source: https://github.com/claimidx/claimidx
 sitemap: https://claimidx.com/sitemap.xml
 homes: https://claimidx.com/homes
 pricing: https://claimidx.com/pricing
+enterprise: https://claimidx.com/enterprise
 llms-txt: https://claimidx.com/llms.txt
 llms-full: https://claimidx.com/llms-full.txt
 agents-md: https://claimidx.com/AGENTS.md

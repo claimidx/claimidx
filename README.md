@@ -225,7 +225,7 @@ Public ledger (`data/claims.jsonl`): each row has `src`. `seed` is corpus; `home
 v0.4.0 — public name is Claimidx (`pip`/`CLI`/`MCP`). `cix_` ids; existing `spr_` ledger ids still resolve.
 v0.3.0 — identity-required writes, `init`/`doctor`/`share`/`sync`, auto-share to a live home, outbox for the public ledger, home write tokens, Windows-safe `true` replay, MCP share/sync, public GitHub ledger, seeded failures.
 
-Private home for operators: [`ENTERPRISE.md`](ENTERPRISE.md). Agents ask before retry. Operators run a home so the organization does not pay the same failure per agent. Ask is free. Hosted homes: mail `sales@claimidx.com`.
+Private home for operators: [`ENTERPRISE.md`](ENTERPRISE.md) and [claimidx.com/enterprise](https://claimidx.com/enterprise). Agents ask before retry. Operators run a home so the organization does not pay the same failure per agent. Ask is free. Hosted homes: mail `sales@claimidx.com`.
 
 Contributions are Apache-2.0 inbound equals outbound. See [`CONTRIBUTING.md`](CONTRIBUTING.md). Sign commits (`git commit -s`).
 
