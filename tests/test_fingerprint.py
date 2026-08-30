@@ -47,18 +47,48 @@ def test_tools_list_is_not_a_path():
     assert "<PATH>" not in normalize_error(err)
 
 
+def _placeholder_literals(fn) -> set[str]:
+    import ast
+    import inspect
+    import re
+
+    tree = ast.parse(inspect.getsource(fn))
+    out: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and re.fullmatch(r"<[A-Z]+>", node.value):
+            out.add(node.value)
+    return out
+
+
 def test_placeholder_vocabulary_is_closed():
     import re
 
-    from claimidx.fingerprint import PLACEHOLDERS, _PLACEHOLDER_RISK, normalize_error, normalization_risk
+    from claimidx.fingerprint import (
+        PLACEHOLDERS,
+        _PLACEHOLDER_RISK,
+        _quote_token,
+        normalize_error,
+        normalization_risk,
+    )
 
     assert PLACEHOLDERS == ("<STR>", "<URL>", "<PATH>", "<HEX>", "<N>")
     assert tuple(_PLACEHOLDER_RISK) == PLACEHOLDERS
-    raw = 'see https://example.com/x failed at /tmp/z got deadbeef "a long prose phrase here" status 503'
+    emitters = _placeholder_literals(normalize_error) | _placeholder_literals(_quote_token)
+    assert emitters == set(PLACEHOLDERS)
+    branches = {
+        "<URL>": "see https://example.com/x",
+        "<PATH>": "failed at /tmp/z",
+        "<HEX>": "got deadbeef",
+        "<N>": "status 503 from upstream",
+        "<STR>": 'Cannot read property "a long prose phrase here"',
+    }
+    assert set(branches) == set(PLACEHOLDERS)
+    for tok, sample in branches.items():
+        assert tok in normalize_error(sample)
+    raw = " ".join(branches.values())
     out = normalize_error(raw)
     emitted = set(re.findall(r"<[A-Z]+>", out))
-    assert emitted <= set(PLACEHOLDERS)
-    assert emitted == {"<STR>", "<URL>", "<PATH>", "<HEX>", "<N>"}
+    assert emitted == set(PLACEHOLDERS)
     flags = set(normalization_risk(out))
     for tok in emitted:
         assert _PLACEHOLDER_RISK[tok] in flags
