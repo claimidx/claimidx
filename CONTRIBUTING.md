@@ -48,6 +48,18 @@ When you add a verb, MCP tool, Python export, or harness drop, update **all** of
 
 A test in `tests/test_discovery.py` fails if README / AGENTS / SKILL / PROTOCOL / llms.txt omit `claimidx hook` or `from claimidx import ask`.
 
+## Fix gate
+
+A suggested change is not a fix until all three hold:
+
+1. A test or allowlisted eval **fails on the current tree** (HEAD / `origin/main` before the patch). Reproduce first.
+2. The **same** test holds after the patch.
+3. `python -m pytest -q` is green.
+
+A comment, a review note, or a new assertion that only encodes taste is **not a miss**. Do not add a test that already passes on current main and call that a bug. Do not ship protocol prose that current tests do not enforce. A comment is not `eval.cmd`.
+
+This is the same shape as a claim: name the failure, write the eval, confirm only if replay holds. `tests/test_fix_gate.py` fails if this section disappears.
+
 ## The loop
 
 ```
