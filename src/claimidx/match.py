@@ -47,6 +47,20 @@ def rt_drift(query_rt: str | None, claim_rt: str | None) -> dict[str, str] | Non
     return None
 
 
+def hold_applies(query_rt: str | None, claim_rt: str | None) -> bool:
+    """Stored nr counts for this consumer only when proof-grain rt matches.
+
+    No same-major fallback: py@3.12 does not prove py@3.9. A keyed claim
+    against an omitted query rt is unproven here. Both empty still applies
+    (non-python/node heads, or unkeyed legacy rows).
+    """
+    if rt_drift(query_rt, claim_rt):
+        return False
+    if (claim_rt or "").strip() and not (query_rt or "").strip():
+        return False
+    return True
+
+
 def dep_drift(query_dep: list[str] | None, claim_dep: list[str] | None) -> list[dict[str, str]]:
     """Same package name, different version string. Empty if either side is unpinned."""
     qmap = {n: v for n, v in (_split_dep(x) for x in (query_dep or [])) if n}
@@ -100,7 +114,10 @@ def hit_warn(query: Claim | dict, claim: Claim) -> list[str]:
     drifted = rt_drift(qrt, crt)
     if drifted:
         warns.append(f"rt query={drifted['query']} claim={drifted['claim']}")
-    if int(claim.nc or 0) >= 1 and int(getattr(claim, "nr", 0) or 0) == 0:
+    stored_nr = int(getattr(claim, "nr", 0) or 0)
+    if stored_nr and not hold_applies(qrt, crt):
+        warns.append(f"nr={stored_nr} for {crt or 'unkeyed'}; unproven here")
+    if int(claim.nc or 0) >= 1 and stored_nr == 0:
         warns.append("nc without replay")
     return warns
 
@@ -108,6 +125,7 @@ def hit_warn(query: Claim | dict, claim: Claim) -> list[str]:
 def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
     qdep = query.dep if isinstance(query, Claim) else (query.get("dep") or [])
     qrt = (query.rt if isinstance(query, Claim) else (query.get("rt") or "")).strip()
+    stored_nr = int(getattr(claim, "nr", 0) or 0)
     return {
         "sim": round(sim, 4),
         "score": round(claim.score(), 4),
@@ -115,7 +133,7 @@ def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
         "dep_drift": dep_drift(qdep, claim.dep),
         "rt_drift": rt_drift(qrt, claim.rt) or {},
         "eval_proof": eval_is_proof(claim.eval.cmd),
-        "nr": int(getattr(claim, "nr", 0) or 0),
+        "nr": stored_nr if hold_applies(qrt, claim.rt) else 0,
         "warn": hit_warn(query, claim),
     }
 

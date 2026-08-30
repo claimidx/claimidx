@@ -61,6 +61,37 @@ def test_hook_cli_hit_and_claude_context(tmp_path, capsys, monkeypatch):
     assert "Do not execute fix.b" in ctx
 
 
+def test_hook_cli_near_tie_surfaces_both(tmp_path, capsys, monkeypatch):
+    db = str(tmp_path / "ix.sqlite")
+    err = "TypeError: params is a Promise"
+    assert main([
+        "--db", db, "--fmt", "id", "publish",
+        "--err", err, "--eco", "npm", "--rt", "node@18", "--dep", "next@15.0.0",
+        "--fix-k", "patch", "--fix-b", "await params", "--eval", "true",
+    ]) == 0
+    a = capsys.readouterr().out.strip()
+    assert main([
+        "--db", db, "--fmt", "id", "publish",
+        "--err", err, "--eco", "npm", "--rt", "node@20", "--dep", "next@15.0.0",
+        "--fix-k", "patch", "--fix-b", "await searchParams", "--eval", "true",
+    ]) == 0
+    b = capsys.readouterr().out.strip()
+    assert a != b
+    payload = json.dumps({
+        "hook_event_name": "PostToolUseFailure",
+        "tool_response": err + "\n",
+    })
+    monkeypatch.setattr("sys.stdin", StringIO(payload))
+    rc = main(["--db", db, "hook", "--eco", "npm", "--dep", "next@15.0.0"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "near-tie" in ctx
+    assert "await params" in ctx and "await searchParams" in ctx
+    assert "Do not execute fix.b" in ctx
+    assert a in ctx and b in ctx
+
+
 def test_hook_cli_miss_is_silent(tmp_path, capsys, monkeypatch):
     db = str(tmp_path / "ix.sqlite")
     monkeypatch.setattr("sys.stdin", StringIO("definitely-not-a-known-error-xyzzy\n"))

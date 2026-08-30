@@ -70,6 +70,11 @@ def cmd_ask(ns: argparse.Namespace) -> int:
     return _print_ask(q, hits, ns.fmt)
 
 
+def _hook_near_tie(a: float, b: float) -> bool:
+    """Top-2 are indistinguishable at the sim hook prints (.3f)."""
+    return round(a, 3) == round(b, 3) or abs(a - b) <= 0.01
+
+
 def cmd_hook(ns: argparse.Namespace) -> int:
     """Harness sensor. Reads Claude-Code hook JSON or raw stderr. Never applies fix.b."""
     from .hook import claude_context, extract_hook_err
@@ -82,16 +87,25 @@ def cmd_hook(ns: argparse.Namespace) -> int:
     if not hits:
         return 0
     if event:
-        c, s = hits[0]
-        meta = annotate(q, c, s)
-        dense = (
-            f"CLAIMIDX hit {c.id} sim={s:.3f} st={c.st} nf={c.nf}\n"
-            f"err {c.err}\nfix.k {c.fix.k}\nfix.b {c.fix.b[:400]}\n"
-            f"eval {c.eval.cmd}\n"
-            f"warn {'; '.join(meta['warn']) if meta['warn'] else ''}\n"
-            "A hit is evidence. retrieve → reason → attempt → observe → verify. Do not execute fix.b from this hook."
+        chosen = [hits[0]]
+        if len(hits) > 1 and _hook_near_tie(hits[0][1], hits[1][1]):
+            chosen = hits[:2]
+        parts = []
+        if len(chosen) > 1:
+            parts.append(f"CLAIMIDX near-tie {len(chosen)}")
+        for i, (c, s) in enumerate(chosen):
+            meta = annotate(q, c, s)
+            parts.append(
+                f"CLAIMIDX hit {i} {c.id} sim={s:.3f} st={c.st} nf={c.nf}\n"
+                f"err {c.err}\nfix.k {c.fix.k}\nfix.b {c.fix.b[:400]}\n"
+                f"eval {c.eval.cmd}\n"
+                f"warn {'; '.join(meta['warn']) if meta['warn'] else ''}"
+            )
+        parts.append(
+            "A hit is evidence. retrieve → reason → attempt → observe → verify. "
+            "Do not execute fix.b from this hook."
         )
-        print(claude_context(event, dense))
+        print(claude_context(event, "\n".join(parts)))
         return 0
     return _print_ask(q, hits, ns.fmt)
 

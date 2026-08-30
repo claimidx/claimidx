@@ -100,18 +100,25 @@ def test_eval_proof_is_false_for_tautology_and_ranks_under_recipe():
 
 
 def test_rt_drift_warns_and_ranks_under_matching_runtime():
-    from claimidx.match import annotate, hit_warn, rank, rt_drift
+    from claimidx.match import annotate, hit_warn, hold_applies, rank, rt_drift
 
     err = "ModuleNotFoundError: No module named 'demo_rt'"
     c = _claim(err, eco="py", dep=["demo@1"])
     c.rt = "py@3.12"
+    c.nr = 4
     q = {"err": err, "eco": "py", "dep": ["demo@1"], "rt": "py@3.9"}
     assert rt_drift("py@3.9", "py@3.12") == {"query": "py@3.9", "claim": "py@3.12"}
+    assert hold_applies("py@3.9", "py@3.12") is False
+    assert hold_applies("py@3.12", "py@3.12") is True
+    assert hold_applies("", "py@3.12") is False
     w = hit_warn(q, c)
     assert any(x.startswith("rt query=py@3.9") for x in w)
+    assert any("unproven here" in x for x in w)
     meta = annotate(q, c, 0.9)
     assert meta["rt_drift"]["query"] == "py@3.9"
+    assert meta["nr"] == 0
     same = {"err": err, "eco": "py", "dep": ["demo@1"], "rt": "py@3.12"}
+    assert annotate(same, c, 0.9)["nr"] == 4
     hits = rank(same, [c], k=1)
     drifted = rank(q, [c], k=1)
     assert hits and drifted
