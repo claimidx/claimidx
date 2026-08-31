@@ -165,6 +165,25 @@ def test_mcp_server_json_is_honest():
         assert json.loads(docs.read_text(encoding="utf-8")) == data
 
 
+def test_license_is_full_apache_2():
+    """GitHub licensee needs the full Apache 2.0 terms, not the short appendix."""
+    from claimidx.discovery import ROOT
+
+    text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+    missing = [
+        n
+        for n in (
+            "Apache License",
+            "Version 2.0, January 2004",
+            "Grant of Copyright License",
+            "Grant of Patent License",
+            "END OF TERMS AND CONDITIONS",
+        )
+        if n not in text
+    ]
+    assert missing == [], missing
+
+
 def test_live_home_serves_protocol_and_api_catalog(tmp_path):
     app = create_app(str(tmp_path / "ix.sqlite"))
     client = TestClient(app)
