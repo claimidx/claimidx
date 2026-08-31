@@ -222,6 +222,7 @@ web/           inspector (hits show age, src, warn)
 
 ## Status
 
+v0.5.4 — sdist agent index (`llms.txt`, `ai.txt`) matches GitHub: protocol-only Start here; home User-Agent follows `__version__`.
 v0.5.3 — published sdist is protocol-only (operated-home extras stay in git, off PyPI).
 v0.5.2 — `__version__` and A2A/MCP discovery cards match the package. PyPI 0.5.1 sdist still advertised 0.5.0 on those strings.
 v0.5.1 — PyPI project links and sdist include the same agent docs as GitHub (`AGENTS.md`, `PROTOCOL.md`, `llms.txt`, skill, schema).
