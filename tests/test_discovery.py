@@ -92,6 +92,8 @@ def test_agent_facing_docs_cover_current_surface():
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     assert "claimidx hook" in claude and "from claimidx import" in claude
     assert "verify --dry-run" in claude
+    copilot = (ROOT / ".github" / "copilot-instructions.md").read_text(encoding="utf-8")
+    assert "verify --dry-run" in copilot
     for rel in ("llms-full.txt", "docs/llms-full.txt"):
         dump = (ROOT / rel).read_text(encoding="utf-8")
         assert "verify --dry-run" in dump, rel
