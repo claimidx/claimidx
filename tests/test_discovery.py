@@ -214,11 +214,16 @@ def test_sdist_manifest_excludes_hangout_and_worker_probes():
             "test_worker_stripe.py",
             "social_reply.py",
             "worker_stripe_probe.mjs",
+            "stripe_hook.py",
+            "test_stripe_hook.py",
         )
         if n not in text
     ]
     assert missing == [], missing
     assert "prune tests" not in text.lower() or "recursive-include tests" in text
+    api = (ROOT / "src" / "claimidx" / "api.py").read_text(encoding="utf-8")
+    assert "from .stripe_hook import" not in api.split("def create_app", 1)[0]
+    assert not any(line.startswith("from .stripe_hook import") or line.startswith("from claimidx.stripe_hook") for line in api.splitlines())
 
 
 def test_mcp_server_json_is_honest():

@@ -17,9 +17,11 @@ exclude tests/test_social_directed.py
 exclude tests/test_worker_fp.py
 exclude tests/test_worker_oauth.py
 exclude tests/test_worker_stripe.py
+exclude tests/test_stripe_hook.py
 exclude tests/worker_fp_probe.mjs
 exclude tests/worker_oauth_probe.mjs
 exclude tests/worker_stripe_probe.mjs
 exclude scripts/social_reply.py
+exclude src/claimidx/stripe_hook.py
 global-exclude *.pyc
 global-exclude __pycache__

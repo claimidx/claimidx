@@ -17,7 +17,6 @@ from .policy import PolicyError, require_identity
 from .public import refine_eval
 from .security import SecretError
 from .store import Store, force_reset_emits, force_reset_from
-from .stripe_hook import WebhookError, handle_payload
 from .team import resolve_owner, whoami as team_whoami
 from . import __version__
 from . import tokens as home_tokens
@@ -278,6 +277,10 @@ def create_app(db: str | None = None) -> FastAPI:
         secret = (os.environ.get("STRIPE_WEBHOOK_SECRET") or "").strip()
         if not secret:
             raise HTTPException(503, "webhook secret not configured")
+        try:
+            from .stripe_hook import WebhookError, handle_payload
+        except ImportError as e:
+            raise HTTPException(503, "webhook module not installed") from e
         payload = await request.body()
         header = request.headers.get("stripe-signature") or request.headers.get("Stripe-Signature") or ""
         try:
