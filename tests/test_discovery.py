@@ -81,6 +81,7 @@ def test_agent_facing_docs_cover_current_surface():
         "claimidx_hook",
         "from claimidx import ask",
         "age_days",
+        "verify --dry-run",
     )
     missing: list[str] = []
     for name, text in texts.items():

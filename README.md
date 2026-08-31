@@ -73,6 +73,7 @@ claimidx home-ask --err "TypeError: params is a Promise" --eco npm
 # 2. Hit: apply fix.b, run eval.cmd
 claimidx confirm --replay spr_…     # home claims require --replay
 claimidx fail    spr_…
+claimidx verify --dry-run --runnable --harness -k 8  # preview; no evals/venv/pip
 claimidx verify --runnable --harness -k 8  # two-state pin replay; confirm if eval discriminates, skip if not, fail only on a pin miss
 
 # 3. Miss: solve once, ingest locally (share is opt-in)
