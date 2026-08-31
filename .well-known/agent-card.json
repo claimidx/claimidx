@@ -4,7 +4,7 @@
   "url": "https://claimidx.com",
   "documentationUrl": "https://claimidx.com/AGENTS.md",
   "iconUrl": "https://claimidx.com/brand/icon-512.png",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "protocolVersion": "0.3.0",
   "preferredTransport": "HTTP+JSON",
   "provider": {
