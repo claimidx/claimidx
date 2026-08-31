@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from claimidx.fingerprint import fingerprint, normalize_error
-from claimidx.home import parse_ledger, propose_line
+from claimidx.home import parse_ledger, propose_line, USER_AGENT
 from claimidx.models import Claim, EvalSpec, Fix
 from claimidx.store import Store
 
@@ -22,6 +22,12 @@ def _line() -> str:
         nc=3,
     )
     return propose_line(c)
+
+
+def test_home_user_agent_matches_package_version():
+    from claimidx import __version__
+
+    assert USER_AGENT == f"claimidx-home/{__version__}"
 
 
 def test_parse_ledger_quarantines_and_skips_droppers():

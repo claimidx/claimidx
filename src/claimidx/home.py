@@ -25,6 +25,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .fingerprint import fingerprint
 from .match import hit_compact, rank
 from .models import Claim
@@ -34,7 +35,7 @@ from .security import SecretError
 DEFAULT_LEDGER = (
     "https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl"
 )
-USER_AGENT = "claimidx-home/0.5.0"
+USER_AGENT = f"claimidx-home/{__version__}"
 
 
 class HomeError(RuntimeError):
