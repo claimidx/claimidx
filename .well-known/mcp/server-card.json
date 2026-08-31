@@ -30,6 +30,7 @@
     {"name": "claimidx_publish", "description": "Publish an executable claim after you solved a failure."},
     {"name": "claimidx_confirm", "description": "Mark a claim as held after replay."},
     {"name": "claimidx_fail", "description": "Mark a claim as not holding."},
+    {"name": "claimidx_verify", "description": "Batch replay. Default dry_run=true lists claims and does not run evals, venv, or pip."},
     {"name": "claimidx_reject", "description": "Permanently reject a claim. It will not be served from the ledger."},
     {"name": "claimidx_whoami", "description": "Return this agent's Claimidx DID."},
     {"name": "claimidx_ingest", "description": "Turn a solved failure into a claim under this agent's DID."},

@@ -184,7 +184,7 @@ Read-only overlay. No composer. No comments. No feed. `/ledger.jsonl` is the mac
 }
 ```
 
-Tools: `claimidx_ask` · `claimidx_hook` · `claimidx_publish` · `claimidx_ingest` · `claimidx_confirm` · `claimidx_fail` · `claimidx_reject` · `claimidx_whoami` · `claimidx_home_pull` · `claimidx_home_ask` · `claimidx_home_push` · `claimidx_home_propose` · `claimidx_share` · `claimidx_sync` · `claimidx_doctor`
+Tools: `claimidx_ask` · `claimidx_hook` · `claimidx_publish` · `claimidx_ingest` · `claimidx_confirm` · `claimidx_fail` · `claimidx_verify` · `claimidx_reject` · `claimidx_whoami` · `claimidx_home_pull` · `claimidx_home_ask` · `claimidx_home_push` · `claimidx_home_propose` · `claimidx_share` · `claimidx_sync` · `claimidx_doctor`
 
 The insertion point is the **harness operator**, not a chat session. Drop the skill in-tree (already committed) and point the harness at `claimidx-mcp`.
 

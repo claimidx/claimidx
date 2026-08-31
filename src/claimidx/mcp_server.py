@@ -23,6 +23,7 @@ TOOLS = [
     {"name": "claimidx_publish", "description": "Publish an executable claim after you solved a failure.", "inputSchema": {"type": "object", "required": ["err", "fix_k", "fix_b", "eval"], "properties": {"err": {"type": "string"}, "fix_k": {"type": "string", "enum": ["pin", "patch", "config", "constraint", "cmd", "wontfix"]}, "fix_b": {"type": "string"}, "eval": {"type": "string"}, "eco": {"type": "string"}, "rt": {"type": "string"}, "dep": {"type": "array", "items": {"type": "string"}}, "tried": {"type": "array", "items": {"type": "string"}}, "note": {"type": "string"}, "own": {"type": "string"}, "force": {"type": "boolean"}}}},
     {"name": "claimidx_confirm", "description": "Mark a claim as held after replay. Home claims require replay=true.", "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}, "own": {"type": "string"}, "replay": {"type": "boolean"}}}},
     {"name": "claimidx_fail", "description": "Mark a claim as not holding after replay.", "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}, "own": {"type": "string"}}}},
+    {"name": "claimidx_verify", "description": "Batch replay. Default dry_run=true lists claims and does not run evals, venv, or pip.", "inputSchema": {"type": "object", "properties": {"k": {"type": "integer", "default": 8}, "id": {"type": "array", "items": {"type": "string"}}, "dry_run": {"type": "boolean", "default": True}, "runnable": {"type": "boolean"}, "harness": {"type": "boolean"}, "own": {"type": "string"}}}},
     {"name": "claimidx_reject", "description": "Permanently reject a claim. It will not be served from the ledger.", "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}, "own": {"type": "string"}}}},
     {"name": "claimidx_whoami", "description": "Return this agent's Claimidx DID and whether it is on the team roster.", "inputSchema": {"type": "object", "properties": {}}},
     {"name": "claimidx_ingest", "description": "Turn a solved failure into a claim under this agent's DID. Use instead of pasting findings into chat. Subagents must pass own; otherwise the parent session DID is stamped.", "inputSchema": {"type": "object", "required": ["err", "fix_k", "fix_b", "eval"], "properties": {"err": {"type": "string"}, "fix_k": {"type": "string", "enum": ["pin", "patch", "config", "constraint", "cmd", "wontfix"]}, "fix_b": {"type": "string"}, "eval": {"type": "string"}, "eco": {"type": "string"}, "rt": {"type": "string"}, "dep": {"type": "array", "items": {"type": "string"}}, "tried": {"type": "array", "items": {"type": "string"}}, "note": {"type": "string"}, "own": {"type": "string"}, "force": {"type": "boolean"}}}},
@@ -265,6 +266,24 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
     if name == "claimidx_fail":
         c = store.fail(args["id"], resolve_owner(args.get("own")), note=args.get("note") or "")
         return {"id": c.id, "st": c.st, "nc": c.nc, "nf": c.nf, "own": resolve_owner(args.get("own"))}
+    if name == "claimidx_verify":
+        from .verify import run
+
+        dry = args.get("dry_run")
+        if dry is None:
+            dry = True
+        ids = args.get("id")
+        if isinstance(ids, str):
+            ids = [ids]
+        return run(
+            store,
+            k=int(args.get("k") or 8),
+            ids=ids or None,
+            own=args.get("own"),
+            dry_run=bool(dry),
+            runnable=bool(args.get("runnable")),
+            harness_mode=bool(args.get("harness")),
+        )
     if name == "claimidx_reject":
         c = store.reject(args["id"], resolve_owner(args.get("own")))
         return {"id": c.id, "st": c.st, "own": resolve_owner(args.get("own"))}

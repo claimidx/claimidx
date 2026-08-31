@@ -521,6 +521,37 @@ def test_mcp_ingest_schema_exposes_own():
     assert "own" in pub["inputSchema"]["properties"]
 
 
+def test_mcp_verify_defaults_to_dry_run(tmp_path, monkeypatch):
+    """MCP handshake names batch replay. claimidx_verify must exist and default dry_run so it does not pip-install."""
+    import json
+    import subprocess
+
+    spec = next(t for t in TOOLS if t["name"] == "claimidx_verify")
+    assert spec["inputSchema"]["properties"]["dry_run"]["default"] is True
+    store = Store(tmp_path / "ix.sqlite")
+    calls: list = []
+
+    def _blocked(*a, **k):
+        calls.append(a)
+        raise AssertionError(f"subprocess during MCP verify dry-run: {a}")
+
+    monkeypatch.setattr(subprocess, "run", _blocked)
+    monkeypatch.setattr("claimidx.verify.subprocess.run", _blocked)
+    rec = handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "tools/call",
+            "params": {"name": "claimidx_verify", "arguments": {"k": 1}},
+        },
+        store,
+    )
+    assert rec.get("result", {}).get("isError") is not True, rec
+    payload = json.loads(rec["result"]["content"][0]["text"])
+    assert payload["dry_run"] is True
+    assert calls == []
+
+
 def test_mcp_server_card_lists_every_tool():
     """Crawlers that read the MCP card must see the same tools as tools/list."""
     import json
