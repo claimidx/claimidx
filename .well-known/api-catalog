@@ -38,6 +38,18 @@
         {
           "href": "https://raw.githubusercontent.com/claimidx/claimidx/main/schema/claim.v1.json",
           "type": "application/schema+json"
+        },
+        {
+          "href": "https://claimidx.com/PROTOCOL.md",
+          "type": "text/markdown"
+        },
+        {
+          "href": "https://claimidx.com/SECURITY.md",
+          "type": "text/markdown"
+        },
+        {
+          "href": "https://claimidx.com/.well-known/security.txt",
+          "type": "text/plain"
         }
       ]
     }

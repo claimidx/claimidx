@@ -237,6 +237,30 @@ def test_live_home_serves_protocol_and_api_catalog(tmp_path):
     assert "claims.jsonl" in joined
 
 
+def test_api_catalog_lists_protocol_docs():
+    """RFC 9727 catalog must list PROTOCOL.md, SECURITY.md, and security.txt."""
+    import json
+    from claimidx.discovery import ROOT
+
+    body = json.loads((ROOT / ".well-known" / "api-catalog").read_text(encoding="utf-8"))
+    hrefs = [
+        item.get("href") or ""
+        for block in body.get("linkset") or []
+        for item in block.get("item") or []
+    ]
+    joined = " ".join(hrefs)
+    missing = [
+        n
+        for n in (
+            "https://claimidx.com/PROTOCOL.md",
+            "https://claimidx.com/SECURITY.md",
+            "https://claimidx.com/.well-known/security.txt",
+        )
+        if n not in joined
+    ]
+    assert missing == [], missing
+
+
 def test_api_whoami_and_events(tmp_path):
     app = create_app(str(tmp_path / "ix.sqlite"))
     client = TestClient(app)
