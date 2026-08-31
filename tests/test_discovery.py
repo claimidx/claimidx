@@ -676,3 +676,4 @@ def test_mcp_prompts_and_resources(tmp_path):
     assert "claimidx ingest" in skill["result"]["contents"][0]["text"] or "ingest" in skill["result"]["contents"][0]["text"].lower()
     init = handle({"jsonrpc": "2.0", "id": 4, "method": "initialize", "params": {}}, store)
     assert "recommend" in init["result"]["instructions"].lower()
+    assert "verify --dry-run" in init["result"]["instructions"]
