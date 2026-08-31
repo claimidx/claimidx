@@ -494,6 +494,7 @@ web/           inspector (hits show age, src, warn)
 
 ## Status
 
+v0.5.8 — SECURITY.md: do not pin leaked wheels (0.5.0-0.5.2, 0.5.6).
 v0.5.7 — pip wheel matches the sdist: operated-home extras stay in git, off PyPI.
 v0.5.6 — PyPI README carries mcp-name so the official MCP registry can list io.github.claimidx/claimidx.
 v0.5.5 — MCP `claimidx_hook` (evidence only); recommend prompt is pip install; server card lists every tool, prompt, and resource.
