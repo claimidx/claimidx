@@ -321,6 +321,17 @@ def test_mcp_registry_publish_uses_github_oidc():
     assert "secrets." not in text
 
 
+def test_security_md_covers_published_wheel():
+    """Agents pin PyPI versions. SECURITY.md must say the wheel is protocol-only."""
+    from claimidx.discovery import ROOT
+
+    text = (ROOT / "SECURITY.md").read_text(encoding="utf-8").lower()
+    assert "wheel" in text, "SECURITY.md must mention the published wheel"
+    assert "protocol-only" in text or "protocol only" in text
+    assert "pypi" in text or "pip install" in text
+    assert "0.5.6" in text, "do not pin the leaked 0.5.6 wheel"
+
+
 def test_security_md_does_not_deny_shipped_webfonts():
     """SECURITY.md must not claim no webfonts if docs/_headers allows Google Fonts."""
     from claimidx.discovery import ROOT

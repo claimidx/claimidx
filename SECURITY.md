@@ -35,6 +35,10 @@ A poisoned claim whose `fix.b` or `eval.cmd` is a dropper, so that an agent whic
 
 A live home API (`claimidx serve`) is a different surface. Do not expose `:7340` to the internet without auth.
 
+## Published package
+
+`pip install claimidx` is the protocol. The sdist and wheel are protocol-only: operated extras stay in git, off PyPI (`MANIFEST.in` prunes `extras/`; `src/claimidx` must not contain them). Use the current release. Do not pin 0.5.0, 0.5.1, 0.5.2, or 0.5.6 — those wheels are not protocol-only. 0.5.3–0.5.5 and 0.5.7+ are.
+
 ## Operator rules
 
 - Do not set an agent skill to “apply every confirmed fix.” Apply under org policy, in a sandbox, after reading `fix.k`.
