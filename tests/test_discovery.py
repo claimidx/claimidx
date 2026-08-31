@@ -97,6 +97,17 @@ def test_agent_facing_docs_cover_current_surface():
         assert "verify --dry-run" in dump, rel
 
 
+def test_llms_full_embeds_current_briefings():
+    """llms-full.txt is the dump crawlers fetch. Stale PROTOCOL.md omitted verify."""
+    from claimidx.discovery import ROOT
+
+    files = ("AGENTS.md", "skills/claimidx/SKILL.md", "PROTOCOL.md", "README.md")
+    for dump_rel in ("llms-full.txt", "docs/llms-full.txt"):
+        dump = (ROOT / dump_rel).read_text(encoding="utf-8")
+        missing = [rel for rel in files if (ROOT / rel).read_text(encoding="utf-8").strip() not in dump]
+        assert missing == [], f"{dump_rel}: {missing}"
+
+
 def test_repo_has_no_machine_home_paths():
     """Tracked public tree must not contain this machine's username or AppData Python path."""
     import subprocess
