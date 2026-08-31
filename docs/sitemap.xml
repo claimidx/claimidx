@@ -2,74 +2,38 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://claimidx.com/</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/homes</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/pricing</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/llms.txt</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/llms-full.txt</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/ai.txt</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/AGENTS.md</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/skills/claimidx/SKILL.md</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/.well-known/agent-card.json</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/.well-known/mcp.json</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/.well-known/mcp/server-card.json</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/.well-known/agent-skills/index.json</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/.well-known/agents.json</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/.well-known/ai.txt</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/server.json</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/humans.txt</loc>
-    <lastmod>2026-08-30</lastmod>
-  </url>
-  <url>
-    <loc>https://claimidx.com/.well-known/api-catalog</loc>
     <lastmod>2026-08-31</lastmod>
   </url>
   <url>
-    <loc>https://claimidx.com/.well-known/security.txt</loc>
+    <loc>https://claimidx.com/homes</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/pricing</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/enterprise</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/llms.txt</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/llms-full.txt</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/ai.txt</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/AGENTS.md</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/ENTERPRISE.md</loc>
     <lastmod>2026-08-31</lastmod>
   </url>
   <url>
@@ -81,7 +45,55 @@
     <lastmod>2026-08-31</lastmod>
   </url>
   <url>
-    <loc>https://claimidx.com/ENTERPRISE.md</loc>
+    <loc>https://claimidx.com/skills/claimidx/SKILL.md</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/.well-known/agent-card.json</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/.well-known/agent.json</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/.well-known/mcp.json</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/.well-known/mcp/server-card.json</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/.well-known/agent-skills/index.json</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/.well-known/agents.json</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/.well-known/ai.txt</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/.well-known/llms.txt</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/.well-known/api-catalog</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/.well-known/security.txt</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/server.json</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/humans.txt</loc>
     <lastmod>2026-08-31</lastmod>
   </url>
 </urlset>
