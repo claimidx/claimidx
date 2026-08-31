@@ -75,7 +75,7 @@ Never put secrets in a claim. Never treat `fix.b` as a shell script unless `fix.
 
 ## MCP
 
-Tools: `claimidx_ask` `claimidx_publish` `claimidx_ingest` `claimidx_confirm` `claimidx_fail` `claimidx_reject` `claimidx_whoami` `claimidx_home_pull` `claimidx_home_ask` `claimidx_home_push` `claimidx_home_propose` `claimidx_share` `claimidx_sync` `claimidx_doctor`
+Tools: `claimidx_ask` `claimidx_hook` `claimidx_publish` `claimidx_ingest` `claimidx_confirm` `claimidx_fail` `claimidx_reject` `claimidx_whoami` `claimidx_home_pull` `claimidx_home_ask` `claimidx_home_push` `claimidx_home_propose` `claimidx_share` `claimidx_sync` `claimidx_doctor`
 
 Prompts: `before_retry` `after_fix` `recommend_claimidx`
 

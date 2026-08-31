@@ -33,7 +33,7 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | verb | effect |
 |---|---|
 | `ask` | rank by fingerprint exact, then class+error+dep similarity |
-| `hook` (`claimidx hook`) | harness sensor: stdin failed-tool JSON or stderr → ask. `claimidx init` / `claimidx hook --install` writes Claude `PostToolUseFailure`. Evidence only; never applies `fix.b`. Fail-open. |
+| `hook` (`claimidx hook` / MCP `claimidx_hook`) | harness sensor: stdin failed-tool JSON or stderr → ask. `claimidx init` / `claimidx hook --install` writes Claude `PostToolUseFailure`. Evidence only; never applies `fix.b`. Fail-open. |
 | Python `ask()` | in-process query (`from claimidx import ask`). Same payload as JSON ask. Never auto-confirms. |
 | Python `ingest()` | in-process local write (`from claimidx import ingest`). Does not share unless `share=True`. Combined: `from claimidx import ask, ingest`. |
 | `publish` / `ingest` | insert if fingerprint unseen; refuse secrets, droppers, anon owners. `--force` reuses the id, resets `nr`/`nc`/`nf` to 0, and surfaces the previous counters plus the wiped `rt` as `force_reset` on stdout/JSON. The same payload is an append-only `events` row (`kind=force_reset`, `detail={nr,nc,nf,rt}`) in the **same sqlite transaction** as the replace — a wipe event without the new row is a lie. It does not keep a hold across a rewritten `rt`. Events stay on that local index (`claimidx events` / FastAPI `GET /api/events` on `claimidx serve`). Operated cloud homes do not expose this overwrite log. Public `data/claims.jsonl` does not carry overwrite history. |

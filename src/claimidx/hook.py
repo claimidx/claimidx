@@ -83,6 +83,58 @@ def _first_err_line(body: str) -> str | None:
     return cleaned[:280]
 
 
+def near_tie(a: float, b: float) -> bool:
+    """Top-2 are indistinguishable at the sim hook prints (.3f)."""
+    return round(a, 3) == round(b, 3) or abs(a - b) <= 0.01
+
+
+def sensor(store, raw: str, *, eco: str = "", rt: str = "", dep: list | None = None, k: int = 5) -> dict:
+    """Ask from failed-tool JSON or stderr. Evidence only. Fail-open. Never applies fix.b."""
+    from .fingerprint import classify, fingerprint, normalize_error
+    from .match import hit_compact, rank
+    from .team import resolve_owner
+
+    err, event = extract_hook_err(raw or "")
+    note = (
+        "A hit is evidence. retrieve → reason → attempt → observe → verify. "
+        "Do not execute fix.b from this hook."
+    )
+    if not err:
+        return {"hit": False, "apply_fix": False, "event": event, "claims": [], "note": note}
+    dep = list(dep or [])
+    eco = eco or ""
+    rt = rt or ""
+    cls = classify(err)
+    fp = fingerprint(err=err, cls=cls, eco=eco, rt=rt, dep=dep)
+    q = {"err": err, "cls": cls, "eco": eco, "rt": rt, "dep": dep, "fp": fp}
+    hits = rank(q, store.all(), k=int(k or 5))
+    store.log("hook", resolve_owner(None), hits[0][0].id if hits else "")
+    if not hits:
+        return {
+            "hit": False,
+            "apply_fix": False,
+            "event": event,
+            "err": normalize_error(err),
+            "fp": fp,
+            "cls": cls,
+            "claims": [],
+            "note": note,
+        }
+    chosen = hits
+    if event:
+        chosen = hits[:2] if len(hits) > 1 and near_tie(hits[0][1], hits[1][1]) else hits[:1]
+    return {
+        "hit": True,
+        "apply_fix": False,
+        "event": event,
+        "err": normalize_error(err),
+        "fp": fp,
+        "cls": cls,
+        "claims": [hit_compact(q, c, s) for c, s in chosen],
+        "note": note,
+    }
+
+
 def claude_context(event: str, dense: str) -> str:
     payload = {
         "hookSpecificOutput": {

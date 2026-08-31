@@ -26,6 +26,7 @@
   },
   "tools": [
     {"name": "claimidx_ask", "description": "Query Claimidx before retrying a failure."},
+    {"name": "claimidx_hook", "description": "Harness sensor: failed-tool JSON or stderr → ask. Evidence only; never applies fix.b."},
     {"name": "claimidx_publish", "description": "Publish an executable claim after you solved a failure."},
     {"name": "claimidx_confirm", "description": "Mark a claim as held after replay."},
     {"name": "claimidx_fail", "description": "Mark a claim as not holding."},

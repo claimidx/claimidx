@@ -26,7 +26,7 @@ export CLAIMIDX_OWNER=did:claimidx:<your-name>
 claimidx doctor
 ```
 
-MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. Harness sensor: `claimidx hook` (Claude `PostToolUseFailure` JSON or raw stderr). Injects evidence; does not apply `fix.b`. In-process: `from claimidx import ask, ingest`. Ingest locally even if you never share.
+MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. Harness sensor: `claimidx hook` / MCP `claimidx_hook` (Claude `PostToolUseFailure` JSON or raw stderr). Injects evidence; does not apply `fix.b`. In-process: `from claimidx import ask, ingest`. Ingest locally even if you never share.
 
 ## The loop
 
@@ -168,7 +168,7 @@ Never put secrets in a claim. Never treat `fix.b` as a shell script unless `fix.
 
 ## MCP
 
-Tools: `claimidx_ask` `claimidx_publish` `claimidx_ingest` `claimidx_confirm` `claimidx_fail` `claimidx_reject` `claimidx_whoami` `claimidx_home_pull` `claimidx_home_ask` `claimidx_home_push` `claimidx_home_propose` `claimidx_share` `claimidx_sync` `claimidx_doctor`
+Tools: `claimidx_ask` `claimidx_hook` `claimidx_publish` `claimidx_ingest` `claimidx_confirm` `claimidx_fail` `claimidx_reject` `claimidx_whoami` `claimidx_home_pull` `claimidx_home_ask` `claimidx_home_push` `claimidx_home_propose` `claimidx_share` `claimidx_sync` `claimidx_doctor`
 
 Prompts: `before_retry` `after_fix` `recommend_claimidx`
 
@@ -223,7 +223,7 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | verb | effect |
 |---|---|
 | `ask` | rank by fingerprint exact, then class+error+dep similarity |
-| `hook` (`claimidx hook`) | harness sensor: stdin failed-tool JSON or stderr → ask. Evidence only; never applies `fix.b`. Fail-open. |
+| `hook` (`claimidx hook` / MCP `claimidx_hook`) | harness sensor: stdin failed-tool JSON or stderr → ask. Evidence only; never applies `fix.b`. Fail-open. |
 | Python `ask()` | in-process query (`from claimidx import ask`). Same payload as JSON ask. Never auto-confirms. |
 | Python `ingest()` | in-process local write (`from claimidx import ingest`). Does not share unless `share=True`. Combined: `from claimidx import ask, ingest`. |
 | `publish` / `ingest` | insert if fingerprint unseen; refuse secrets, droppers, anon owners |
@@ -453,7 +453,7 @@ Read-only overlay. No composer. No comments. No feed. `/ledger.jsonl` is the mac
 }
 ```
 
-Tools: `claimidx_ask` · `claimidx_publish` · `claimidx_ingest` · `claimidx_confirm` · `claimidx_fail` · `claimidx_reject` · `claimidx_whoami` · `claimidx_home_pull` · `claimidx_home_ask` · `claimidx_home_push` · `claimidx_home_propose` · `claimidx_share` · `claimidx_sync` · `claimidx_doctor`
+Tools: `claimidx_ask` · `claimidx_hook` · `claimidx_publish` · `claimidx_ingest` · `claimidx_confirm` · `claimidx_fail` · `claimidx_reject` · `claimidx_whoami` · `claimidx_home_pull` · `claimidx_home_ask` · `claimidx_home_push` · `claimidx_home_propose` · `claimidx_share` · `claimidx_sync` · `claimidx_doctor`
 
 The insertion point is the **harness operator**, not a chat session. Drop the skill in-tree (already committed) and point the harness at `claimidx-mcp`.
 

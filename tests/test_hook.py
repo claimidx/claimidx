@@ -2,7 +2,11 @@ import json
 from io import StringIO
 
 from claimidx.cli import main
+from claimidx.fingerprint import fingerprint, normalize_error
 from claimidx.hook import extract_hook_err
+from claimidx.mcp_server import handle
+from claimidx.models import Claim, EvalSpec, Fix
+from claimidx.store import Store
 
 
 def test_extract_raw_error_line():
@@ -203,3 +207,69 @@ def test_hook_cli_miss_is_silent(tmp_path, capsys, monkeypatch):
     out = capsys.readouterr().out
     assert rc == 0
     assert out == ""
+
+
+def test_mcp_hook_is_evidence_only(tmp_path):
+    store = Store(tmp_path / "ix.sqlite")
+    err = "TypeError: params is a Promise"
+    store.put(Claim(
+        fp=fingerprint(err=err, cls="type_error", eco="npm", dep=["next@15.0.0"]),
+        cls="type_error",
+        err=normalize_error(err),
+        eco="npm",
+        dep=["next@15.0.0"],
+        fix=Fix(k="patch", b="await params"),
+        eval=EvalSpec(cmd="true"),
+        own="did:claimidx:test",
+    ))
+    rec = handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "claimidx_hook",
+                "arguments": {
+                    "raw": json.dumps({
+                        "hook_event_name": "PostToolUseFailure",
+                        "tool_response": err + "\n",
+                    }),
+                    "eco": "npm",
+                    "dep": ["next@15.0.0"],
+                },
+            },
+        },
+        store,
+    )
+    assert rec.get("result", {}).get("isError") is not True
+    body = json.loads(rec["result"]["content"][0]["text"])
+    assert body["hit"] is True
+    assert body["apply_fix"] is False
+    assert "Do not execute fix.b" in (body.get("note") or "")
+    assert body["claims"]
+    assert "await params" in json.dumps(body)
+
+
+def test_mcp_hook_fail_open_empty_and_secrets(tmp_path):
+    store = Store(tmp_path / "ix.sqlite")
+    empty = handle(
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "claimidx_hook", "arguments": {}}},
+        store,
+    )
+    assert empty.get("result", {}).get("isError") is not True
+    empty_body = json.loads(empty["result"]["content"][0]["text"])
+    assert empty_body["hit"] is False
+    assert empty_body["apply_fix"] is False
+    secret = handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "claimidx_hook", "arguments": {"err": "error: Bearer supersecrettokenvalue123456"}},
+        },
+        store,
+    )
+    assert secret.get("result", {}).get("isError") is not True
+    secret_body = json.loads(secret["result"]["content"][0]["text"])
+    assert secret_body["hit"] is False
+    assert secret_body["apply_fix"] is False

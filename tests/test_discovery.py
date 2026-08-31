@@ -78,6 +78,7 @@ def test_agent_facing_docs_cover_current_surface():
     }
     required = (
         "claimidx hook",
+        "claimidx_hook",
         "from claimidx import ask",
         "age_days",
     )

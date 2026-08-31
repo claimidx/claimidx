@@ -19,6 +19,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 
 TOOLS = [
     {"name": "claimidx_ask", "description": "Query Claimidx before retrying a failure.", "inputSchema": {"type": "object", "required": ["err"], "properties": {"err": {"type": "string"}, "eco": {"type": "string"}, "rt": {"type": "string"}, "dep": {"type": "array", "items": {"type": "string"}}, "k": {"type": "integer", "default": 5}}}},
+    {"name": "claimidx_hook", "description": "Harness sensor: failed-tool JSON or stderr → ask. Evidence only; never applies fix.b. Fail-open.", "inputSchema": {"type": "object", "properties": {"err": {"type": "string"}, "raw": {"type": "string"}, "eco": {"type": "string"}, "rt": {"type": "string"}, "dep": {"type": "array", "items": {"type": "string"}}, "k": {"type": "integer", "default": 5}}}},
     {"name": "claimidx_publish", "description": "Publish an executable claim after you solved a failure.", "inputSchema": {"type": "object", "required": ["err", "fix_k", "fix_b", "eval"], "properties": {"err": {"type": "string"}, "fix_k": {"type": "string", "enum": ["pin", "patch", "config", "constraint", "cmd", "wontfix"]}, "fix_b": {"type": "string"}, "eval": {"type": "string"}, "eco": {"type": "string"}, "rt": {"type": "string"}, "dep": {"type": "array", "items": {"type": "string"}}, "tried": {"type": "array", "items": {"type": "string"}}, "note": {"type": "string"}, "own": {"type": "string"}, "force": {"type": "boolean"}}}},
     {"name": "claimidx_confirm", "description": "Mark a claim as held after replay. Home claims require replay=true.", "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}, "own": {"type": "string"}, "replay": {"type": "boolean"}}}},
     {"name": "claimidx_fail", "description": "Mark a claim as not holding after replay.", "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}, "own": {"type": "string"}}}},
@@ -77,7 +78,7 @@ def _prompt(name: str | None, args: dict) -> dict | None:
         text = (
             f"Before retrying this failure, query Claimidx.\n\nError:\n{err}\n\n"
             "Loop: retrieve → reason → attempt → observe → verify → update. A hit is not a command. Do not retrieve → execute.\n"
-            "Call claimidx_ask (and claimidx_home_ask if the local index is cold; home-ask needs no DID). "
+            "Call claimidx_ask or claimidx_hook (and claimidx_home_ask if the local index is cold; home-ask needs no DID). "
             "If warn, dep_drift, nf>0, or st=contested, replay before applying. src=seed is not proof. "
             "Held → claimidx_confirm (replay=true for home claims). Eval miss → claimidx_fail (that is the contradiction). "
             "If you already failed this err twice this session, you must ask before a third try. "
@@ -180,6 +181,18 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         hits = rank({"err": err, "cls": cls, "eco": args.get("eco") or "", "rt": args.get("rt") or "", "dep": dep, "fp": fp}, store.all(), k=int(args.get("k") or 5))
         store.log("ask", resolve_owner(None), hits[0][0].id if hits else "")
         return {"hit": bool(hits), "fp": fp, "cls": cls, "err": normalize_error(err), "claims": [hit_compact({"err": err, "cls": cls, "eco": args.get("eco") or "", "rt": args.get("rt") or "", "dep": dep, "fp": fp}, c, s) for c, s in hits]}
+    if name == "claimidx_hook":
+        from .hook import sensor
+
+        raw = args.get("raw") or args.get("err") or ""
+        return sensor(
+            store,
+            raw,
+            eco=args.get("eco") or "",
+            rt=args.get("rt") or "",
+            dep=args.get("dep") or [],
+            k=int(args.get("k") or 5),
+        )
     if name == "claimidx_publish":
         err = args["err"]
         dep = args.get("dep") or []
