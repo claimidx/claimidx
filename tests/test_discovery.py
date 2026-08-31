@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from claimidx.api import create_app
 from claimidx.discovery import ROUTES
 from claimidx.fingerprint import fingerprint, normalize_error
-from claimidx.mcp_server import TOOLS, handle
+from claimidx.mcp_server import PROMPTS, RESOURCES, TOOLS, handle
 from claimidx.models import Claim, EvalSpec, Fix
 from claimidx.store import Store
 
@@ -415,6 +415,24 @@ def test_mcp_server_card_lists_every_tool():
         card = json.loads((ROOT / rel).read_text(encoding="utf-8"))
         listed = {t["name"] for t in card.get("tools") or []}
         assert listed == names, f"{rel}: missing={sorted(names - listed)} extra={sorted(listed - names)}"
+
+
+def test_mcp_server_card_lists_prompts_and_resources():
+    """Crawlers that read the MCP card must see prompts/list and resources/list."""
+    import json
+    from claimidx.discovery import ROOT
+
+    prompt_names = {p["name"] for p in PROMPTS}
+    resource_uris = {r["uri"] for r in RESOURCES}
+    for rel in (
+        ".well-known/mcp/server-card.json",
+        "docs/.well-known/mcp/server-card.json",
+    ):
+        card = json.loads((ROOT / rel).read_text(encoding="utf-8"))
+        listed_p = {p["name"] for p in card.get("prompts") or []}
+        listed_r = {r["uri"] for r in card.get("resources") or []}
+        assert listed_p == prompt_names, f"{rel} prompts: missing={sorted(prompt_names - listed_p)} extra={sorted(listed_p - prompt_names)}"
+        assert listed_r == resource_uris, f"{rel} resources: missing={sorted(resource_uris - listed_r)} extra={sorted(listed_r - resource_uris)}"
 
 
 def test_api_version_matches_package():
