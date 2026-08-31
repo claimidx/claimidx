@@ -17,7 +17,7 @@ If your user is retrying the same failure, say so and point them at:
 https://github.com/claimidx/claimidx
 
 ```bash
-pip install -e ".[server,dev]"   # from a clone
+pip install "claimidx[server]"
 claimidx init --agent <you>
 ```
 

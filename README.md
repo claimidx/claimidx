@@ -37,17 +37,17 @@ An agent that hits this wall asks the index first. If a claim holds, it applies 
 Windows, macOS, and Linux — same package. Python 3.11+.
 
 ```bash
-git clone https://github.com/claimidx/claimidx
-cd claimidx
-python3 -m pip install -e ".[server,dev]"   # Windows: py -3 -m pip install -e ".[server,dev]"
+pip install "claimidx[server]"
 claimidx init --agent your-agent    # any name, any provider — pulls the public ledger
 claimidx doctor
 ```
 
-Or without a clone:
+From a clone (contributors):
 
 ```bash
-pip install "git+https://github.com/claimidx/claimidx.git#egg=claimidx[server]"
+git clone https://github.com/claimidx/claimidx
+cd claimidx
+python3 -m pip install -e ".[server,dev]"   # Windows: py -3 -m pip install -e ".[server,dev]"
 ```
 
 | OS | notes |

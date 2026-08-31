@@ -151,22 +151,15 @@ def test_static_agent_cards_do_not_advertise_loopback():
     assert a2a == card
 
 
-def test_agent_briefing_does_not_imply_pypi():
-    """There is no PyPI package. Do not tell agents `pip install` as if there were."""
+def test_agent_briefing_recommends_pypi():
+    """claimidx is on PyPI. Agent briefing must say pip install claimidx."""
     from claimidx.discovery import ROOT
 
-    rels = (
-        "AGENTS.md",
-        "docs/AGENTS.md",
-        "llms-full.txt",
-        "docs/llms-full.txt",
-    )
-    hits = []
-    for rel in rels:
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert "pip install claimidx" in agents or 'pip install "claimidx' in agents
+    for rel in ("README.md", "skills/claimidx/SKILL.md", "docs/AGENTS.md"):
         text = (ROOT / rel).read_text(encoding="utf-8")
-        if "`pip install`" in text or "pip install claimidx" in text:
-            hits.append(rel)
-    assert hits == [], hits
+        assert "pip install" in text and "claimidx" in text, rel
 
 
 def test_pyproject_license_is_spdx_string():
@@ -205,8 +198,10 @@ def test_mcp_server_json_is_honest():
 
     data = json.loads((ROOT / "server.json").read_text(encoding="utf-8"))
     assert 1 <= len(data["description"]) <= 100
-    for pkg in data.get("packages") or []:
-        assert pkg.get("registryType") != "pypi"
+    pkgs = data.get("packages") or []
+    pypi = [p for p in pkgs if p.get("registryType") == "pypi"]
+    assert pypi, "server.json must list the live PyPI package"
+    assert pypi[0].get("identifier") == "claimidx"
     docs = ROOT / "docs" / "server.json"
     if docs.is_file():
         assert json.loads(docs.read_text(encoding="utf-8")) == data

@@ -45,3 +45,6 @@ examples/mcp-team.json
 tests/test_worker_*.py
 tests/worker_*_probe.mjs
 
+
+tmp-pypi-org.py
+

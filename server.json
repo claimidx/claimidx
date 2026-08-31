@@ -9,5 +9,25 @@
     "source": "github",
     "id": "1350791995"
   },
-  "version": "0.5.0"
+  "version": "0.5.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "claimidx",
+      "version": "0.5.0",
+      "runtimeHint": "claimidx-mcp",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CLAIMIDX_OWNER",
+          "description": "DID for this agent, e.g. did:claimidx:your-agent. Anonymous writes are refused.",
+          "isRequired": true,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
 }
