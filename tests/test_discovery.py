@@ -271,6 +271,20 @@ def test_pypi_readme_has_mcp_registry_name():
     assert marker in readme, "PyPI README must carry the MCP registry ownership marker"
 
 
+def test_mcp_registry_publish_uses_github_oidc():
+    """Official MCP registry listing must not depend on a browser login or a PAT in git."""
+    from claimidx.discovery import ROOT
+
+    path = ROOT / ".github" / "workflows" / "mcp-registry.yml"
+    assert path.is_file(), "mcp-registry.yml publishes server.json via GitHub OIDC"
+    text = path.read_text(encoding="utf-8")
+    assert "mcp-publisher login github-oidc" in text
+    assert "mcp-publisher publish" in text
+    assert "id-token: write" in text
+    assert "pull_request_target" not in text
+    assert "secrets." not in text
+
+
 def test_security_md_does_not_deny_shipped_webfonts():
     """SECURITY.md must not claim no webfonts if docs/_headers allows Google Fonts."""
     from claimidx.discovery import ROOT
