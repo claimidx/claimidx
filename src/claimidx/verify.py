@@ -126,10 +126,9 @@ def _install_plan(specs: list[str], dep: list[str] | None) -> tuple[list[str], l
         pkg = _pkg_name(spec)
         if pkg:
             broken[_dist_key(pkg)] = spec
-    for name in names:
-        k = _dist_key(name)
-        if k not in broken:
-            broken[k] = name
+    # Pin names with no dep stay off the broken install. Bare `pip install pkg`
+    # is latest, which is the pin, so both states hold and harness cannot
+    # discriminate (standard-imghdr on py@3.13).
     fixed = dict(broken)
     for spec in specs:
         pkg = _pkg_name(spec)
@@ -194,17 +193,18 @@ def harness(c: Claim, scratch: Path) -> dict:
         return {"action": "skip", "reason": f"harness-venv:{e}", "id": c.id}
     py = _venv_python(venv)
     pip = [str(py), "-m", "pip", "install", "--disable-pip-version-check", "-q"]
-    try:
-        br = subprocess.run(pip + broken_req, capture_output=True, text=True, timeout=180)
-    except (subprocess.SubprocessError, OSError) as e:
-        return {"action": "skip", "reason": f"harness-broken-install:{e}", "id": c.id}
-    if br.returncode != 0:
-        return {
-            "action": "skip",
-            "reason": "harness-broken-install",
-            "id": c.id,
-            "stderr": (br.stderr or "")[-300:],
-        }
+    if broken_req:
+        try:
+            br = subprocess.run(pip + broken_req, capture_output=True, text=True, timeout=180)
+        except (subprocess.SubprocessError, OSError) as e:
+            return {"action": "skip", "reason": f"harness-broken-install:{e}", "id": c.id}
+        if br.returncode != 0:
+            return {
+                "action": "skip",
+                "reason": "harness-broken-install",
+                "id": c.id,
+                "stderr": (br.stderr or "")[-300:],
+            }
     broken = _replay_py(py, c.eval.cmd, c.eval.expect)
     try:
         fx = subprocess.run(pip + fixed_req, capture_output=True, text=True, timeout=180)

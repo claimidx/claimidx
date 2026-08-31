@@ -204,6 +204,16 @@ def test_dep_pip_and_install_plan_overlay_pin():
     assert "huggingface-hub==1.29.0" not in fixed
 
 
+def test_install_plan_empty_dep_broken_is_unpinned():
+    """Unpinned then pin: empty dep must not pip-install the pin package as 'broken'."""
+    broken, fixed = _install_plan(["standard-imghdr"], [])
+    assert broken == []
+    assert fixed == ["standard-imghdr"]
+    broken, fixed = _install_plan(["pydantic>=2.6"], [])
+    assert broken == []
+    assert "pydantic>=2.6" in fixed
+
+
 def test_harness_installs_dep_then_pin(tmp_path: Path, monkeypatch):
     calls = []
     replays = iter(
