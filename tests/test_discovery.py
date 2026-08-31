@@ -165,6 +165,16 @@ def test_mcp_server_json_is_honest():
         assert json.loads(docs.read_text(encoding="utf-8")) == data
 
 
+def test_security_md_does_not_deny_shipped_webfonts():
+    """SECURITY.md must not claim no webfonts if docs/_headers allows Google Fonts."""
+    from claimidx.discovery import ROOT
+
+    headers = (ROOT / "docs" / "_headers").read_text(encoding="utf-8")
+    sec = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
+    if "fonts.googleapis.com" in headers or "fonts.gstatic.com" in headers:
+        assert "No third-party scripts or webfonts" not in sec, headers
+
+
 def test_license_is_full_apache_2():
     """GitHub licensee needs the full Apache 2.0 terms, not the short appendix."""
     from claimidx.discovery import ROOT
