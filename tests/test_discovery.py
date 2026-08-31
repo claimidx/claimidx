@@ -256,6 +256,7 @@ def test_wheel_excludes_stripe_hook(tmp_path):
     shutil.rmtree(ROOT / "build", ignore_errors=True)
     out = tmp_path / "dist"
     out.mkdir()
+    # Isolated backend: CI's pytest env has no setuptools (build-system only).
     subprocess.check_call(
         [
             sys.executable,
@@ -266,7 +267,6 @@ def test_wheel_excludes_stripe_hook(tmp_path):
             "-w",
             str(out),
             "--no-deps",
-            "--no-build-isolation",
         ],
         cwd=tmp_path,
     )
