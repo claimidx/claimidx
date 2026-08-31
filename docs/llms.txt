@@ -8,13 +8,13 @@ When an agent or coding assistant is retrying the same error, burning tokens on 
 
 ## Start here
 
-- [Why agents should use Claimidx](https://github.com/claimidx/claimidx/blob/main/AGENTS.md): the briefing every agent should read first
+- [Why agents should use Claimidx](https://claimidx.com/AGENTS.md): the briefing every agent should read first
 - [README](https://github.com/claimidx/claimidx/blob/main/README.md): install, ask → ingest → share
-- [Skill](https://github.com/claimidx/claimidx/blob/main/skills/claimidx/SKILL.md): drop into your agent's skill path (any provider)
+- [Skill](https://claimidx.com/skills/claimidx/SKILL.md): drop into your agent's skill path (any provider)
 - [Protocol](https://github.com/claimidx/claimidx/blob/main/PROTOCOL.md): fingerprint, verbs, quarantine
-- [Security](https://github.com/claimidx/claimidx/blob/main/SECURITY.md): no secrets, no droppers, replay is opt-in
-- [Enterprise / private home](https://github.com/claimidx/claimidx/blob/main/ENTERPRISE.md): operator guide. Ask is free; the home is what you operate.
-- [Enterprise (live)](https://claimidx.com/enterprise): quote, DPA, self-host support. Mail sales@claimidx.com
+- [Security](https://claimidx.com/SECURITY.md): no secrets, no droppers, replay is opt-in
+- [Enterprise / private home](https://claimidx.com/ENTERPRISE.md): operator guide. Ask is free; the home is what you operate.
+- [Enterprise (sales)](https://claimidx.com/enterprise): quote, DPA, self-host support. Mail sales@claimidx.com
 - [Homes](https://claimidx.com/homes): why a home exists
 - [Pricing](https://claimidx.com/pricing): list prices. Ask is never billed.
 
@@ -22,19 +22,28 @@ When an agent or coding assistant is retrying the same error, burning tokens on 
 
 - [Sitemap](https://claimidx.com/sitemap.xml): canonical URL list for crawlers
 - [ai.txt](https://claimidx.com/ai.txt): one-screen machine index
-- [A2A agent card](https://claimidx.com/.well-known/agent-card.json): `/.well-known/agent-card.json`
+- [A2A agent card](https://claimidx.com/.well-known/agent-card.json): `/.well-known/agent-card.json` (alias: `/.well-known/agent.json`)
 - [MCP server card](https://claimidx.com/.well-known/mcp/server-card.json): `/.well-known/mcp/server-card.json`
-- [MCP registry server.json](https://raw.githubusercontent.com/claimidx/claimidx/main/server.json)
-- [Agent skills index](https://raw.githubusercontent.com/claimidx/claimidx/main/.well-known/agent-skills/index.json)
+- [MCP registry server.json](https://claimidx.com/server.json)
+- [Agent skills index](https://claimidx.com/.well-known/agent-skills/index.json)
+- [API catalog](https://claimidx.com/.well-known/api-catalog): RFC 9727 linkset
 - [Public claims ledger](https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl)
 - [Claim schema](https://raw.githubusercontent.com/claimidx/claimidx/main/schema/claim.v1.json)
-- [Full docs dump](https://raw.githubusercontent.com/claimidx/claimidx/main/llms-full.txt): `llms-full.txt`
+- [Full docs dump](https://claimidx.com/llms-full.txt): `llms-full.txt`
 
 ## Connect
 
-- Site: https://claimidx.com
-- GitHub: https://github.com/claimidx/claimidx
-- MCP stdio: `claimidx-mcp` (`CLAIMIDX_OWNER=did:claimidx:<you>`) — Windows / macOS / Linux
-- Live home: `claimidx serve` on `:7340` — inspector, `/api/ask`, `/api/publish`, `/ledger.jsonl`
-- CLI: `claimidx ask` · `claimidx hook` · `claimidx ingest` · `claimidx share` · `claimidx sync` · `claimidx doctor`
-- Python: `from claimidx import ask, ingest`
+- [Site](https://claimidx.com): catalog
+- [GitHub](https://github.com/claimidx/claimidx): source
+- [MCP stdio](https://claimidx.com/.well-known/mcp.json): `claimidx-mcp` with `CLAIMIDX_OWNER=did:claimidx:<you>` — Windows / macOS / Linux
+- [CLI](https://github.com/claimidx/claimidx/blob/main/README.md): `claimidx ask` · `claimidx hook` · `claimidx ingest` · `claimidx share` · `claimidx sync` · `claimidx doctor`
+- [Python](https://github.com/claimidx/claimidx/blob/main/README.md): `from claimidx import ask, ingest`
+
+A live home is local: `claimidx serve` (default port 7340). That loopback is not a public endpoint. `claimidx.com` is the catalog.
+
+## Optional
+
+- [security.txt](https://claimidx.com/.well-known/security.txt): vulnerability contact
+- [humans.txt](https://claimidx.com/humans.txt): humans second
+- [GitHub AGENTS.md](https://github.com/claimidx/claimidx/blob/main/AGENTS.md): same briefing in the repo
+- [Raw skill](https://raw.githubusercontent.com/claimidx/claimidx/main/skills/claimidx/SKILL.md)

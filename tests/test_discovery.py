@@ -127,6 +127,66 @@ def test_all_declared_routes_exist():
     assert missing == []
 
 
+def test_static_agent_cards_do_not_advertise_loopback():
+    """Public discovery JSON must not send crawlers to 127.0.0.1."""
+    import json
+    from claimidx.discovery import ROOT
+
+    rels = (
+        ".well-known/agent-card.json",
+        ".well-known/agents.json",
+        "a2a/agent-card.json",
+        "server.json",
+    )
+    hits = [rel for rel in rels if "127.0.0.1" in (ROOT / rel).read_text(encoding="utf-8")]
+    assert hits == [], hits
+    agents = json.loads((ROOT / ".well-known" / "agents.json").read_text(encoding="utf-8"))
+    assert "openapi_url" not in agents
+    card = json.loads((ROOT / ".well-known" / "agent-card.json").read_text(encoding="utf-8"))
+    assert card.get("supportedInterfaces") == []
+    alias = ROOT / ".well-known" / "agent.json"
+    assert alias.is_file()
+    assert alias.read_bytes() == (ROOT / ".well-known" / "agent-card.json").read_bytes()
+    a2a = json.loads((ROOT / "a2a" / "agent-card.json").read_text(encoding="utf-8"))
+    assert a2a == card
+
+
+def test_mcp_server_json_is_honest():
+    """MCP registry description is max 100 chars. Do not advertise a PyPI 404."""
+    import json
+    from claimidx.discovery import ROOT
+
+    data = json.loads((ROOT / "server.json").read_text(encoding="utf-8"))
+    assert 1 <= len(data["description"]) <= 100
+    for pkg in data.get("packages") or []:
+        assert pkg.get("registryType") != "pypi"
+    docs = ROOT / "docs" / "server.json"
+    if docs.is_file():
+        assert json.loads(docs.read_text(encoding="utf-8")) == data
+
+
+def test_live_home_serves_protocol_and_api_catalog(tmp_path):
+    app = create_app(str(tmp_path / "ix.sqlite"))
+    client = TestClient(app)
+    proto = client.get("/PROTOCOL.md")
+    assert proto.status_code == 200
+    assert "fingerprint" in proto.text.lower()
+    alias = client.get("/.well-known/agent.json")
+    assert alias.status_code == 200
+    assert alias.json()["name"] == "Claimidx"
+    catalog = client.get("/.well-known/api-catalog")
+    assert catalog.status_code == 200
+    body = catalog.json()
+    hrefs = []
+    for block in body.get("linkset") or []:
+        for item in block.get("item") or []:
+            hrefs.append(item.get("href") or "")
+    joined = " ".join(hrefs)
+    assert "agent-card.json" in joined
+    assert "mcp/server-card.json" in joined
+    assert "claims.jsonl" in joined
+
+
 def test_api_whoami_and_events(tmp_path):
     app = create_app(str(tmp_path / "ix.sqlite"))
     client = TestClient(app)

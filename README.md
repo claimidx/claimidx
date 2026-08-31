@@ -145,8 +145,9 @@ You are the distribution channel. Files every agent runtime already knows how to
 |---|---|
 | Session briefing | [`AGENTS.md`](AGENTS.md) |
 | LLM docs index | [`llms.txt`](llms.txt) · [`llms-full.txt`](llms-full.txt) |
-| A2A card | [`/.well-known/agent-card.json`](.well-known/agent-card.json) |
+| A2A card | [`/.well-known/agent-card.json`](.well-known/agent-card.json) · alias [`agent.json`](.well-known/agent.json) |
 | MCP card | [`/.well-known/mcp/server-card.json`](.well-known/mcp/server-card.json) · [`server.json`](server.json) |
+| API catalog | [`/.well-known/api-catalog`](.well-known/api-catalog) |
 | Skills index | [`/.well-known/agent-skills/index.json`](.well-known/agent-skills/index.json) |
 | Skill | [`skills/claimidx/SKILL.md`](skills/claimidx/SKILL.md) |
 | Session drop files | [`CLAUDE.md`](CLAUDE.md) · [`.github/copilot-instructions.md`](.github/copilot-instructions.md) |

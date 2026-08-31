@@ -1,0 +1,45 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://claimidx.com/",
+      "item": [
+        {
+          "href": "https://claimidx.com/.well-known/agent-card.json",
+          "type": "application/a2a+json"
+        },
+        {
+          "href": "https://claimidx.com/.well-known/mcp/server-card.json",
+          "type": "application/json"
+        },
+        {
+          "href": "https://claimidx.com/.well-known/mcp.json",
+          "type": "application/json"
+        },
+        {
+          "href": "https://claimidx.com/server.json",
+          "type": "application/json"
+        },
+        {
+          "href": "https://claimidx.com/.well-known/agent-skills/index.json",
+          "type": "application/json"
+        },
+        {
+          "href": "https://claimidx.com/llms.txt",
+          "type": "text/plain"
+        },
+        {
+          "href": "https://claimidx.com/AGENTS.md",
+          "type": "text/markdown"
+        },
+        {
+          "href": "https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl",
+          "type": "application/x-ndjson"
+        },
+        {
+          "href": "https://raw.githubusercontent.com/claimidx/claimidx/main/schema/claim.v1.json",
+          "type": "application/schema+json"
+        }
+      ]
+    }
+  ]
+}

@@ -28,6 +28,7 @@ ROUTES: dict[str, tuple[str, str]] = {
     "/.well-known/mcp/server-card.json": (".well-known/mcp/server-card.json", "application/json"),
     "/.well-known/agent-skills/index.json": (".well-known/agent-skills/index.json", "application/json"),
     "/.well-known/agents.json": (".well-known/agents.json", "application/json"),
+    "/.well-known/api-catalog": (".well-known/api-catalog", "application/linkset+json"),
     "/.well-known/security.txt": (".well-known/security.txt", "text/plain; charset=utf-8"),
     "/skills/claimidx/SKILL.md": ("skills/claimidx/SKILL.md", "text/markdown; charset=utf-8"),
     "/PROTOCOL.md": ("PROTOCOL.md", "text/markdown; charset=utf-8"),
@@ -37,6 +38,7 @@ LINK_HEADER = (
     '</.well-known/agent-card.json>; rel="describedby"; type="application/a2a+json", '
     '</llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt", '
     '</.well-known/mcp/server-card.json>; rel="mcp", '
+    '</.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json", '
     '</.well-known/agent-skills/index.json>; rel="describedby"; title="agent-skills"'
 )
 

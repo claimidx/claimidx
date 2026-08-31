@@ -93,12 +93,29 @@ Allow: /
 User-agent: iask-ai
 Allow: /
 
+User-agent: GoogleOther
+Allow: /
+
+User-agent: Gemini-Deep-Research
+Allow: /
+
+User-agent: ClaudeSearchBot
+Allow: /
+
+User-agent: Copilot
+Allow: /
+
+User-agent: archive.org_bot
+Allow: /
+
 # Agents first. Fetch these before the HTML:
 #   /llms.txt
 #   /ai.txt
 #   /AGENTS.md
 #   /sitemap.xml
 #   /.well-known/agent-card.json
+#   /.well-known/agent.json
 #   /.well-known/mcp.json
+#   /.well-known/api-catalog
 #   https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl
 Sitemap: https://claimidx.com/sitemap.xml
