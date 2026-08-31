@@ -1,6 +1,6 @@
 """Claimidx — prior art for agents."""
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 from .models import Claim, Fix, EvalSpec
 from .fingerprint import fingerprint, normalize_error, classify

@@ -390,6 +390,36 @@ def test_api_version_matches_package():
     assert create_app().version == __version__
 
 
+def test_discovery_cards_match_package_version():
+    """A2A/MCP discovery JSON must advertise the same version as pyproject and __version__."""
+    import json
+    import re
+    from claimidx import __version__
+    from claimidx.discovery import ROOT
+
+    toml = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    m = re.search(r'(?m)^version = "([^"]+)"', toml)
+    assert m, "pyproject version missing"
+    assert m.group(1) == __version__
+    cards = (
+        (ROOT / ".well-known" / "agent-card.json", ("version",)),
+        (ROOT / ".well-known" / "agent.json", ("version",)),
+        (ROOT / "a2a" / "agent-card.json", ("version",)),
+        (ROOT / ".well-known" / "mcp.json", ("version",)),
+        (ROOT / ".well-known" / "mcp" / "server-card.json", ("serverInfo", "version")),
+        (ROOT / "server.json", ("version",)),
+        (ROOT / "docs" / ".well-known" / "agent-card.json", ("version",)),
+        (ROOT / "docs" / ".well-known" / "mcp.json", ("version",)),
+        (ROOT / "docs" / ".well-known" / "mcp" / "server-card.json", ("serverInfo", "version")),
+        (ROOT / "docs" / "server.json", ("version",)),
+    )
+    for path, keys in cards:
+        cur = json.loads(path.read_text(encoding="utf-8"))
+        for k in keys:
+            cur = cur[k]
+        assert cur == __version__, f"{path}: {cur} != {__version__}"
+
+
 def test_mcp_force_keeps_stored_cls(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAIMIDX_SHARE", "0")
     store = Store(tmp_path / "ix.sqlite")
