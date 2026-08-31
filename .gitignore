@@ -32,6 +32,8 @@ tests/test_social_directed.py
 
 # This-machine ops.
 scripts/claimidx_home.ps1
+scripts/claimidx_ops.ps1
+INTERNAL/ops/
 skills/claimidx-dev/
 docs/harvest-*.md
 data/audit-results-*.jsonl
