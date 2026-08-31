@@ -739,7 +739,7 @@ def build_parser() -> argparse.ArgumentParser:
     vf.add_argument("--id", action="append", default=None, help="claim id; repeatable")
     vf.add_argument("-k", type=int, default=8)
     vf.add_argument("--own")
-    vf.add_argument("--dry-run", action="store_true")
+    vf.add_argument("--dry-run", action="store_true", help="list chosen claims; do not run evals, venv, or pip")
     vf.add_argument("--ledger", help="optional public jsonl to project nc/nf/st into")
     vf.add_argument("--runnable", action="store_true", help="only self-contained python -c evals; confirm or fail, do not pick tree recipes")
     vf.add_argument("--harness", action="store_true", help="two-state pin replay: confirm only if unpinned misses and pin holds; skip if the eval cannot prove the pin; fail only on a proven pin miss")

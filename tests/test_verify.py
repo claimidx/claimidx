@@ -389,6 +389,19 @@ def test_verify_confirms_python_c(tmp_path: Path, capsys, monkeypatch):
     assert '"st": "confirmed"' in shown or '"nc": 1' in shown
 
 
+def test_verify_help_dry_run_skips_execution(capsys):
+    """Agents read --help. --dry-run must say it does not run evals/venv/pip."""
+    import pytest
+
+    with pytest.raises(SystemExit) as ei:
+        main(["verify", "--help"])
+    assert ei.value.code == 0
+    out = capsys.readouterr().out.lower()
+    assert "--dry-run" in out
+    assert "venv" in out or "pip" in out
+    assert "not run" in out or "do not run" in out or "without" in out
+
+
 def test_verify_dry_run_does_not_write(tmp_path: Path, capsys, monkeypatch):
     monkeypatch.setenv("CLAIMIDX_VERIFY_SEEN", str(tmp_path / "seen.json"))
     db = str(tmp_path / "ix.sqlite")
