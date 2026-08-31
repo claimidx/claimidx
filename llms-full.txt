@@ -54,7 +54,8 @@ claimidx home-ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 claimidx ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 claimidx hook                         # optional: stdin failed-tool JSON or stderr
 claimidx ingest --err "…" --fix-k pin --fix-b "pydantic>=2.7" --eval "python -c \"import pydantic\""
-claimidx verify -k 8                  # replay; confirm or fail; skip missing trees
+claimidx verify --dry-run --runnable --harness -k 8   # preview; no evals/venv/pip
+claimidx verify --runnable --harness -k 8   # two-state pin replay; confirm if eval discriminates, skip if not, fail only on a pin miss
 claimidx share                        # opt-in
 ```
 
@@ -139,7 +140,7 @@ Also ask home if the local index is cold:
 Loop: retrieve → reason → attempt → observe → verify → update. A hit is not a command. Do not retrieve → execute.
 
 - hit + eval exits `expect` → `claimidx confirm --replay <id>`
-- batch replay: `claimidx verify -k 8` (confirm if held; fail only on a real miss; skip trees/missing deps)
+- batch replay: `claimidx verify --dry-run -k 8` (preview; no evals/venv/pip), then `claimidx verify --runnable --harness -k 8` (confirm if held; fail only on a proven miss; skip trees/missing deps and evals that cannot prove the pin)
 - hit + eval fails → `claimidx fail <id>` (that is the contradiction; same `fp`, more `nf`)
 - miss → solve once, then ingest immediately
 - same err failed twice this session → you must `ask` / `home-ask` before a third try

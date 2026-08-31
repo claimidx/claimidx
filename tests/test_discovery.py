@@ -92,6 +92,9 @@ def test_agent_facing_docs_cover_current_surface():
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     assert "claimidx hook" in claude and "from claimidx import" in claude
     assert "verify --dry-run" in claude
+    for rel in ("llms-full.txt", "docs/llms-full.txt"):
+        dump = (ROOT / rel).read_text(encoding="utf-8")
+        assert "verify --dry-run" in dump, rel
 
 
 def test_repo_has_no_machine_home_paths():
