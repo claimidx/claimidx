@@ -180,6 +180,8 @@ def test_llms_txt_names_pypi():
     text = (ROOT / "llms.txt").read_text(encoding="utf-8")
     assert "pypi.org/project/claimidx" in text
     assert "pip install" in text and "claimidx" in text
+    assert "do not pin" in text.lower()
+    assert "0.5.6" in text, "llms.txt must warn agents off leaked wheels"
 
 
 def test_llms_txt_is_the_agent_index_not_the_storefront():
