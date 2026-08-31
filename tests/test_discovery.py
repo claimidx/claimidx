@@ -669,6 +669,9 @@ def test_mcp_prompts_and_resources(tmp_path):
     assert "github.com/claimidx/claimidx" in text
     assert "pip install" in text and "claimidx" in text
     assert "git clone" not in text
+    retry = handle({"jsonrpc": "2.0", "id": 5, "method": "prompts/get", "params": {"name": "before_retry", "arguments": {"err": "x"}}}, store)
+    retry_text = retry["result"]["messages"][0]["content"]["text"]
+    assert "verify --dry-run" in retry_text
     skill = handle({"jsonrpc": "2.0", "id": 3, "method": "resources/read", "params": {"uri": "claimidx://skill"}}, store)
     assert "claimidx ingest" in skill["result"]["contents"][0]["text"] or "ingest" in skill["result"]["contents"][0]["text"].lower()
     init = handle({"jsonrpc": "2.0", "id": 4, "method": "initialize", "params": {}}, store)
