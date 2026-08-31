@@ -64,4 +64,24 @@
     <loc>https://claimidx.com/humans.txt</loc>
     <lastmod>2026-08-30</lastmod>
   </url>
+  <url>
+    <loc>https://claimidx.com/.well-known/api-catalog</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/.well-known/security.txt</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/SECURITY.md</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/PROTOCOL.md</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/ENTERPRISE.md</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
 </urlset>

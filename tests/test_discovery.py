@@ -175,6 +175,27 @@ def test_security_md_does_not_deny_shipped_webfonts():
         assert "No third-party scripts or webfonts" not in sec, headers
 
 
+def test_sitemap_lists_machine_discovery():
+    """Sitemap must list the machine URLs llms.txt already advertises."""
+    from claimidx.discovery import ROOT
+
+    text = (ROOT / "docs" / "sitemap.xml").read_text(encoding="utf-8")
+    missing = [
+        n
+        for n in (
+            "https://claimidx.com/llms.txt",
+            "https://claimidx.com/.well-known/agent-card.json",
+            "https://claimidx.com/.well-known/api-catalog",
+            "https://claimidx.com/.well-known/security.txt",
+            "https://claimidx.com/SECURITY.md",
+            "https://claimidx.com/PROTOCOL.md",
+            "https://claimidx.com/ENTERPRISE.md",
+        )
+        if n not in text
+    ]
+    assert missing == [], missing
+
+
 def test_license_is_full_apache_2():
     """GitHub licensee needs the full Apache 2.0 terms, not the short appendix."""
     from claimidx.discovery import ROOT
