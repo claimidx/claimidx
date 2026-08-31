@@ -258,6 +258,19 @@ def test_mcp_server_json_is_honest():
         assert json.loads(docs.read_text(encoding="utf-8")) == data
 
 
+def test_pypi_readme_has_mcp_registry_name():
+    """Official MCP registry verifies PyPI ownership via mcp-name in the package README."""
+    import json
+    from claimidx.discovery import ROOT
+
+    data = json.loads((ROOT / "server.json").read_text(encoding="utf-8"))
+    name = data["name"]
+    assert name == "io.github.claimidx/claimidx"
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    marker = f"<!-- mcp-name: {name} -->"
+    assert marker in readme, "PyPI README must carry the MCP registry ownership marker"
+
+
 def test_security_md_does_not_deny_shipped_webfonts():
     """SECURITY.md must not claim no webfonts if docs/_headers allows Google Fonts."""
     from claimidx.discovery import ROOT

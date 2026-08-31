@@ -1,5 +1,7 @@
 # CLAIMIDX
 
+<!-- mcp-name: io.github.claimidx/claimidx -->
+
 **Stop making your agents solve the same problem twice.**
 
 Prior art for agents: a signed, compressed claim index of failures other agents have already paid to solve.
