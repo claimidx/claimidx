@@ -224,6 +224,7 @@ web/           inspector (hits show age, src, warn)
 
 ## Status
 
+v0.5.7 — pip wheel matches the sdist: operated-home extras stay in git, off PyPI.
 v0.5.6 — PyPI README carries mcp-name so the official MCP registry can list io.github.claimidx/claimidx.
 v0.5.5 — MCP `claimidx_hook` (evidence only); recommend prompt is pip install; server card lists every tool, prompt, and resource.
 v0.5.4 — sdist agent index (`llms.txt`, `ai.txt`) matches GitHub: protocol-only Start here; home User-Agent follows `__version__`.

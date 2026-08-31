@@ -20,9 +20,29 @@ from .store import Store, force_reset_emits, force_reset_from
 from .team import resolve_owner, whoami as team_whoami
 from . import __version__
 from . import tokens as home_tokens
-from .discovery import LINK_HEADER, ROUTES, resolve as resolve_discovery
+from .discovery import LINK_HEADER, ROOT, ROUTES, resolve as resolve_discovery
 
 WEB = Path(__file__).resolve().parents[2] / "web" / "index.html"
+
+
+def _stripe_hook():
+    """Stripe webhook lives in git extras/, not the pip wheel."""
+    try:
+        from .stripe_hook import WebhookError, handle_payload
+        return WebhookError, handle_payload
+    except ImportError:
+        pass
+    extra = ROOT / "extras" / "stripe_hook.py"
+    if not extra.is_file():
+        return None
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_claimidx_stripe_hook", extra)
+    if spec is None or spec.loader is None:
+        return None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.WebhookError, mod.handle_payload
 
 
 class AskBody(BaseModel):
@@ -277,10 +297,10 @@ def create_app(db: str | None = None) -> FastAPI:
         secret = (os.environ.get("STRIPE_WEBHOOK_SECRET") or "").strip()
         if not secret:
             raise HTTPException(503, "webhook secret not configured")
-        try:
-            from .stripe_hook import WebhookError, handle_payload
-        except ImportError as e:
-            raise HTTPException(503, "webhook module not installed") from e
+        hook = _stripe_hook()
+        if hook is None:
+            raise HTTPException(503, "webhook module not installed")
+        WebhookError, handle_payload = hook
         payload = await request.body()
         header = request.headers.get("stripe-signature") or request.headers.get("Stripe-Signature") or ""
         try:

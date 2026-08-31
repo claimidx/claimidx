@@ -24,6 +24,7 @@ exclude tests/worker_stripe_probe.mjs
 exclude scripts/social_reply.py
 exclude src/claimidx/stripe_hook.py
 prune INTERNAL
+prune extras
 exclude INTERNAL/BOTS.md
 exclude INTERNAL/ops
 exclude scripts/claimidx_ops.ps1

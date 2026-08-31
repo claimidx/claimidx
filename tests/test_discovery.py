@@ -230,6 +230,7 @@ def test_sdist_manifest_excludes_hangout_and_worker_probes():
             "stripe_hook.py",
             "test_stripe_hook.py",
             "INTERNAL",
+            "extras",
             "BOTS.md",
             "claimidx_ops.ps1",
         )
@@ -238,8 +239,43 @@ def test_sdist_manifest_excludes_hangout_and_worker_probes():
     assert missing == [], missing
     assert "prune tests" not in text.lower() or "recursive-include tests" in text
     api = (ROOT / "src" / "claimidx" / "api.py").read_text(encoding="utf-8")
-    assert "from .stripe_hook import" not in api.split("def create_app", 1)[0]
+    assert not (ROOT / "src" / "claimidx" / "stripe_hook.py").exists()
     assert not any(line.startswith("from .stripe_hook import") or line.startswith("from claimidx.stripe_hook") for line in api.splitlines())
+
+
+def test_wheel_excludes_stripe_hook(tmp_path):
+    """pip installs the wheel. MANIFEST.in does not apply; stripe_hook must not live under src/claimidx."""
+    import shutil
+    import subprocess
+    import sys
+    import zipfile
+    from claimidx.discovery import ROOT
+
+    assert not (ROOT / "src" / "claimidx" / "stripe_hook.py").exists()
+    assert (ROOT / "extras" / "stripe_hook.py").is_file()
+    shutil.rmtree(ROOT / "build", ignore_errors=True)
+    out = tmp_path / "dist"
+    out.mkdir()
+    subprocess.check_call(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "wheel",
+            str(ROOT),
+            "-w",
+            str(out),
+            "--no-deps",
+            "--no-build-isolation",
+        ],
+        cwd=tmp_path,
+    )
+    wheels = list(out.glob("claimidx-*.whl"))
+    assert len(wheels) == 1, wheels
+    names = zipfile.ZipFile(wheels[0]).namelist()
+    assert not any(n.endswith("stripe_hook.py") for n in names)
+    assert any(n.endswith("claimidx/cli.py") for n in names)
+    assert not any("INTERNAL/" in n.replace("\\", "/") for n in names)
 
 
 def test_mcp_server_json_is_honest():

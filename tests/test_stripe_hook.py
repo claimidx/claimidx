@@ -6,8 +6,15 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
+import sys
+from pathlib import Path
+
 from claimidx.api import create_app
-from claimidx.stripe_hook import WebhookError, handle_payload, verify_signature
+
+_EXTRAS = Path(__file__).resolve().parents[1] / "extras"
+if str(_EXTRAS) not in sys.path:
+    sys.path.insert(0, str(_EXTRAS))
+from stripe_hook import WebhookError, handle_payload, verify_signature  # noqa: E402
 
 
 SECRET = "whsec_test_claimidx"
