@@ -332,6 +332,7 @@ def test_mcp_registry_hides_leaked_pypi_versions():
     assert "--status deleted" in text
     assert "0.5.6" in text
     assert "io.github.claimidx/claimidx" in text
+    assert "No changes to apply" in text, "re-dispatch must treat already-deleted as success"
 
 
 def test_mcp_registry_publish_only_on_tags():

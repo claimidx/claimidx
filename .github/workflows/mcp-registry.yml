@@ -35,4 +35,13 @@ jobs:
       - name: Authenticate
         run: ./mcp-publisher login github-oidc
       - name: Hide leaked versions
-        run: ./mcp-publisher status --status deleted --message "Yanked from PyPI. Wheel leaked operated extras. Use 0.5.8+." io.github.claimidx/claimidx 0.5.6
+        run: |
+          set +e
+          out=$(./mcp-publisher status --status deleted --message "Yanked from PyPI. Wheel leaked operated extras. Use 0.5.8+." io.github.claimidx/claimidx 0.5.6 2>&1)
+          code=$?
+          printf '%s\n' "$out"
+          if [ "$code" -eq 0 ]; then exit 0; fi
+          case "$out" in
+            *"No changes to apply"*) exit 0 ;;
+          esac
+          exit "$code"
