@@ -172,6 +172,27 @@ def test_pyproject_license_is_spdx_string():
     assert "license = { text" not in text
 
 
+def test_pypi_metadata_links_github_docs():
+    """PyPI project.urls and README must point at GitHub docs, not relative paths that 404 on pypi.org."""
+    from claimidx.discovery import ROOT
+
+    toml = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    for needle in (
+        "https://github.com/claimidx/claimidx/blob/main/AGENTS.md",
+        "https://github.com/claimidx/claimidx/blob/main/PROTOCOL.md",
+        "https://github.com/claimidx/claimidx/blob/main/SECURITY.md",
+        "https://github.com/claimidx/claimidx/blob/main/skills/claimidx/SKILL.md",
+        "https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl",
+    ):
+        assert needle in toml, needle
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "https://github.com/claimidx/claimidx/blob/main/AGENTS.md" in readme
+    assert "](AGENTS.md)" not in readme
+    manifest = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
+    for n in ("AGENTS.md", "PROTOCOL.md", "SECURITY.md", "llms.txt", "skills/claimidx/SKILL.md", "schema/claim.v1.json"):
+        assert n in manifest, n
+
+
 def test_sdist_manifest_excludes_hangout_and_worker_probes():
     """The published sdist is protocol. Hangout bot and worker probes stay off PyPI."""
     from claimidx.discovery import ROOT

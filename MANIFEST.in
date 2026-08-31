@@ -1,4 +1,16 @@
 include LICENSE README.md pyproject.toml
+include AGENTS.md PROTOCOL.md SECURITY.md ENTERPRISE.md CONTRIBUTING.md CLAUDE.md
+include llms.txt llms-full.txt ai.txt
+include skills/claimidx/SKILL.md
+include schema/claim.v1.json
+include server.json
+include .well-known/agent-card.json
+include .well-known/agent.json
+include .well-known/mcp.json
+include .well-known/mcp/server-card.json
+include .well-known/api-catalog
+include .well-known/security.txt
+include .well-known/agent-skills/index.json
 graft src/claimidx
 recursive-include tests *.py
 exclude tests/test_social_directed.py
