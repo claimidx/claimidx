@@ -522,6 +522,16 @@ def run(
     )
     results = []
     changed: list[Claim] = []
+    if dry_run:
+        return {
+            "n": len(chosen),
+            "dry_run": True,
+            "counts": {"confirm": 0, "fail": 0, "skip": len(chosen)},
+            "results": [
+                {"action": "skip", "reason": "dry-run", "id": c.id, "st": c.st}
+                for c in chosen
+            ],
+        }
     scratch_root = Path(tempfile.mkdtemp(prefix="cix-verify-"))
     try:
         for c in chosen:

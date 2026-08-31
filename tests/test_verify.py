@@ -392,3 +392,45 @@ def test_verify_dry_run_does_not_write(tmp_path: Path, capsys, monkeypatch):
     assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
     shown = capsys.readouterr().out
     assert '"nc": 0' in shown
+
+
+def test_verify_dry_run_harness_does_not_create_venv(tmp_path: Path, capsys, monkeypatch):
+    """--dry-run must not pip-install pins. harness venv+pip hung verify --dry-run -k 8 past 120s."""
+    import json
+    import subprocess
+    import sys
+
+    monkeypatch.setenv("CLAIMIDX_VERIFY_SEEN", str(tmp_path / "seen.json"))
+    db = str(tmp_path / "ix.sqlite")
+    rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
+    err = "ModuleNotFoundError: No module named 'pydantic_core'"
+    eval_cmd = 'python -c "import pydantic"'
+    assert main([
+        "--db", db, "--fmt", "id", "publish",
+        "--err", err, "--eco", "py", "--rt", rt,
+        "--fix-k", "pin", "--fix-b", "pydantic>=2.6",
+        "--eval", eval_cmd,
+    ]) == 0
+    cid = capsys.readouterr().out.strip()
+    calls: list[list] = []
+
+    def _blocked(*args, **kwargs):
+        argv = args[0] if args else kwargs.get("args")
+        calls.append(list(argv) if argv else [])
+        raise AssertionError(f"subprocess.run during dry-run: {argv}")
+
+    monkeypatch.setattr(subprocess, "run", _blocked)
+    monkeypatch.setattr("claimidx.verify.subprocess.run", _blocked)
+    rc = main([
+        "--db", db, "--fmt", "json", "verify", "--dry-run",
+        "--runnable", "--harness", "--id", cid, "-k", "1",
+    ])
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    report = json.loads(out)
+    assert report["dry_run"] is True
+    assert report["n"] == 1
+    assert report["results"][0]["id"] == cid
+    assert report["results"][0]["action"] == "skip"
+    assert report["results"][0]["reason"] == "dry-run"
+    assert calls == []
