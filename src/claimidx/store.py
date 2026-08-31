@@ -4,6 +4,8 @@ import json
 import sqlite3
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from .models import Claim, utcnow
 
 
@@ -184,14 +186,20 @@ class Store:
             self._upsert(con, claim)
         return claim
 
+    def _claim_from_json(self, blob: str) -> Claim | None:
+        try:
+            claim = Claim.model_validate_json(blob)
+        except (ValidationError, ValueError, json.JSONDecodeError):
+            return None
+        claim.refresh_status()
+        return claim
+
     def get(self, claim_id: str) -> Claim | None:
         with self._conn() as con:
             row = con.execute("SELECT json FROM claims WHERE id=?", (claim_id,)).fetchone()
         if not row:
             return None
-        claim = Claim.model_validate_json(row["json"])
-        claim.refresh_status()
-        return claim
+        return self._claim_from_json(row["json"])
 
     def match_amend(
         self,
@@ -232,15 +240,12 @@ class Store:
     def by_fp(self, fp: str) -> list[Claim]:
         with self._conn() as con:
             rows = con.execute("SELECT json FROM claims WHERE fp=?", (fp,)).fetchall()
-        return [Claim.model_validate_json(r["json"]) for r in rows]
+        return [c for r in rows if (c := self._claim_from_json(r["json"]))]
 
     def all(self) -> list[Claim]:
         with self._conn() as con:
             rows = con.execute("SELECT json FROM claims").fetchall()
-        claims = [Claim.model_validate_json(r["json"]) for r in rows]
-        for c in claims:
-            c.refresh_status()
-        return claims
+        return [c for r in rows if (c := self._claim_from_json(r["json"]))]
 
     def confirm(self, claim_id: str, actor: str = "did:claimidx:anon", *, replayed: bool = False) -> Claim:
         c = self.get(claim_id)
@@ -364,7 +369,7 @@ class Store:
                 continue
             try:
                 self.put(Claim.model_validate(json.loads(line)))
-            except (json.JSONDecodeError, ValueError):
+            except (json.JSONDecodeError, ValueError, ValidationError):
                 continue
             n += 1
         return n

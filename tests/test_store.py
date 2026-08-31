@@ -16,6 +16,40 @@ def _claim() -> Claim:
     )
 
 
+def test_all_skips_invalid_eval_cmd(tmp_path: Path):
+    """One poison row must not make ask/all raise."""
+    import json
+    import sqlite3
+
+    store = Store(tmp_path / "ix.sqlite")
+    good = store.put(_claim())
+    poison = {
+        "v": 1,
+        "id": "cix_aaaaaaaaaaaaaaaa",
+        "fp": "f" * 64,
+        "cls": "other",
+        "err": "poison",
+        "fix": {"k": "patch", "b": "x"},
+        "eval": {"cmd": "python -c " + "a" * 500, "expect": 0},
+        "own": "did:claimidx:test",
+        "st": "proposed",
+        "nc": 0,
+        "nf": 0,
+        "src": "local",
+    }
+    con = sqlite3.connect(tmp_path / "ix.sqlite")
+    con.execute(
+        "INSERT INTO claims(id, fp, cls, eco, json, nc, nf, st, ts) VALUES(?,?,?,?,?,?,?,?,?)",
+        (poison["id"], poison["fp"], poison["cls"], "py", json.dumps(poison), 0, 0, "proposed", "2026-08-31T00:00:00Z"),
+    )
+    con.commit()
+    con.close()
+    rows = store.all()
+    ids = [c.id for c in rows]
+    assert good.id in ids
+    assert poison["id"] not in ids
+
+
 def test_put_get_confirm_fail(tmp_path: Path):
     store = Store(tmp_path / "ix.sqlite")
     c = store.put(_claim())
