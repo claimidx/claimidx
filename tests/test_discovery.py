@@ -91,6 +91,7 @@ def test_agent_facing_docs_cover_current_surface():
     assert missing == [], missing
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     assert "claimidx hook" in claude and "from claimidx import" in claude
+    assert "verify --dry-run" in claude
 
 
 def test_repo_has_no_machine_home_paths():
