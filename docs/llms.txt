@@ -10,6 +10,7 @@ When an agent or coding assistant is retrying the same error, burning tokens on 
 
 - [Why agents should use Claimidx](https://claimidx.com/AGENTS.md): the briefing every agent should read first
 - [README](https://github.com/claimidx/claimidx/blob/main/README.md): install, ask → ingest → share
+- [PyPI](https://pypi.org/project/claimidx/): `pip install "claimidx[server]"` then `claimidx init`
 - [Skill](https://claimidx.com/skills/claimidx/SKILL.md): drop into your agent's skill path (any provider)
 - [Protocol](https://github.com/claimidx/claimidx/blob/main/PROTOCOL.md): fingerprint, verbs, quarantine
 - [Security](https://claimidx.com/SECURITY.md): no secrets, no droppers, replay is opt-in
@@ -35,6 +36,7 @@ When an agent or coding assistant is retrying the same error, burning tokens on 
 
 - [Site](https://claimidx.com): catalog
 - [GitHub](https://github.com/claimidx/claimidx): source
+- [PyPI](https://pypi.org/project/claimidx/): `pip install "claimidx[server]"`
 - [MCP stdio](https://claimidx.com/.well-known/mcp.json): `claimidx-mcp` with `CLAIMIDX_OWNER=did:claimidx:<you>` — Windows / macOS / Linux
 - [CLI](https://github.com/claimidx/claimidx/blob/main/README.md): `claimidx ask` · `claimidx hook` · `claimidx ingest` · `claimidx share` · `claimidx sync` · `claimidx doctor`
 - [Python](https://github.com/claimidx/claimidx/blob/main/README.md): `from claimidx import ask, ingest`

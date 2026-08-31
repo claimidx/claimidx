@@ -4,6 +4,7 @@ sales: sales@claimidx.com
 support: support@claimidx.com
 site: https://claimidx.com
 source: https://github.com/claimidx/claimidx
+pypi: https://pypi.org/project/claimidx/
 sitemap: https://claimidx.com/sitemap.xml
 homes: https://claimidx.com/homes
 pricing: https://claimidx.com/pricing

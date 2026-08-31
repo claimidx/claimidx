@@ -172,6 +172,15 @@ def test_pyproject_license_is_spdx_string():
     assert "license = { text" not in text
 
 
+def test_llms_txt_names_pypi():
+    """Agent docs index must name pip install claimidx now that PyPI is live."""
+    from claimidx.discovery import ROOT
+
+    text = (ROOT / "llms.txt").read_text(encoding="utf-8")
+    assert "pypi.org/project/claimidx" in text
+    assert "pip install" in text and "claimidx" in text
+
+
 def test_pypi_metadata_links_github_docs():
     """PyPI project.urls and README must point at GitHub docs, not relative paths that 404 on pypi.org."""
     from claimidx.discovery import ROOT
