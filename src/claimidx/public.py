@@ -69,7 +69,16 @@ def public_eval(cmd: str) -> str:
     rel = re.sub(r"(?<=\s)\./\.\.\.(?=\s|$)", "", raw)
     if re.search(r"(?:^|[\s=])(?:\.\.?[/\\]|~[/\\])", rel):
         return ""
-    return raw[:200]
+    out = raw[:200]
+    from .policy import eval_allowed
+
+    # Truncation can split a quoted python -c payload and leave `;` unquoted.
+    # A commons recipe that Claim refuses is not a recipe — blank it, do not
+    # rewrite as `true`.
+    ok, _ = eval_allowed(out)
+    if not ok:
+        return ""
+    return out
 
 
 def _pkg_token(raw: str) -> str:

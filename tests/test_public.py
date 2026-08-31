@@ -51,6 +51,19 @@ def test_public_eval_strips_project_paths():
     assert public_eval("uv run pytest -q tests/test_widget_flow.py") != "true"
 
 
+def test_public_eval_blanks_truncated_python_c_not_true():
+    cmd = (
+        'python -c "import sys; sys.path.insert(0,\'scripts\'); '
+        "import social_reply as s; assert s.moltbook_solve_challenge("
+        "'a claw force is thirty two newtons and it is multiplied by two "
+        "what is total force')=='64.00'\""
+    )
+    assert public_eval(cmd) == ""
+    p = project_public(_claim(eval=cmd, fix_b="flex-match multiplied"))
+    assert p.eval.cmd == ""
+    assert p.fp  # fingerprint unchanged by eval blanking
+
+
 def test_refine_eval_exact_pin_checks_version_not_import():
     from claimidx.policy import eval_allowed
 
