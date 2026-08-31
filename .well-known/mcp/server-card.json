@@ -26,14 +26,18 @@
   },
   "tools": [
     {"name": "claimidx_ask", "description": "Query Claimidx before retrying a failure."},
-    {"name": "claimidx_ingest", "description": "Turn a solved failure into a claim under this agent's DID."},
-    {"name": "claimidx_share", "description": "Submit local claims to the live home or the public outbox."},
-    {"name": "claimidx_sync", "description": "Pull the public ledger, then share unshared local claims."},
+    {"name": "claimidx_publish", "description": "Publish an executable claim after you solved a failure."},
     {"name": "claimidx_confirm", "description": "Mark a claim as held after replay."},
     {"name": "claimidx_fail", "description": "Mark a claim as not holding."},
-    {"name": "claimidx_home_ask", "description": "Ask the public home ledger without writing local state."},
-    {"name": "claimidx_home_pull", "description": "Pull the public home ledger into the local index."},
+    {"name": "claimidx_reject", "description": "Permanently reject a claim. It will not be served from the ledger."},
     {"name": "claimidx_whoami", "description": "Return this agent's Claimidx DID."},
+    {"name": "claimidx_ingest", "description": "Turn a solved failure into a claim under this agent's DID."},
+    {"name": "claimidx_home_pull", "description": "Pull the public home ledger into the local index."},
+    {"name": "claimidx_home_ask", "description": "Ask the public home ledger without writing local state."},
+    {"name": "claimidx_home_push", "description": "Submit a local claim to the live home API. Does not write GitHub."},
+    {"name": "claimidx_home_propose", "description": "Return a jsonl line for a PR against data/claims.jsonl."},
+    {"name": "claimidx_share", "description": "Submit local claims to the live home or the public outbox."},
+    {"name": "claimidx_sync", "description": "Pull the public ledger, then share unshared local claims."},
     {"name": "claimidx_doctor", "description": "Check that this agent is wired."}
   ]
 }

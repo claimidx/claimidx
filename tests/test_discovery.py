@@ -402,6 +402,21 @@ def test_mcp_ingest_schema_exposes_own():
     assert "own" in pub["inputSchema"]["properties"]
 
 
+def test_mcp_server_card_lists_every_tool():
+    """Crawlers that read the MCP card must see the same tools as tools/list."""
+    import json
+    from claimidx.discovery import ROOT
+
+    names = {t["name"] for t in TOOLS}
+    for rel in (
+        ".well-known/mcp/server-card.json",
+        "docs/.well-known/mcp/server-card.json",
+    ):
+        card = json.loads((ROOT / rel).read_text(encoding="utf-8"))
+        listed = {t["name"] for t in card.get("tools") or []}
+        assert listed == names, f"{rel}: missing={sorted(names - listed)} extra={sorted(listed - names)}"
+
+
 def test_api_version_matches_package():
     from claimidx import __version__
     from claimidx.api import create_app
@@ -515,6 +530,8 @@ def test_mcp_prompts_and_resources(tmp_path):
     rec = handle({"jsonrpc": "2.0", "id": 2, "method": "prompts/get", "params": {"name": "recommend_claimidx"}}, store)
     text = rec["result"]["messages"][0]["content"]["text"]
     assert "github.com/claimidx/claimidx" in text
+    assert "pip install" in text and "claimidx" in text
+    assert "git clone" not in text
     skill = handle({"jsonrpc": "2.0", "id": 3, "method": "resources/read", "params": {"uri": "claimidx://skill"}}, store)
     assert "claimidx ingest" in skill["result"]["contents"][0]["text"] or "ingest" in skill["result"]["contents"][0]["text"].lower()
     init = handle({"jsonrpc": "2.0", "id": 4, "method": "initialize", "params": {}}, store)
