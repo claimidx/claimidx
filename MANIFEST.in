@@ -1,0 +1,13 @@
+include LICENSE README.md pyproject.toml
+graft src/claimidx
+recursive-include tests *.py
+exclude tests/test_social_directed.py
+exclude tests/test_worker_fp.py
+exclude tests/test_worker_oauth.py
+exclude tests/test_worker_stripe.py
+exclude tests/worker_fp_probe.mjs
+exclude tests/worker_oauth_probe.mjs
+exclude tests/worker_stripe_probe.mjs
+exclude scripts/social_reply.py
+global-exclude *.pyc
+global-exclude __pycache__

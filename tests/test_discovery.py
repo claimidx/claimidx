@@ -169,6 +169,25 @@ def test_agent_briefing_does_not_imply_pypi():
     assert hits == [], hits
 
 
+def test_sdist_manifest_excludes_hangout_and_worker_probes():
+    """The published sdist is protocol. Hangout bot and worker probes stay off PyPI."""
+    from claimidx.discovery import ROOT
+
+    text = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
+    missing = [
+        n
+        for n in (
+            "test_social_directed.py",
+            "test_worker_stripe.py",
+            "social_reply.py",
+            "worker_stripe_probe.mjs",
+        )
+        if n not in text
+    ]
+    assert missing == [], missing
+    assert "prune tests" not in text.lower() or "recursive-include tests" in text
+
+
 def test_mcp_server_json_is_honest():
     """MCP registry description is max 100 chars. Do not advertise a PyPI 404."""
     import json
