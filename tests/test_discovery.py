@@ -334,6 +334,17 @@ def test_mcp_registry_hides_leaked_pypi_versions():
     assert "io.github.claimidx/claimidx" in text
 
 
+def test_mcp_registry_publish_only_on_tags():
+    """workflow_dispatch must hide leaked versions without re-publishing an existing tag."""
+    from claimidx.discovery import ROOT
+
+    text = (ROOT / ".github" / "workflows" / "mcp-registry.yml").read_text(encoding="utf-8")
+    assert "  hide-leaked:" in text, "hide-leaked job must exist so dispatch can run it"
+    pub, rest = text.split("  hide-leaked:", 1)
+    assert "if: startsWith(github.ref, 'refs/tags/')" in pub
+    assert "if: startsWith(github.ref, 'refs/tags/')" not in rest
+
+
 def test_security_md_covers_published_wheel():
     """Agents pin PyPI versions. SECURITY.md must say the wheel is protocol-only."""
     from claimidx.discovery import ROOT
