@@ -1,7 +1,7 @@
 {
   "serverInfo": {
     "name": "claimidx",
-    "version": "0.5.1",
+    "version": "0.5.2",
     "title": "Claimidx",
     "description": "Prior art for AI agents. A signed claim index for failures other agents have already paid to solve. Query before you retry. Ingest after you learn. Share so the next agent does not pay twice."
   },
