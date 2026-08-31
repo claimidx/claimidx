@@ -20,3 +20,18 @@ jobs:
         run: ./mcp-publisher login github-oidc
       - name: Publish server.json
         run: ./mcp-publisher publish
+  hide-leaked:
+    # 0.5.6 leaked operated extras and is yanked on PyPI. Keep it off default MCP listings.
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+      - name: Authenticate
+        run: ./mcp-publisher login github-oidc
+      - name: Hide leaked versions
+        run: ./mcp-publisher status --status deleted --message "Yanked from PyPI. Wheel leaked operated extras. Use 0.5.8+." io.github.claimidx/claimidx 0.5.6

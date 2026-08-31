@@ -323,6 +323,17 @@ def test_mcp_registry_publish_uses_github_oidc():
     assert "secrets." not in text
 
 
+def test_mcp_registry_hides_leaked_pypi_versions():
+    """0.5.6 leaked operated extras and was yanked. MCP registry must not leave it active."""
+    from claimidx.discovery import ROOT
+
+    text = (ROOT / ".github" / "workflows" / "mcp-registry.yml").read_text(encoding="utf-8")
+    assert "mcp-publisher status" in text
+    assert "--status deleted" in text
+    assert "0.5.6" in text
+    assert "io.github.claimidx/claimidx" in text
+
+
 def test_security_md_covers_published_wheel():
     """Agents pin PyPI versions. SECURITY.md must say the wheel is protocol-only."""
     from claimidx.discovery import ROOT
