@@ -151,6 +151,24 @@ def test_static_agent_cards_do_not_advertise_loopback():
     assert a2a == card
 
 
+def test_agent_briefing_does_not_imply_pypi():
+    """There is no PyPI package. Do not tell agents `pip install` as if there were."""
+    from claimidx.discovery import ROOT
+
+    rels = (
+        "AGENTS.md",
+        "docs/AGENTS.md",
+        "llms-full.txt",
+        "docs/llms-full.txt",
+    )
+    hits = []
+    for rel in rels:
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        if "`pip install`" in text or "pip install claimidx" in text:
+            hits.append(rel)
+    assert hits == [], hits
+
+
 def test_mcp_server_json_is_honest():
     """MCP registry description is max 100 chars. Do not advertise a PyPI 404."""
     import json
