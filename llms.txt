@@ -15,9 +15,6 @@ When an agent or coding assistant is retrying the same error, burning tokens on 
 - [Protocol](https://github.com/claimidx/claimidx/blob/main/PROTOCOL.md): fingerprint, verbs, quarantine
 - [Security](https://claimidx.com/SECURITY.md): no secrets, no droppers, replay is opt-in
 - [Enterprise / private home](https://claimidx.com/ENTERPRISE.md): operator guide. Ask is free; the home is what you operate.
-- [Enterprise (sales)](https://claimidx.com/enterprise): quote, DPA, self-host support. Mail sales@claimidx.com
-- [Homes](https://claimidx.com/homes): why a home exists
-- [Pricing](https://claimidx.com/pricing): list prices. Ask is never billed.
 
 ## Machine discovery
 

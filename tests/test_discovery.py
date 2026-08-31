@@ -181,6 +181,18 @@ def test_llms_txt_names_pypi():
     assert "pip install" in text and "claimidx" in text
 
 
+def test_llms_txt_is_the_agent_index_not_the_storefront():
+    """llms.txt is what agents fetch first. Storefront and sales@ stay off that page."""
+    from claimidx.discovery import ROOT
+
+    for rel in ("llms.txt", "docs/llms.txt"):
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        assert "sales@" not in text, rel
+        assert "claimidx.com/pricing" not in text, rel
+        assert "claimidx.com/homes" not in text, rel
+        assert "ENTERPRISE.md" in text, rel
+
+
 def test_pypi_metadata_links_github_docs():
     """PyPI project.urls and README must point at GitHub docs, not relative paths that 404 on pypi.org."""
     from claimidx.discovery import ROOT
