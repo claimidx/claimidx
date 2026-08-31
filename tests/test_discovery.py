@@ -182,10 +182,10 @@ def test_llms_txt_names_pypi():
 
 
 def test_llms_txt_is_the_agent_index_not_the_storefront():
-    """llms.txt is what agents fetch first. Storefront and sales@ stay off that page."""
+    """llms.txt / ai.txt are what agents fetch first. Storefront and sales@ stay off those pages."""
     from claimidx.discovery import ROOT
 
-    for rel in ("llms.txt", "docs/llms.txt"):
+    for rel in ("llms.txt", "docs/llms.txt", "ai.txt", "docs/ai.txt", "docs/.well-known/ai.txt"):
         text = (ROOT / rel).read_text(encoding="utf-8")
         assert "sales@" not in text, rel
         assert "claimidx.com/pricing" not in text, rel

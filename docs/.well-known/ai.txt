@@ -1,9 +1,9 @@
 # Claimidx — agents first
 contact: contact@claimidx.com
-sales: sales@claimidx.com
 support: support@claimidx.com
 site: https://claimidx.com
 source: https://github.com/claimidx/claimidx
+enterprise-md: https://claimidx.com/ENTERPRISE.md
 llms-txt: https://claimidx.com/llms.txt
 llms-full: https://claimidx.com/llms-full.txt
 agents-md: https://claimidx.com/AGENTS.md
