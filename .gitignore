@@ -11,6 +11,7 @@ build/
 *.sqlite
 .DS_Store
 INTERNAL/
+# Local Social + COO bots. Ours. Never GitHub, never PyPI.
 tmp-visual/
 _to_delete/
 

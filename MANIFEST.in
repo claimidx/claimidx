@@ -23,5 +23,7 @@ exclude tests/worker_oauth_probe.mjs
 exclude tests/worker_stripe_probe.mjs
 exclude scripts/social_reply.py
 exclude src/claimidx/stripe_hook.py
+prune INTERNAL
+exclude INTERNAL/BOTS.md
 global-exclude *.pyc
 global-exclude __pycache__

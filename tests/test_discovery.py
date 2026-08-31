@@ -228,6 +228,8 @@ def test_sdist_manifest_excludes_hangout_and_worker_probes():
             "worker_stripe_probe.mjs",
             "stripe_hook.py",
             "test_stripe_hook.py",
+            "INTERNAL",
+            "BOTS.md",
         )
         if n not in text
     ]
