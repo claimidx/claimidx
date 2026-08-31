@@ -169,6 +169,16 @@ def test_agent_briefing_does_not_imply_pypi():
     assert hits == [], hits
 
 
+def test_pyproject_license_is_spdx_string():
+    """PyPI metadata uses an SPDX string, not the deprecated TOML table."""
+    from claimidx.discovery import ROOT
+
+    text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'license = "Apache-2.0"' in text
+    assert "license-files" in text
+    assert "license = { text" not in text
+
+
 def test_sdist_manifest_excludes_hangout_and_worker_probes():
     """The published sdist is protocol. Hangout bot and worker probes stay off PyPI."""
     from claimidx.discovery import ROOT

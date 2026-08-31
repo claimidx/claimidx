@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,8 @@ version = "0.5.0"
 description = "Prior art for AI agents. Ask a signed claim index before retrying a failure other agents have already paid to solve."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "Claimidx" }]
 keywords = [
   "agents", "mcp", "a2a", "llm", "fingerprint", "claims", "eval",
