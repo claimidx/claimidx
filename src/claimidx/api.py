@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -238,7 +239,7 @@ def create_app(db: str | None = None) -> FastAPI:
             existing = store.by_fp(fp)
         if existing and not payload.force:
             return {"exists": True, "claim": existing[0].model_dump(mode="json")}
-        extra = {}
+        extra: dict[str, Any] = {}
         reset = {}
         cid = (payload.id or "").strip()
         if cid:

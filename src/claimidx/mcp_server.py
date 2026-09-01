@@ -399,7 +399,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             existing = store.by_fp(fp)
         if existing and not args.get("force"):
             return {"exists": True, "id": existing[0].id, "st": existing[0].st}
-        extra = {"id": existing[0].id} if existing else {}
+        extra: dict[str, Any] = {"id": existing[0].id} if existing else {}
         reset = {}
         if existing and args.get("force"):
             reset = force_reset_from(existing[0])

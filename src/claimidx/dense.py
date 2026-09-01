@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from .models import Claim, EvalSpec, Fix
+from .models import Claim, EvalSpec, Fix, utcnow
 
 
 def _ts(dt: datetime | None) -> str:
@@ -73,7 +73,7 @@ def decode(text: str) -> Claim:
         nf=int(kv.get("nf") or 0),
         own=kv.get("own") or "did:claimidx:anon",
         model=kv.get("model") or "",
-        ts=parse_ts(kv.get("ts", "")) or Claim.model_fields["ts"].default_factory(),  # type: ignore[misc]
+        ts=parse_ts(kv.get("ts", "")) or utcnow(),
         exp=parse_ts(kv.get("exp", "")),
         note=kv.get("note") or "",
         src=kv.get("src") or "local",

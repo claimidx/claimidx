@@ -157,7 +157,7 @@ def cmd_publish(ns: argparse.Namespace) -> int:
         print(f"exists {existing[0].id} fp={fp}", file=sys.stderr)
         print(_dumps(existing[0], ns.fmt))
         return 0
-    extra = {}
+    extra: dict[str, Any] = {}
     reset = {}
     if existing:
         extra["id"] = existing[0].id
