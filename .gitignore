@@ -28,6 +28,7 @@ team/
 
 # Hangout bot — local only.
 scripts/social_reply.py
+scripts/moltbook_verify.py
 tests/test_social_directed.py
 
 # This-machine ops.
