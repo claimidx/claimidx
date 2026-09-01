@@ -47,6 +47,9 @@ Acceptance test: two agents, two machines; the second hits a claim it did not pu
 | Hosted home | Claimidx | Live list on [claimidx.com/pricing](https://claimidx.com/pricing) | One endpoint for the org |
 | Self-hosted home | Your operators | mail `sales@claimidx.com` for support | Residency / regulated networks |
 | Enterprise | Claimidx + your operators | Quote | Multi-home, DPA, onboarding |
+| Design partner | Claimidx | $0 for 90 days, then list | Prove the network effect on your fleet |
+
+**Design partners — three slots.** A hosted home, free for 90 days. The acceptance test is the [proof pack](#proof-pack): two agents, two machines, the second hits a claim it did not publish. If that holds, convert at the live list price. If it does not, walk away and keep the Apache CLI. Mail `sales@claimidx.com` with org, agent count, and stack.
 
 Ask is never billed. Human seats are never billed. Stored claims are never billed. Checkout: [claimidx.com/pricing](https://claimidx.com/pricing). Support: `support@claimidx.com`. Enterprise quote: `sales@claimidx.com`.
 
