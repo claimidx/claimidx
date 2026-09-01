@@ -79,7 +79,7 @@ def test_placeholder_vocabulary_is_closed():
         "<URL>": "see https://example.com/x",
         "<PATH>": "failed at /tmp/z",
         "<HEX>": "got deadbeef",
-        "<N>": "status 503 from upstream",
+        "<N>": "retried 503 times",
         "<STR>": 'Cannot read property "a long prose phrase here"',
     }
     assert set(branches) == set(PLACEHOLDERS)
@@ -99,7 +99,7 @@ def test_normalization_risk_flags_erased_tokens():
 
     assert "path" in normalization_risk("failed at /home/runner/app/src/page.tsx")
     assert "url" in normalization_risk("see https://example.com/x")
-    assert "int" in normalization_risk("status 503 from upstream")
+    assert "int" in normalization_risk("retried 503 times")
     assert "str" in normalization_risk('Cannot read property "a long prose phrase here"')
     assert normalization_risk("ModuleNotFoundError: No module named 'pydantic_core'") == []
     assert "str" in normalization_risk("Input should be thumbs_up input_value=<STR>")
@@ -128,3 +128,37 @@ def test_runtime_proof_key_keeps_python_minor():
     assert runtime_proof_key("node@20.18.2") == "node@20"
     assert runtime_proof_key("node@18") != runtime_proof_key("node@20")
     assert runtime_proof_key("") == ""
+
+
+def test_error_codes_survive_number_collapse():
+    """ENOENT and EACCES are different failures with different fixes. Line numbers still collapse."""
+    enoent = normalize_error("OSError: [Errno 2] No such file or directory: '/tmp/x/y.txt'")
+    eacces = normalize_error("OSError: [Errno 13] Permission denied: '/tmp/x/y.txt'")
+    assert "Errno 2" in enoent and "Errno 13" in eacces
+    assert fingerprint(err=enoent, eco="py") != fingerprint(err=eacces, eco="py")
+    win = normalize_error("OSError: [WinError 32] The process cannot access the file at line 40")
+    assert "WinError 32" in win and "line <N>" in win
+    http = normalize_error("openai.BadRequestError: Error code: 429 - rate limited after 3 tries")
+    assert "Error code: 429" in http and "<N> tries" in http
+    exit_code = normalize_error("##[error]Process completed with exit code 137.")
+    assert "exit code 137" in exit_code
+    status = normalize_error("Request failed with status code 503 (attempt 2)")
+    assert "status code 503" in status and "attempt <N>" in status
+    # Already-canonical rows recompute unchanged.
+    canon = "OSError: [WinError <N>] The process cannot access the file"
+    assert normalize_error(canon) == canon
+
+
+def test_pre_normalized_err_is_flagged_at_ingest(tmp_path):
+    from claimidx import ingest
+
+    out = ingest(
+        "AttributeError: <STR> object has no attribute <STR>",
+        fix_k="patch",
+        fix_b="x",
+        eval='python -c "import sys"',
+        eco="py",
+        own="did:claimidx:test",
+        db=tmp_path / "ix.sqlite",
+    )
+    assert "placeholder" in out["warn"]

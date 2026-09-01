@@ -3,15 +3,15 @@ from __future__ import annotations
 import hashlib
 import re
 
-_PATH = re.compile(
-    r"(?:[A-Za-z]:\\|\\\\|~[/\\]|/(?:home|Users|usr|var|tmp|opt|root|etc|app|src|private|opt)|(?:\./|\.\./))[^\s:'\"]+"
-)
+_PATH = re.compile(r"(?:[A-Za-z]:\\|\\\\|~[/\\]|/(?:home|Users|usr|var|tmp|opt|root|etc|app|src|private|opt)|(?:\./|\.\./))[^\s:'\"]+")
 _URL = re.compile(r"https?://[^\s]+")
 # Contractions (`Can't`) are not quotes. Single quotes only when not mid-word.
-_QUOTED = re.compile(
-    r"(?:(?<![A-Za-z])'([^']{1,200})'(?![A-Za-z])|\"([^\"]{1,200})\")"
-)
+_QUOTED = re.compile(r"(?:(?<![A-Za-z])'([^']{1,200})'(?![A-Za-z])|\"([^\"]{1,200})\")")
 _NUM = re.compile(r"\b\d+\b")
+# Error codes discriminate failures (Errno 2 vs 13, HTTP 401 vs 429, exit 137 vs 1).
+# Line numbers, counts, and versions still collapse to <N>.
+_CODE_NUM = re.compile(r"(?i)\b(Errno|WinError|error code:?|exit code:?|status(?: code)?:?|HTTP(?:/[\d.]+)?)\s+(\d+)\b")
+_CODE_MARK = "\x00"
 _HEX = re.compile(r"\b[0-9a-f]{7,}\b", re.I)
 _WS = re.compile(r"\s+")
 
@@ -69,7 +69,7 @@ def normalization_risk(raw: str) -> list[str]:
         flags.append("path")
     if _HEX.search(s):
         flags.append("hex")
-    if _NUM.search(s):
+    if _NUM.search(_CODE_NUM.sub(" ", s)):
         flags.append("int")
     if "str" not in flags:
         for m in _QUOTED.finditer(s):
@@ -89,7 +89,15 @@ def normalize_error(raw: str) -> str:
     s = _PATH.sub("<PATH>", s)
     s = _QUOTED.sub(_quote_token, s)
     s = _HEX.sub("<HEX>", s)
+    kept: list[str] = []
+
+    def _keep(m: re.Match[str]) -> str:
+        kept.append(m.group(2))
+        return f"{m.group(1)} {_CODE_MARK}K{len(kept) - 1}{_CODE_MARK}"
+
+    s = _CODE_NUM.sub(_keep, s)
     s = _NUM.sub("<N>", s)
+    s = re.sub(f"{_CODE_MARK}K(\\d+){_CODE_MARK}", lambda m: kept[int(m.group(1))], s)
     s = _WS.sub(" ", s)
     return s[:280]
 
