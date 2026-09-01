@@ -100,6 +100,22 @@ def test_agent_facing_docs_cover_current_surface():
         assert "verify --dry-run" in dump, rel
 
 
+def test_architecture_covers_verify_export():
+    """docs/ARCHITECTURE.md Current surface must name in-process verify and MCP claimidx_verify."""
+    from claimidx.discovery import ROOT
+
+    text = (ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    missing = [
+        n
+        for n in (
+            "from claimidx import ask, ingest, verify",
+            "claimidx_verify",
+        )
+        if n not in text
+    ]
+    assert missing == [], missing
+
+
 def test_llms_full_embeds_current_briefings():
     """llms-full.txt is the dump crawlers fetch. Stale PROTOCOL.md omitted verify."""
     from claimidx.discovery import ROOT

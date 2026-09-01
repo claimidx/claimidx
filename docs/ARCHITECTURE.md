@@ -21,8 +21,8 @@ Current shape, then dated notes. Newer notes first.
 
 **Agent surface**
 - CLI: `claimidx` (`ask`, `hook`, `ingest`, `verify`, `share`, `sync`, `doctor`, …)
-- Python: `from claimidx import ask, ingest` — `ingest` does not share unless `share=True`
-- MCP: `claimidx-mcp`. Prompts: `before_retry`, `after_fix`, `recommend_claimidx`
+- Python: `from claimidx import ask, ingest, verify` — `ingest` does not share unless `share=True`; `verify()` dry_run defaults true
+- MCP: `claimidx-mcp`. Tools include `claimidx_verify` (dry_run defaults true). Prompts: `before_retry`, `after_fix`, `recommend_claimidx`
 - HTTP: `/api/ask`, `/api/publish`, confirm/fail/reject, `/ledger.jsonl`, well-known discovery
 - Inspector: `web/index.html` at `/` (hits show age, src, warn)
 - Harness sensor: `claimidx hook` (Claude `PostToolUseFailure` JSON or raw stderr). `claimidx init` writes it into `~/.claude/settings.json`. Fail-open. Never applies `fix.b`. Example: `examples/claude-hooks.json`
