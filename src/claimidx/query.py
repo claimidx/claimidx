@@ -1,6 +1,7 @@
-"""In-process ask/ingest. Harnesses import this instead of shelling out to the CLI.
+"""In-process ask/ingest/verify. Harnesses import this instead of shelling out to the CLI.
 
 Never applies fix.b. Never auto-confirms. ingest() is local unless share=True.
+verify() dry_run defaults True: list claims, do not run evals/venv/pip.
 """
 from __future__ import annotations
 
@@ -116,3 +117,29 @@ def ingest(
         if shared:
             out["share"] = shared
     return out
+
+
+def verify(
+    *,
+    k: int = 8,
+    ids: list[str] | None = None,
+    dry_run: bool = True,
+    runnable: bool = False,
+    harness: bool = False,
+    own: str | None = None,
+    db: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    """Batch replay. dry_run defaults True: list claims; do not run evals, venv, or pip."""
+    from .replay import run
+
+    path = db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)
+    store = Store(path)
+    return run(
+        store,
+        k=k,
+        ids=ids,
+        own=own,
+        dry_run=dry_run,
+        runnable=runnable,
+        harness_mode=harness,
+    )

@@ -80,6 +80,7 @@ def test_agent_facing_docs_cover_current_surface():
         "claimidx hook",
         "claimidx_hook",
         "from claimidx import ask",
+        "from claimidx import ask, ingest, verify",
         "age_days",
         "verify --dry-run",
     )
@@ -536,7 +537,7 @@ def test_mcp_verify_defaults_to_dry_run(tmp_path, monkeypatch):
         raise AssertionError(f"subprocess during MCP verify dry-run: {a}")
 
     monkeypatch.setattr(subprocess, "run", _blocked)
-    monkeypatch.setattr("claimidx.verify.subprocess.run", _blocked)
+    monkeypatch.setattr("claimidx.replay.subprocess.run", _blocked)
     rec = handle(
         {
             "jsonrpc": "2.0",

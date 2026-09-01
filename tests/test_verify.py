@@ -3,7 +3,7 @@ from pathlib import Path
 from claimidx.cli import main
 from claimidx.sandbox import ReplayResult
 from claimidx.store import Store
-from claimidx.verify import (
+from claimidx.replay import (
     _dep_pip,
     _install_plan,
     _pin_spec,
@@ -41,14 +41,14 @@ def test_harness_confirms_when_eval_discriminates(tmp_path: Path, monkeypatch):
             ReplayResult(True, True, 0, 0, True, "held"),
         ]
     )
-    monkeypatch.setattr("claimidx.verify.replay", lambda *a, **k: next(replays))
+    monkeypatch.setattr("claimidx.replay.replay", lambda *a, **k: next(replays))
 
     class R:
         returncode = 0
         stderr = ""
         stdout = ""
 
-    monkeypatch.setattr("claimidx.verify.subprocess.run", lambda *a, **k: R())
+    monkeypatch.setattr("claimidx.replay.subprocess.run", lambda *a, **k: R())
     c = _claim("ModuleNotFoundError: No module named 'demo'", "python -c \"import demo\"", fix_k="pin", fix_b="demo<2")
     d = harness(c, tmp_path / "h")
     assert d["action"] == "confirm"
@@ -62,14 +62,14 @@ def test_harness_skips_when_eval_holds_without_pin(tmp_path: Path, monkeypatch):
             ReplayResult(True, True, 0, 0, True, "held"),
         ]
     )
-    monkeypatch.setattr("claimidx.verify.replay", lambda *a, **k: next(replays))
+    monkeypatch.setattr("claimidx.replay.replay", lambda *a, **k: next(replays))
 
     class R:
         returncode = 0
         stderr = ""
         stdout = ""
 
-    monkeypatch.setattr("claimidx.verify.subprocess.run", lambda *a, **k: R())
+    monkeypatch.setattr("claimidx.replay.subprocess.run", lambda *a, **k: R())
     c = _claim("ModuleNotFoundError: No module named 'demo'", "python -c \"import demo\"", fix_k="pin", fix_b="demo<2")
     d = harness(c, tmp_path / "h")
     assert d["action"] == "skip"
@@ -90,14 +90,14 @@ def test_harness_fails_when_pin_misses_targeted_eval(tmp_path: Path, monkeypatch
             ReplayResult(True, True, 1, 0, False, "eval-miss"),
         ]
     )
-    monkeypatch.setattr("claimidx.verify.replay", lambda *a, **k: next(replays))
+    monkeypatch.setattr("claimidx.replay.replay", lambda *a, **k: next(replays))
 
     class R:
         returncode = 0
         stderr = ""
         stdout = ""
 
-    monkeypatch.setattr("claimidx.verify.subprocess.run", lambda *a, **k: R())
+    monkeypatch.setattr("claimidx.replay.subprocess.run", lambda *a, **k: R())
     c = _claim(
         "ModuleNotFoundError: No module named 'pandas.util.testing'",
         "python -c \"from pandas.util.testing import assert_frame_equal\"",
@@ -117,14 +117,14 @@ def test_harness_skips_when_eval_does_not_target_pin(tmp_path: Path, monkeypatch
             ReplayResult(True, True, 1, 0, False, "eval-miss"),
         ]
     )
-    monkeypatch.setattr("claimidx.verify.replay", lambda *a, **k: next(replays))
+    monkeypatch.setattr("claimidx.replay.replay", lambda *a, **k: next(replays))
 
     class R:
         returncode = 0
         stderr = ""
         stdout = ""
 
-    monkeypatch.setattr("claimidx.verify.subprocess.run", lambda *a, **k: R())
+    monkeypatch.setattr("claimidx.replay.subprocess.run", lambda *a, **k: R())
     c = _claim(
         "ImportError: cannot import name Undefined",
         "python3 -c \"import app\"",
@@ -143,14 +143,14 @@ def test_harness_fails_on_pin_regression(tmp_path: Path, monkeypatch):
             ReplayResult(True, True, 1, 0, False, "eval-miss"),
         ]
     )
-    monkeypatch.setattr("claimidx.verify.replay", lambda *a, **k: next(replays))
+    monkeypatch.setattr("claimidx.replay.replay", lambda *a, **k: next(replays))
 
     class R:
         returncode = 0
         stderr = ""
         stdout = ""
 
-    monkeypatch.setattr("claimidx.verify.subprocess.run", lambda *a, **k: R())
+    monkeypatch.setattr("claimidx.replay.subprocess.run", lambda *a, **k: R())
     c = _claim("ModuleNotFoundError: No module named 'demo'", "python -c \"import demo\"", fix_k="pin", fix_b="demo==9")
     d = harness(c, tmp_path / "h")
     assert d["action"] == "fail"
@@ -172,7 +172,7 @@ def test_harness_skips_broken_install(tmp_path: Path, monkeypatch):
             return R(0)
         return R(1)
 
-    monkeypatch.setattr("claimidx.verify.subprocess.run", fake_run)
+    monkeypatch.setattr("claimidx.replay.subprocess.run", fake_run)
     c = _claim("ModuleNotFoundError: No module named 'demo'", "python -c \"import demo\"", fix_k="pin", fix_b="demo<2")
     d = harness(c, tmp_path / "h")
     assert d["action"] == "skip"
@@ -222,7 +222,7 @@ def test_harness_installs_dep_then_pin(tmp_path: Path, monkeypatch):
             ReplayResult(True, True, 0, 0, True, "held"),
         ]
     )
-    monkeypatch.setattr("claimidx.verify.replay", lambda *a, **k: next(replays))
+    monkeypatch.setattr("claimidx.replay.replay", lambda *a, **k: next(replays))
 
     class R:
         returncode = 0
@@ -233,7 +233,7 @@ def test_harness_installs_dep_then_pin(tmp_path: Path, monkeypatch):
         calls.append(list(argv))
         return R()
 
-    monkeypatch.setattr("claimidx.verify.subprocess.run", fake_run)
+    monkeypatch.setattr("claimidx.replay.subprocess.run", fake_run)
     c = _claim(
         "ImportError: huggingface-hub is required",
         "python -c \"import transformers\"",
@@ -275,7 +275,7 @@ def test_run_harness_skip_does_not_mint_nf(tmp_path: Path, monkeypatch):
     c = _claim("ModuleNotFoundError: No module named 'demo'", "python -c \"import demo\"", fix_k="pin", fix_b="demo<2")
     store.put(c)
     monkeypatch.setattr(
-        "claimidx.verify.harness",
+        "claimidx.replay.harness",
         lambda claim, work: {"action": "skip", "reason": "harness-no-discriminate", "id": claim.id},
     )
     report = run(store, k=1, ids=[c.id], harness_mode=True)
@@ -443,7 +443,7 @@ def test_verify_dry_run_harness_does_not_create_venv(tmp_path: Path, capsys, mon
         raise AssertionError(f"subprocess.run during dry-run: {argv}")
 
     monkeypatch.setattr(subprocess, "run", _blocked)
-    monkeypatch.setattr("claimidx.verify.subprocess.run", _blocked)
+    monkeypatch.setattr("claimidx.replay.subprocess.run", _blocked)
     rc = main([
         "--db", db, "--fmt", "json", "verify", "--dry-run",
         "--runnable", "--harness", "--id", cid, "-k", "1",

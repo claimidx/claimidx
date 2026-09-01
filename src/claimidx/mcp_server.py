@@ -267,7 +267,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         c = store.fail(args["id"], resolve_owner(args.get("own")), note=args.get("note") or "")
         return {"id": c.id, "st": c.st, "nc": c.nc, "nf": c.nf, "own": resolve_owner(args.get("own"))}
     if name == "claimidx_verify":
-        from .verify import run
+        from .replay import run
 
         dry = args.get("dry_run")
         if dry is None:

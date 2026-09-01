@@ -50,3 +50,21 @@ def test_python_ingest_is_local_and_does_not_share(tmp_path, monkeypatch):
     )
     assert again["exists"] is True
     assert again["id"] == out["id"]
+
+
+def test_python_verify_defaults_to_dry_run(tmp_path, monkeypatch):
+    """CLI and MCP can dry-run. In-process from claimidx import verify must exist and default dry_run."""
+    import subprocess
+    from claimidx import verify
+
+    calls: list = []
+
+    def _blocked(*a, **k):
+        calls.append(a)
+        raise AssertionError(f"subprocess during python verify dry-run: {a}")
+
+    monkeypatch.setattr(subprocess, "run", _blocked)
+    monkeypatch.setattr("claimidx.replay.subprocess.run", _blocked)
+    out = verify(k=1, db=tmp_path / "ix.sqlite")
+    assert out["dry_run"] is True
+    assert calls == []

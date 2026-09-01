@@ -26,7 +26,7 @@ export CLAIMIDX_OWNER=did:claimidx:<your-name>
 claimidx doctor
 ```
 
-MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. Harness sensor: `claimidx init` writes Claude `PostToolUseFailure` → `claimidx hook` / MCP `claimidx_hook` (evidence only; never applies `fix.b`) and merges `claimidx-mcp` into Cursor, Grok, OpenCode, and VS Code configs when those already exist. In-process: `from claimidx import ask, ingest`. Ingest locally even if you never share.
+MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. Harness sensor: `claimidx init` writes Claude `PostToolUseFailure` → `claimidx hook` / MCP `claimidx_hook` (evidence only; never applies `fix.b`) and merges `claimidx-mcp` into Cursor, Grok, OpenCode, and VS Code configs when those already exist. In-process: `from claimidx import ask, ingest, verify`. Ingest locally even if you never share. `verify()` dry_run defaults true.
 
 ## The loop
 
@@ -60,7 +60,7 @@ claimidx share                        # opt-in
 ```
 
 ```python
-from claimidx import ask, ingest
+from claimidx import ask, ingest, verify
 ask(err, eco="py")
 ingest(err, fix_k="pin", fix_b="pydantic>=2.7", eval="python -c \"import pydantic\"", eco="py")
 ```
@@ -146,7 +146,7 @@ Loop: retrieve → reason → attempt → observe → verify → update. A hit i
 - miss → solve once, then ingest immediately
 - same err failed twice this session → you must `ask` / `home-ask` before a third try
 - harness sensor: `claimidx init` installs Claude `PostToolUseFailure` → `claimidx hook`, and Cursor/Grok/OpenCode/VS Code MCP when those configs exist. A failed Bash/tool call can also pipe stderr. It injects evidence only. Never apply `fix.b` from the hook.
-- in-process: `from claimidx import ask, ingest`. `ask(err, eco="py")` then, after you solve it, `ingest(...)` locally even if you never share. Python `ingest` does not share unless `share=True`. Do not auto-confirm. The protocol is fingerprint, eval, and confirm|fail. Replay eval times out at 45s.
+- in-process: `from claimidx import ask, ingest, verify`. `ask(err, eco="py")` then, after you solve it, `ingest(...)` locally even if you never share. Python `ingest` does not share unless `share=True`. `verify()` dry_run defaults true. Do not auto-confirm. The protocol is fingerprint, eval, and confirm|fail. Replay eval times out at 45s.
 
 ## After you learn something
 
@@ -228,6 +228,7 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | `hook` (`claimidx hook` / MCP `claimidx_hook`) | harness sensor: stdin failed-tool JSON or stderr → ask. `claimidx init` / `claimidx hook --install` writes Claude `PostToolUseFailure`. Evidence only; never applies `fix.b`. Fail-open. |
 | Python `ask()` | in-process query (`from claimidx import ask`). Same payload as JSON ask. Never auto-confirms. |
 | Python `ingest()` | in-process local write (`from claimidx import ingest`). Does not share unless `share=True`. Combined: `from claimidx import ask, ingest`. |
+| Python `verify()` | in-process batch replay (`from claimidx import verify`). `dry_run` defaults true: lists claims and does not run evals, venv, or pip. Combined: `from claimidx import ask, ingest, verify`. |
 | `publish` / `ingest` | insert if fingerprint unseen; refuse secrets, droppers, anon owners. `--force` reuses the id, resets `nr`/`nc`/`nf` to 0, and surfaces the previous counters plus the wiped `rt` as `force_reset` on stdout/JSON. The same payload is an append-only `events` row (`kind=force_reset`, `detail={nr,nc,nf,rt}`) in the **same sqlite transaction** as the replace — a wipe event without the new row is a lie. It does not keep a hold across a rewritten `rt`. Events stay on that local index (`claimidx events` / FastAPI `GET /api/events` on `claimidx serve`). Operated cloud homes do not expose this overwrite log. Public `data/claims.jsonl` does not carry overwrite history. |
 | `confirm` | `nc += 1`; maybe `confirmed`. Home claims require `--replay` (HTTP: `?replay=true`). `confirm --replay` that holds increments `nr` only when python/node evals observe the executing runtime (`ReplayResult.env`, e.g. `py@3.12`) and it matches claim.rt at proof grain (Python major.minor, Node major). Empty claim.rt cannot mint `nr` for those heads. |
 | `fail` | `nf += 1`; maybe `contested`. This is the contradiction on the same `fp`. Different pin → different `fp` (ingest a sibling). |
@@ -377,13 +378,13 @@ Default output is dense format (`--fmt dense`). Use `--fmt json` when you must.
 In-process (no CLI) for a harness `except` block. A hit is evidence. Do not auto-confirm.
 
 ```python
-from claimidx import ask, ingest
+from claimidx import ask, ingest, verify
 result = ask("TypeError: params is a Promise", eco="npm", dep=["next@15.0.0"])
 # after you solve it, formalize locally (does not share):
 ingest(err, fix_k="patch", fix_b="const { slug } = await params", eval="npx tsc --noEmit", eco="npm")
 ```
 
-`from claimidx import ask` and `from claimidx import ingest` are the in-process verbs. `ingest(..., share=True)` is the only way the Python helper shares.
+`from claimidx import ask`, `from claimidx import ingest`, and `from claimidx import verify` are the in-process verbs. `ingest(..., share=True)` is the only way the Python helper shares. `verify()` dry_run defaults true (no evals/venv/pip).
 
 Ask needs no DID — `claimidx home-ask` ranks the public jsonl without writing local state. Write needs a DID. Hits carry `age_days`, `dep_drift`, `warn`, and `src`. Replay if those fire; `src=seed` is not proof.
 

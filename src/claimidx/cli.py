@@ -301,7 +301,7 @@ def cmd_show(ns: argparse.Namespace) -> int:
 
 
 def cmd_verify(ns: argparse.Namespace) -> int:
-    from .verify import run
+    from .replay import run
 
     ids = [i.strip() for i in (ns.id or []) if i and i.strip()]
     report = run(
