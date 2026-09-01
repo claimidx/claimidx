@@ -544,6 +544,12 @@ def test_mcp_confirm_schema_includes_cwd():
     assert "cwd" in spec["inputSchema"]["properties"]
 
 
+def test_mcp_fail_schema_includes_note():
+    """CLI fail --note. MCP claimidx_fail must advertise note so the contradiction can record why."""
+    spec = next(t for t in TOOLS if t["name"] == "claimidx_fail")
+    assert "note" in spec["inputSchema"]["properties"]
+
+
 def test_mcp_verify_defaults_to_dry_run(tmp_path, monkeypatch):
     """MCP handshake names batch replay. claimidx_verify must exist and default dry_run so it does not pip-install."""
     import json
