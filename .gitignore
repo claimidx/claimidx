@@ -23,6 +23,7 @@ functions/
 docs/pricing.html
 docs/homes.html
 docs/thanks.html
+docs/terms.html
 scripts/stripe_*.py
 team/
 .github/workflows/home.yml
