@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 
 from .fingerprint import runtime_proof_key
@@ -63,6 +64,7 @@ class ReplayResult:
     stdout: str = ""
     stderr: str = ""
     env: str = ""  # observed executing runtime, e.g. py@3.12 / node@20
+    ms: int = 0
 
     def as_dict(self) -> dict:
         return {
@@ -75,6 +77,7 @@ class ReplayResult:
             "stdout": self.stdout[-400:],
             "stderr": self.stderr[-400:],
             "env": self.env,
+            "ms": int(self.ms or 0),
         }
 
     def is_hint(self) -> bool:
@@ -232,6 +235,7 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
     observed = observe_env(argv)
     env = os.environ.copy()
     env.update(extra_env)
+    t0 = time.monotonic()
     try:
         proc = subprocess.run(
             argv,
@@ -244,10 +248,13 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
             env=env,
         )
     except subprocess.TimeoutExpired:
-        return ReplayResult(True, True, 124, expect, False, "timeout", env=observed)
+        ms = int((time.monotonic() - t0) * 1000)
+        return ReplayResult(True, True, 124, expect, False, "timeout", env=observed, ms=ms)
     except OSError as e:
-        return ReplayResult(True, False, None, expect, False, f"exec-error:{e}", env=observed)
+        ms = int((time.monotonic() - t0) * 1000)
+        return ReplayResult(True, False, None, expect, False, f"exec-error:{e}", env=observed, ms=ms)
     held = proc.returncode == expect
+    ms = int((time.monotonic() - t0) * 1000)
     return ReplayResult(
         True,
         True,
@@ -258,4 +265,5 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
         proc.stdout or "",
         proc.stderr or "",
         observed,
+        ms,
     )

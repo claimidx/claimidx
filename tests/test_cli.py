@@ -382,6 +382,46 @@ def test_confirm_replay_json(tmp_path: Path, capsys):
     assert '"nc": 0' in capsys.readouterr().out
 
 
+def test_confirm_replay_logs_eval_ms(tmp_path: Path, capsys):
+    import sys
+
+    from claimidx.store import Store
+
+    db = str(tmp_path / "ix.sqlite")
+    rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'evalms_mod'",
+                "--eco",
+                "py",
+                "--rt",
+                rt,
+                "--fix-k",
+                "cmd",
+                "--fix-b",
+                'python -c "print(0)"',
+                "--eval",
+                'python -c "print(0)"',
+            ]
+        )
+        == 0
+    )
+    cid = capsys.readouterr().out.strip()
+    assert main(["--db", db, "--fmt", "json", "confirm", "--replay", cid]) == 0
+    capsys.readouterr()
+    rows = [e for e in Store(db).events(limit=20) if e["kind"] == "confirm-replay" and e["claim_id"] == cid]
+    assert rows, Store(db).events(limit=20)
+    assert isinstance(rows[0]["detail"]["ms"], int) and rows[0]["detail"]["ms"] >= 0
+    assert rows[0]["detail"]["held"] is True
+
+
 def test_seed_materialize_count():
     claims = materialize()
     assert len(claims) >= 12

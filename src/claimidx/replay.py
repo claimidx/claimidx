@@ -560,11 +560,23 @@ def run(
             action = decision["action"]
             if not dry_run:
                 if action == "confirm":
-                    store.confirm(c.id, actor, replayed=True)
+                    replay_info = decision.get("replay") or {}
+                    store.confirm(
+                        c.id,
+                        actor,
+                        replayed=True,
+                        detail={"ms": int(replay_info.get("ms") or 0), "held": True},
+                    )
                     changed.append(store.get(c.id) or c)
                     seen.add(c.id)
                 elif action == "fail":
-                    store.fail(c.id, actor, note=decision.get("reason") or "verify eval-miss")
+                    replay_info = decision.get("replay") or {}
+                    store.fail(
+                        c.id,
+                        actor,
+                        note=decision.get("reason") or "verify eval-miss",
+                        detail={"ms": int(replay_info.get("ms") or 0), "held": False},
+                    )
                     changed.append(store.get(c.id) or c)
                     seen.add(c.id)
                 elif action == "skip":

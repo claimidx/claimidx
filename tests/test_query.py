@@ -25,6 +25,29 @@ def test_python_ask_miss(tmp_path):
     assert out["claims"] == []
 
 
+def test_python_ask_logs_hit_miss_and_ms(tmp_path, monkeypatch):
+    """Ask events must record hit/miss and retrieve ms. Empty detail cannot estimate savings."""
+    from claimidx.store import Store
+
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:test")
+    db = tmp_path / "ix.sqlite"
+    assert main(["--db", str(db), "seed"]) == 0
+    assert ask("TypeError: params is a Promise", eco="npm", dep=["next@15.0.0"], db=db)["hit"] is True
+    assert ask("definitely-not-a-known-xyzzy-error-string", eco="py", db=db)["hit"] is False
+    rows = [e for e in Store(db).events(limit=20) if e["kind"] == "ask"]
+    assert len(rows) >= 2
+    by_hit = {e["detail"]["hit"]: e["detail"] for e in rows}
+    assert True in by_hit and False in by_hit
+    assert by_hit[True]["n"] >= 1
+    assert by_hit[False]["n"] == 0
+    assert isinstance(by_hit[True]["ms"], int) and by_hit[True]["ms"] >= 0
+    assert isinstance(by_hit[False]["ms"], int) and by_hit[False]["ms"] >= 0
+    stats = Store(db).stats()
+    assert stats["asks"] >= 2
+    assert stats["ask_hits"] >= 1
+    assert stats["ask_misses"] >= 1
+
+
 def test_python_ingest_is_local_and_does_not_share(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:test")
     monkeypatch.delenv("CLAIMIDX_HOME_API", raising=False)

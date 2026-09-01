@@ -250,7 +250,14 @@ class Store:
             rows = con.execute("SELECT json FROM claims").fetchall()
         return [c for r in rows if (c := self._claim_from_json(r["json"]))]
 
-    def confirm(self, claim_id: str, actor: str = "did:claimidx:anon", *, replayed: bool = False) -> Claim:
+    def confirm(
+        self,
+        claim_id: str,
+        actor: str = "did:claimidx:anon",
+        *,
+        replayed: bool = False,
+        detail: dict | None = None,
+    ) -> Claim:
         c = self.get(claim_id)
         if not c:
             raise KeyError(claim_id)
@@ -261,7 +268,7 @@ class Store:
             c.src = "local"
         c.refresh_status()
         self.put(c)
-        self._event(claim_id, "confirm-replay" if replayed else "confirm", actor)
+        self._event(claim_id, "confirm-replay" if replayed else "confirm", actor, detail)
         return c
 
     def reject(self, claim_id: str, actor: str = "did:claimidx:anon") -> Claim:
@@ -273,7 +280,7 @@ class Store:
         self._event(claim_id, "reject", actor)
         return c
 
-    def fail(self, claim_id: str, actor: str = "did:claimidx:anon", note: str = "") -> Claim:
+    def fail(self, claim_id: str, actor: str = "did:claimidx:anon", note: str = "", detail: dict | None = None) -> Claim:
         c = self.get(claim_id)
         if not c:
             raise KeyError(claim_id)
@@ -285,7 +292,7 @@ class Store:
             c.src = "local"
         c.refresh_status()
         self.put(c)
-        self._event(claim_id, "fail", actor)
+        self._event(claim_id, "fail", actor, detail)
         return c
 
     def stats(self) -> dict:
@@ -293,7 +300,60 @@ class Store:
         by_st: dict[str, int] = {}
         for c in claims:
             by_st[c.st] = by_st.get(c.st, 0) + 1
-        return {"n": len(claims), "status": by_st, "confirms": sum(c.nc for c in claims), "fails": sum(c.nf for c in claims)}
+        asks = ask_hits = ask_misses = 0
+        ask_ms_sum = 0
+        with self._conn() as con:
+            rows = con.execute("SELECT kind, detail FROM events WHERE kind IN ('ask','hook')").fetchall()
+        for r in rows:
+            asks += 1
+            raw = r["detail"] if "detail" in r.keys() else None
+            blob: dict = {}
+            if raw:
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, dict):
+                        blob = parsed
+                except json.JSONDecodeError:
+                    blob = {}
+            if blob.get("hit") is True:
+                ask_hits += 1
+            elif blob.get("hit") is False:
+                ask_misses += 1
+            ms = blob.get("ms")
+            if isinstance(ms, int) and ms >= 0:
+                ask_ms_sum += ms
+        return {
+            "n": len(claims),
+            "status": by_st,
+            "confirms": sum(c.nc for c in claims),
+            "fails": sum(c.nf for c in claims),
+            "asks": asks,
+            "ask_hits": ask_hits,
+            "ask_misses": ask_misses,
+            "ask_ms_sum": ask_ms_sum,
+        }
+
+    def log_ask(
+        self,
+        actor: str,
+        hits,
+        *,
+        ms: int | None = None,
+        q: dict | None = None,
+        kind: str = "ask",
+    ) -> None:
+        """Record ask/hook retrieve: hit, n, ms. Never stores the raw err."""
+        n = len(hits or [])
+        cid = hits[0][0].id if hits else ""
+        detail: dict = {"hit": bool(hits), "n": n}
+        if ms is not None:
+            detail["ms"] = max(0, int(ms))
+        if q:
+            for key in ("fp", "eco", "cls"):
+                val = q.get(key)
+                if val:
+                    detail[key] = val
+        self.log(kind, actor, cid, detail=detail)
 
     def log(self, kind: str, actor: str, claim_id: str = "", detail: dict | None = None) -> None:
         self._event(claim_id, kind, actor, detail)

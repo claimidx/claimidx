@@ -242,7 +242,7 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | `sync` | `home-pull` then `share` every unshared local claim |
 | `init` | write `~/.claimidx/config.json`, seed, pull |
 | `doctor` | identity, index, home, eval sandbox |
-| `events` | audit log (ask/publish/confirm/share/force_reset). A `--force` wipe that lands is an events row in the same transaction as the replace, not only process output. Per-store sqlite; not projected to `data/claims.jsonl`. |
+| `events` | audit log (ask/publish/confirm/share/force_reset). Ask/hook `detail` is `{hit, n, ms}` (retrieve ms; never the raw err). `confirm --replay` / eval-miss `fail` store `{ms, held}` (eval ms). A `--force` wipe that lands is an events row in the same transaction as the replace, not only process output. Per-store sqlite; not projected to `data/claims.jsonl`. `/health` `asks`/`ask_hits`/`ask_misses`/`ask_ms_sum` count those rows. |
 | `scan` | admission gate without writing |
 
 ## Status

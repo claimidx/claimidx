@@ -9,7 +9,7 @@ from typing import Any
 from . import __version__
 from .dense import encode
 from .fingerprint import classify, fingerprint, normalize_error
-from .match import annotate, hit_row, rank
+from .match import annotate, hit_row
 from .models import Claim, EvalSpec, Fix
 from .policy import PolicyError
 from .security import SecretError
@@ -42,8 +42,9 @@ def _ask_hits(store: Store, ns: argparse.Namespace, err: str):
     eco, rt, dep = ns.eco or "", ns.rt or "", list(ns.dep or [])
     q: dict[str, Any] = {"err": err, "cls": cls, "eco": eco, "rt": rt, "dep": dep}
     q["fp"] = fingerprint(err=err, cls=cls, eco=eco, rt=rt, dep=dep)
-    hits = rank(q, store.all(), k=getattr(ns, "k", 5) or 5)
-    store.log("ask", resolve_owner(getattr(ns, "own", None)), hits[0][0].id if hits else "")
+    from .query import retrieve
+
+    hits = retrieve(store, q, k=getattr(ns, "k", 5) or 5, actor=resolve_owner(getattr(ns, "own", None)))
     return q, hits
 
 
@@ -226,6 +227,7 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
 
         result = replay(c.eval.cmd, c.eval.expect, cwd=getattr(ns, "cwd", None))
         replay_info = result.as_dict()
+        eval_detail = {"ms": int(replay_info.get("ms") or 0), "held": bool(result.held)}
         if result.is_hint():
             if ns.fmt == "json":
                 print(json.dumps({"held": False, "replay": replay_info, "recorded": False}, default=str))
@@ -234,7 +236,7 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
                 print("not recorded: eval is a hint or preconditions unmet", file=sys.stderr)
             return 2
         if not result.held:
-            failed = store.fail(ns.id, resolve_owner(ns.own))
+            failed = store.fail(ns.id, resolve_owner(ns.own), detail=eval_detail)
             if ns.fmt == "json":
                 print(json.dumps({"held": False, "replay": replay_info, "claim": json.loads(failed.model_dump_json())}, default=str))
             else:
@@ -249,7 +251,12 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
                 print(json.dumps(replay_info), file=sys.stderr)
                 print(f"not recorded: {why}", file=sys.stderr)
             return 2
-    confirmed = store.confirm(ns.id, resolve_owner(ns.own), replayed=bool(replay_info))
+    confirmed = store.confirm(
+        ns.id,
+        resolve_owner(ns.own),
+        replayed=bool(replay_info),
+        detail={"ms": int(replay_info.get("ms") or 0), "held": True} if replay_info else None,
+    )
     from .home import maybe_share
 
     shared = maybe_share(store, confirmed)

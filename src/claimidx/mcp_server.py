@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .fingerprint import classify, fingerprint, normalize_error
-from .match import hit_compact, rank
+from .match import hit_compact
 from .models import Claim, EvalSpec, Fix
 from .store import Store, force_reset_emits, force_reset_from
 from .team import resolve_owner
@@ -346,10 +346,10 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         cls = classify(err)
         dep = args.get("dep") or []
         fp = fingerprint(err=err, cls=cls, eco=args.get("eco") or "", rt=args.get("rt") or "", dep=dep)
-        hits = rank(
-            {"err": err, "cls": cls, "eco": args.get("eco") or "", "rt": args.get("rt") or "", "dep": dep, "fp": fp}, store.all(), k=int(args.get("k") or 5)
-        )
-        store.log("ask", resolve_owner(None), hits[0][0].id if hits else "")
+        from .query import retrieve
+
+        q = {"err": err, "cls": cls, "eco": args.get("eco") or "", "rt": args.get("rt") or "", "dep": dep, "fp": fp}
+        hits = retrieve(store, q, k=int(args.get("k") or 5))
         return {
             "hit": bool(hits),
             "fp": fp,
@@ -443,10 +443,11 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             from .sandbox import replay, replay_records_hold
 
             result = replay(current.eval.cmd, current.eval.expect, cwd=args.get("cwd"))
+            eval_detail = {"ms": int(result.ms or 0), "held": bool(result.held)}
             if result.is_hint():
                 return {"id": current.id, "st": current.st, "held": False, "recorded": False, "replay": result.as_dict()}
             if not result.held:
-                failed = store.fail(args["id"], resolve_owner(args.get("own")))
+                failed = store.fail(args["id"], resolve_owner(args.get("own")), detail=eval_detail)
                 return {"id": failed.id, "st": failed.st, "nc": failed.nc, "nf": failed.nf, "replay": result.as_dict(), "held": False}
             ok, why = replay_records_hold(current.rt, result, current.eval.cmd)
             if not ok:
@@ -458,7 +459,12 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                     "reason": why,
                     "replay": result.as_dict(),
                 }
-        c = store.confirm(args["id"], resolve_owner(args.get("own")), replayed=bool(args.get("replay")))
+        c = store.confirm(
+            args["id"],
+            resolve_owner(args.get("own")),
+            replayed=bool(args.get("replay")),
+            detail={"ms": int(result.ms or 0), "held": True} if args.get("replay") else None,
+        )
         from .home import maybe_share
 
         shared = maybe_share(store, c)

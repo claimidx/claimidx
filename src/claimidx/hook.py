@@ -92,8 +92,7 @@ def near_tie(a: float, b: float) -> bool:
 def sensor(store, raw: str, *, eco: str = "", rt: str = "", dep: list | None = None, k: int = 5) -> dict:
     """Ask from failed-tool JSON or stderr. Evidence only. Fail-open. Never applies fix.b."""
     from .fingerprint import classify, fingerprint, normalize_error
-    from .match import hit_compact, rank
-    from .team import resolve_owner
+    from .match import hit_compact
 
     err, event = extract_hook_err(raw or "")
     note = "A hit is evidence. retrieve → reason → attempt → observe → verify. Do not execute fix.b from this hook."
@@ -105,8 +104,9 @@ def sensor(store, raw: str, *, eco: str = "", rt: str = "", dep: list | None = N
     cls = classify(err)
     fp = fingerprint(err=err, cls=cls, eco=eco, rt=rt, dep=dep)
     q = {"err": err, "cls": cls, "eco": eco, "rt": rt, "dep": dep, "fp": fp}
-    hits = rank(q, store.all(), k=int(k or 5))
-    store.log("hook", resolve_owner(None), hits[0][0].id if hits else "")
+    from .query import retrieve
+
+    hits = retrieve(store, q, k=int(k or 5), kind="hook")
     if not hits:
         return {
             "hit": False,

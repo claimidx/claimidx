@@ -7,6 +7,7 @@ verify() dry_run defaults True: list claims, do not run evals/venv/pip.
 from __future__ import annotations
 
 import os
+import time
 from typing import Any
 
 from .fingerprint import classify, fingerprint, normalize_error
@@ -14,6 +15,15 @@ from .match import hit_row, rank
 from .models import Claim, EvalSpec, Fix
 from .store import DEFAULT_DB, Store, force_reset_emits, force_reset_from
 from .team import resolve_owner
+
+
+def retrieve(store: Store, q: dict[str, Any], *, k: int = 5, actor: str | None = None, kind: str = "ask"):
+    """Rank and log hit/n/ms. Does not store the raw err."""
+    t0 = time.monotonic()
+    hits = rank(q, store.all(), k=k)
+    ms = int((time.monotonic() - t0) * 1000)
+    store.log_ask(actor or resolve_owner(None), hits, ms=ms, q=q, kind=kind)
+    return hits
 
 
 def ask(
@@ -32,8 +42,7 @@ def ask(
     cls = classify(err)
     q: dict[str, Any] = {"err": err, "cls": cls, "eco": eco or "", "rt": rt or "", "dep": dep}
     q["fp"] = fingerprint(err=err, cls=cls, eco=eco or "", rt=rt or "", dep=dep)
-    hits = rank(q, store.all(), k=k)
-    store.log("ask", resolve_owner(None), hits[0][0].id if hits else "")
+    hits = retrieve(store, q, k=k)
     if not hits:
         return {"hit": False, "fp": q["fp"], "cls": cls, "err": normalize_error(err), "n": 0, "claims": []}
     return {

@@ -22,7 +22,7 @@ from .dense import encode
 from .discovery import LINK_HEADER, ROOT, ROUTES
 from .discovery import resolve as resolve_discovery
 from .fingerprint import classify, fingerprint, normalize_error
-from .match import hit_row, rank
+from .match import hit_row
 from .models import Claim, EvalSpec, Fix
 from .policy import PolicyError, require_identity
 from .public import refine_eval
@@ -207,8 +207,9 @@ def create_app(db: str | None = None) -> FastAPI:
         cls = payload.cls or classify(payload.err)
         fp = fingerprint(err=payload.err, cls=cls, eco=payload.eco or "", rt=payload.rt or "", dep=payload.dep)
         q = {"err": payload.err, "cls": cls, "eco": payload.eco or "", "rt": payload.rt or "", "dep": payload.dep, "fp": fp}
-        hits = rank(q, store.all(), k=payload.k)
-        store.log("ask", resolve_owner(None), hits[0][0].id if hits else "")
+        from .query import retrieve
+
+        hits = retrieve(store, q, k=payload.k)
         return {
             "hit": bool(hits),
             "fp": fp,
