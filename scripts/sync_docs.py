@@ -35,6 +35,7 @@ SKILL_DROPS = (
 
 COPIES = {
     "AGENTS.md": ("docs/AGENTS.md",),
+    "ENTERPRISE.md": ("docs/ENTERPRISE.md",),
     "llms.txt": ("docs/llms.txt",),
     SKILL: tuple(f"{d}/skills/claimidx/SKILL.md" for d in SKILL_DROPS),
 }
