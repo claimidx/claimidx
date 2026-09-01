@@ -70,6 +70,28 @@ def test_eval_heads_windows_and_uv():
     assert quoted
 
 
+def test_eval_network_pkg_installs_denied():
+    from claimidx.policy import eval_allowed
+
+    npm_net, npm_why = eval_allowed("npm install evilpkg")
+    assert not npm_net and "network" in npm_why
+    npm_i, _ = eval_allowed("npm i evilpkg")
+    assert not npm_i
+    npm_ci, _ = eval_allowed("npm ci")
+    assert not npm_ci
+    go_get, go_why = eval_allowed("go get github.com/evil/mod")
+    assert not go_get and "network" in go_why
+    cargo_add, cargo_why = eval_allowed("cargo add evilcrate")
+    assert not cargo_add and "network" in cargo_why
+    cargo_install, _ = eval_allowed("cargo install evilcrate")
+    assert not cargo_install
+    assert eval_allowed("npx tsc --noEmit")[0]
+    assert eval_allowed("npm test")[0]
+    assert eval_allowed("cargo check")[0]
+    assert eval_allowed("go test ./...")[0]
+    assert eval_allowed("cargo install --path .")[0]
+
+
 def test_eval_cargo_docker_and_env_prefix():
     from claimidx.policy import eval_allowed
 

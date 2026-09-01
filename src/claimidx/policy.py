@@ -9,7 +9,8 @@ from __future__ import annotations
 import re
 import shlex
 
-from .security import SecretError, reject_secrets
+from .security import reject_secrets
+
 
 class PolicyError(ValueError):
     pass
@@ -46,7 +47,7 @@ _DROPPER_CODE = [
     re.compile(r"\bexec\s*\(|\beval\s*\(|(?<!re\.)(?<!:)\bcompile\s*\("),
 ]
 
-_LONG_B64 = re.compile(r"[A-Za-z0-9+/]{%d,}={0,2}" % MAX_BASE64_RUN)
+_LONG_B64 = re.compile(rf"[A-Za-z0-9+/]{{{MAX_BASE64_RUN},}}={{0,2}}")
 
 ALLOWED_EVAL_HEADS = {
     "true", "false", "test", "python", "python3", "pytest",
@@ -121,6 +122,29 @@ def _network_pip_install(parts: list[str]) -> bool:
             return not _LOCAL_PIP.search(rest)
     return False
 
+
+def _network_pkg_reason(parts: list[str]) -> str | None:
+    """Deny registry fetches in eval.cmd. Tree recipes (tsc, cargo check, go test) stay."""
+    if _network_pip_install(parts):
+        return "eval network pip install denied"
+    lower = [p.lower() for p in parts]
+    if not lower:
+        return None
+    head = _norm_head(parts[0])
+    flags = {p for p in lower if p.startswith("-")}
+    if head == "npm":
+        rest = lower[1:]
+        if rest and rest[0] in ("install", "i", "ci", "add"):
+            return "eval network npm install denied"
+    if head == "go" and len(lower) > 1 and lower[1] == "get":
+        return "eval network go get denied"
+    if head == "cargo" and len(lower) > 1:
+        if lower[1] == "add":
+            return "eval network cargo add denied"
+        if lower[1] == "install" and "--path" not in flags:
+            return "eval network cargo install denied"
+    return None
+
 _ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.")
 ALLOWED_EVAL_ENV = {
     "GOTOOLCHAIN",
@@ -172,8 +196,9 @@ def eval_allowed(cmd: str, *, heads: set[str] | None = None) -> tuple[bool, str]
         return False, f"eval head denied: {head}"
     if head not in allowed:
         return False, f"eval head not allowlisted: {head}"
-    if _network_pip_install(parts):
-        return False, "eval network pip install denied"
+    net = _network_pkg_reason(parts)
+    if net:
+        return False, net
     lower = {p.lower() for p in parts}
     if lower & DENIED_EVAL_TOKENS:
         return False, "eval token denied"
@@ -187,7 +212,8 @@ def eval_allowed(cmd: str, *, heads: set[str] | None = None) -> tuple[bool, str]
 
 
 def reject_eval(cmd: str | None) -> None:
-    if not (cmd or "").strip():
+    cmd = cmd or ""
+    if not cmd.strip():
         return
     reject_secrets(cmd)
     _scan_dropper(cmd, "eval")
