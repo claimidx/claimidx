@@ -538,6 +538,12 @@ def test_mcp_ingest_schema_exposes_own():
     assert "own" in pub["inputSchema"]["properties"]
 
 
+def test_mcp_confirm_schema_includes_cwd():
+    """CLI confirm --cwd. MCP claimidx_confirm must advertise cwd so tree evals can replay."""
+    spec = next(t for t in TOOLS if t["name"] == "claimidx_confirm")
+    assert "cwd" in spec["inputSchema"]["properties"]
+
+
 def test_mcp_verify_defaults_to_dry_run(tmp_path, monkeypatch):
     """MCP handshake names batch replay. claimidx_verify must exist and default dry_run so it does not pip-install."""
     import json
