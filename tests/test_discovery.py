@@ -284,7 +284,8 @@ def test_wheel_excludes_stripe_hook(tmp_path):
     from claimidx.discovery import ROOT
 
     assert not (ROOT / "src" / "claimidx" / "stripe_hook.py").exists()
-    assert (ROOT / "extras" / "stripe_hook.py").is_file()
+    # The operator drop-in under extras/ is untracked; when it exists locally
+    # the wheel must still exclude it, and its absence must not break the build.
     shutil.rmtree(ROOT / "build", ignore_errors=True)
     out = tmp_path / "dist"
     out.mkdir()
