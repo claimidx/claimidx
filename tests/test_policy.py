@@ -60,6 +60,14 @@ def test_eval_heads_windows_and_uv():
     assert eval_allowed("uv run pytest")[0]
     ok, reason = eval_allowed(r"C:\Windows\System32\cmd.exe /c echo hi")
     assert not ok and "denied" in reason
+    net, net_why = eval_allowed("python -m pip install evilpkg")
+    assert not net and "network" in net_why
+    local, _ = eval_allowed("python -m pip install --no-build-isolation -e .")
+    assert local
+    uv_net, uv_why = eval_allowed("uv pip install evilpkg")
+    assert not uv_net and "network" in uv_why
+    quoted, _ = eval_allowed("python -c \"assert 'pip install' in t and 'git clone' not in t\"")
+    assert quoted
 
 
 def test_eval_cargo_docker_and_env_prefix():

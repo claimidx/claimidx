@@ -108,6 +108,19 @@ def _norm_head(token: str) -> str:
     return name.lower()
 
 
+# Replay must not fetch packages. Local editable installs still prove a tree.
+_LOCAL_PIP = re.compile(r"\bpip\b.+\binstall\b.*(\s-e\s|\s\.(?:\s|$))", re.I)
+
+
+def _network_pip_install(parts: list[str]) -> bool:
+    """True when argv is `pip install <pkg>` / `uv pip install <pkg>`, not python -c text."""
+    lower = [p.lower() for p in parts]
+    for i, p in enumerate(lower):
+        if p == "pip" and i + 1 < len(lower) and lower[i + 1] == "install":
+            rest = " ".join(lower[i:])
+            return not _LOCAL_PIP.search(rest)
+    return False
+
 _ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.")
 ALLOWED_EVAL_ENV = {
     "GOTOOLCHAIN",
@@ -159,6 +172,8 @@ def eval_allowed(cmd: str, *, heads: set[str] | None = None) -> tuple[bool, str]
         return False, f"eval head denied: {head}"
     if head not in allowed:
         return False, f"eval head not allowlisted: {head}"
+    if _network_pip_install(parts):
+        return False, "eval network pip install denied"
     lower = {p.lower() for p in parts}
     if lower & DENIED_EVAL_TOKENS:
         return False, "eval token denied"

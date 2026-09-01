@@ -267,6 +267,22 @@ def test_fail_note(tmp_path: Path, capsys):
     assert "setuptools 84 dropped it" in capsys.readouterr().out
 
 
+def test_fail_note_rejects_secret(tmp_path: Path, capsys):
+    """fail --note is persisted on the claim; a secret-shaped token must not land."""
+    db = str(tmp_path / "ix.sqlite")
+    assert main(["--db", db, "--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'failsec'", "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install failsec", "--eval", "true"]) == 0
+    cid = capsys.readouterr().out.strip()
+    token = "sk-" + "a" * 24
+    rc = main(["--db", db, "--fmt", "json", "fail", cid, "--note", token])
+    err = capsys.readouterr().err
+    assert rc != 0
+    assert "secret" in err.lower()
+    assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
+    shown = capsys.readouterr().out
+    assert token not in shown
+    assert '"nf": 0' in shown
+
+
 def test_serve_warns_on_public_bind_without_token(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr("claimidx.api.run", lambda **kwargs: None)
     rc = main(["--db", str(tmp_path / "ix.sqlite"), "serve", "--host", "0.0.0.0", "--port", "9"])
