@@ -313,6 +313,7 @@ def cmd_verify(ns: argparse.Namespace) -> int:
         ledger=ns.ledger,
         runnable=ns.runnable,
         harness_mode=ns.harness,
+        cwd=ns.cwd,
     )
     print(json.dumps(report, default=str, indent=2 if ns.fmt == "json" else None))
     if report["counts"].get("fail"):
@@ -745,6 +746,7 @@ def build_parser() -> argparse.ArgumentParser:
     vf.add_argument("--ledger", help="optional public jsonl to project nc/nf/st into")
     vf.add_argument("--runnable", action="store_true", help="only self-contained python -c evals; confirm or fail, do not pick tree recipes")
     vf.add_argument("--harness", action="store_true", help="two-state pin replay: confirm only if unpinned misses and pin holds; skip if the eval cannot prove the pin; fail only on a proven pin miss")
+    vf.add_argument("--cwd", help="working directory for tree-scoped evals (default: isolated scratch)")
     vf.set_defaults(func=cmd_verify, dry_run=True)
     rj = sub.add_parser("reject"); rj.add_argument("id"); rj.add_argument("--own"); rj.set_defaults(func=cmd_reject)
     s = sub.add_parser("show"); s.add_argument("id"); s.set_defaults(func=cmd_show)

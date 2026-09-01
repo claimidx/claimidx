@@ -618,6 +618,12 @@ def test_mcp_verify_defaults_to_dry_run(tmp_path, monkeypatch):
     assert calls == []
 
 
+def test_mcp_verify_schema_includes_cwd():
+    """PROTOCOL --cwd. MCP claimidx_verify must advertise cwd so tree evals can replay."""
+    spec = next(t for t in TOOLS if t["name"] == "claimidx_verify")
+    assert "cwd" in spec["inputSchema"]["properties"]
+
+
 def test_mcp_verify_schema_says_how_to_run_evals():
     """tools/list said dry_run=true lists; omitted dry_run=false so MCP agents never apply."""
     import json

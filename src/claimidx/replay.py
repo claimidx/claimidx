@@ -505,6 +505,7 @@ def run(
     ledger: str | Path | None = None,
     runnable: bool = False,
     harness_mode: bool = False,
+    cwd: str | Path | None = None,
 ) -> dict:
     actor = resolve_owner(own)
     seen_st = load_seen()
@@ -533,11 +534,14 @@ def run(
             ],
         }
     scratch_root = Path(tempfile.mkdtemp(prefix="cix-verify-"))
+    tree = Path(cwd) if cwd else None
     try:
         for c in chosen:
             work = scratch_root / c.id
             work.mkdir()
-            decision = harness(c, work) if harness_mode else decide(c, scratch=work)
+            # Pin/harness venv stays in the isolated scratch. Tree recipes replay at --cwd.
+            replay_root = tree if tree and not harness_mode else work
+            decision = harness(c, work) if harness_mode else decide(c, scratch=replay_root)
             action = decision["action"]
             if not dry_run:
                 if action == "confirm":

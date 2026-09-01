@@ -129,6 +129,7 @@ def verify(
     harness: bool = False,
     own: str | None = None,
     db: str | os.PathLike[str] | None = None,
+    cwd: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     """Batch replay. dry_run defaults True: list claims; do not run evals, venv, or pip."""
     from .replay import run
@@ -143,4 +144,5 @@ def verify(
         dry_run=dry_run,
         runnable=runnable,
         harness_mode=harness,
+        cwd=cwd,
     )

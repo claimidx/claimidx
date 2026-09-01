@@ -389,6 +389,36 @@ def test_verify_confirms_python_c(tmp_path: Path, capsys, monkeypatch):
     assert '"st": "confirmed"' in shown or '"nc": 1' in shown
 
 
+def test_verify_cwd_replays_tree_recipe(tmp_path: Path, capsys, monkeypatch):
+    """PROTOCOL --cwd. Empty scratch cannot see the tree; --cwd is the replay root."""
+    import json
+    import sys
+
+    monkeypatch.setenv("CLAIMIDX_VERIFY_SEEN", str(tmp_path / "seen.json"))
+    db = str(tmp_path / "ix.sqlite")
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (tree / "marker.txt").write_text("ok", encoding="utf-8")
+    err = "ModuleNotFoundError: No module named 'vcwd'"
+    rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
+    eval_cmd = 'python -c "open(\'marker.txt\').read()"'
+    assert main([
+        "--db", db, "--fmt", "id", "publish",
+        "--err", err, "--eco", "py", "--rt", rt,
+        "--fix-k", "patch", "--fix-b", "pass", "--eval", eval_cmd,
+    ]) == 0
+    cid = capsys.readouterr().out.strip()
+    rc = main(["--db", db, "--fmt", "json", "verify", "--apply", "--id", cid, "-k", "1"])
+    miss = json.loads(capsys.readouterr().out)
+    assert rc == 2 or miss["counts"].get("fail") or miss["counts"].get("skip")
+    assert miss["counts"].get("confirm", 0) == 0
+    rc = main(["--db", db, "--fmt", "json", "verify", "--apply", "--cwd", str(tree), "--id", cid, "-k", "1"])
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    held = json.loads(out)
+    assert held["counts"].get("confirm") == 1
+
+
 def test_cli_verify_defaults_to_dry_run(tmp_path: Path, capsys, monkeypatch):
     """CLI verify without --apply must preview. MCP and Python already default dry_run true."""
     import json
