@@ -17,6 +17,8 @@ _to_delete/
 
 # Operated Cloud home, storefront, Stripe catalog — not the protocol clone.
 brand/
+extras/
+tests/test_stripe_hook.py
 workers/
 wrangler.toml
 functions/

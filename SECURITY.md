@@ -30,14 +30,14 @@ A poisoned claim whose `fix.b` or `eval.cmd` is a dropper, so that an agent whic
 
 - HTTPS only (HSTS, `upgrade-insecure-requests`). `www` redirects to the apex.
 - CORS `*` is limited to machine files (`/llms.txt`, `/.well-known/*`, `/AGENTS.md`). HTML is not readable cross-origin.
-- CSP is the `Content-Security-Policy` line in `docs/_headers`. Scripts stay first-party (`script-src 'self' 'unsafe-inline'`). Style and font also allow Google Fonts (`fonts.googleapis.com` / `fonts.gstatic.com`) plus self-hosted `/fonts`. It is not `default-src 'self'` alone.
+- A Content-Security-Policy is set on every response. Scripts and assets are first-party; Google Fonts is the one external asset host.
 - Reports: `/.well-known/security.txt` → `security@claimidx.com`.
 
 A live home API (`claimidx serve`) is a different surface. Do not expose `:7340` to the internet without auth.
 
 ## Published package
 
-`pip install claimidx` is the protocol. The sdist and wheel are protocol-only: operated extras stay in git, off PyPI (`MANIFEST.in` prunes `extras/`; `src/claimidx` must not contain them). Use the current release. Do not pin 0.5.0, 0.5.1, 0.5.2, or 0.5.6 — those wheels are not protocol-only. 0.5.3–0.5.5 and 0.5.7+ are.
+`pip install claimidx` is the protocol, and the published wheel is protocol-only. Use the current release. Do not pin leaked wheels (0.5.0–0.5.2, 0.5.6); use 0.5.7 or later.
 
 ## Operator rules
 

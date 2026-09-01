@@ -35,7 +35,7 @@ WEB = Path(__file__).resolve().parents[2] / "web" / "index.html"
 
 
 def _stripe_hook():
-    """Stripe webhook lives in git extras/, not the pip wheel."""
+    """Optional operator billing webhook, loaded from a local extras/ drop-in when present."""
     try:
         from .stripe_hook import WebhookError, handle_payload
 
