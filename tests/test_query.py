@@ -52,6 +52,28 @@ def test_python_ingest_is_local_and_does_not_share(tmp_path, monkeypatch):
     assert again["id"] == out["id"]
 
 
+def test_python_ingest_stores_expect(tmp_path, monkeypatch):
+    """CLI ingest --expect. from claimidx import ingest must store eval.expect."""
+    from claimidx.store import Store
+
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:test")
+    monkeypatch.delenv("CLAIMIDX_HOME_API", raising=False)
+    db = tmp_path / "ix.sqlite"
+    out = ingest(
+        "python -c exit 1 is the proof",
+        fix_k="cmd",
+        fix_b="python -c \"import sys; sys.exit(1)\"",
+        eval="python -c \"import sys; sys.exit(1)\"",
+        expect=1,
+        eco="py",
+        db=db,
+    )
+    assert out["exists"] is False
+    c = Store(db).get(out["id"])
+    assert c is not None
+    assert c.eval.expect == 1
+
+
 def test_python_verify_defaults_to_dry_run(tmp_path, monkeypatch):
     """CLI and MCP can dry-run. In-process from claimidx import verify must exist and default dry_run."""
     import subprocess

@@ -550,6 +550,43 @@ def test_mcp_fail_schema_includes_note():
     assert "note" in spec["inputSchema"]["properties"]
 
 
+def test_mcp_ingest_schema_includes_expect():
+    """CLI ingest --expect. MCP claimidx_ingest/publish must advertise expect so non-zero eval.expect can be stored."""
+    ingest = next(t for t in TOOLS if t["name"] == "claimidx_ingest")
+    pub = next(t for t in TOOLS if t["name"] == "claimidx_publish")
+    assert "expect" in ingest["inputSchema"]["properties"]
+    assert "expect" in pub["inputSchema"]["properties"]
+
+
+def test_mcp_ingest_stores_expect(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:test")
+    monkeypatch.setenv("CLAIMIDX_SHARE", "0")
+    store = Store(tmp_path / "ix.sqlite")
+    rec = handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "tools/call",
+            "params": {
+                "name": "claimidx_ingest",
+                "arguments": {
+                    "err": "MCP ingest omitted expect so eval.expect stayed 0",
+                    "fix_k": "cmd",
+                    "fix_b": "python -c \"import sys; sys.exit(1)\"",
+                    "eval": "python -c \"import sys; sys.exit(1)\"",
+                    "expect": 1,
+                    "eco": "py",
+                    "own": "did:claimidx:test",
+                },
+            },
+        },
+        store,
+    )
+    assert rec.get("result", {}).get("isError") is not True, rec
+    claims = store.all()
+    assert claims and claims[0].eval.expect == 1
+
+
 def test_mcp_verify_defaults_to_dry_run(tmp_path, monkeypatch):
     """MCP handshake names batch replay. claimidx_verify must exist and default dry_run so it does not pip-install."""
     import json

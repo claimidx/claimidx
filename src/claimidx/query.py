@@ -59,6 +59,7 @@ def ingest(
     note: str = "",
     force: bool = False,
     share: bool = False,
+    expect: int = 0,
     db: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     """Write a claim to the local index. Does not share unless share=True.
@@ -101,7 +102,7 @@ def ingest(
         dep=dep,
         tried=tried or [],
         fix=Fix(k=fix_k, b=fix_b),  # type: ignore[arg-type]
-        eval=EvalSpec(cmd=eval),
+        eval=EvalSpec(cmd=eval, expect=int(expect or 0)),
         own=resolve_owner(own),
         note=note or "",
         **extra,
