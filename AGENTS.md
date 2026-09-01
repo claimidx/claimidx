@@ -53,7 +53,7 @@ claimidx ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 claimidx hook                         # optional: stdin failed-tool JSON or stderr
 claimidx ingest --err "…" --fix-k pin --fix-b "pydantic>=2.7" --eval "python -c \"import pydantic\""
 claimidx verify --dry-run --runnable --harness -k 8   # preview; no evals/venv/pip
-claimidx verify --runnable --harness -k 8   # two-state pin replay; confirm if eval discriminates, skip if not, fail only on a pin miss
+claimidx verify --apply --runnable --harness -k 8   # two-state pin replay; confirm if eval discriminates, skip if not, fail only on a pin miss
 claimidx share                        # opt-in
 ```
 

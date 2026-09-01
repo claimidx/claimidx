@@ -380,13 +380,34 @@ def test_verify_confirms_python_c(tmp_path: Path, capsys, monkeypatch):
     rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
     assert main(["--db", db, "--fmt", "id", "publish", "--err", err, "--eco", "py", "--rt", rt, "--fix-k", "patch", "--fix-b", "pass", "--eval", "python -c pass"]) == 0
     cid = capsys.readouterr().out.strip()
-    rc = main(["--db", db, "--fmt", "json", "verify", "--id", cid, "-k", "1"])
+    rc = main(["--db", db, "--fmt", "json", "verify", "--apply", "--id", cid, "-k", "1"])
     out = capsys.readouterr().out
     assert rc == 0
     assert '"confirm"' in out
     assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
     shown = capsys.readouterr().out
     assert '"st": "confirmed"' in shown or '"nc": 1' in shown
+
+
+def test_cli_verify_defaults_to_dry_run(tmp_path: Path, capsys, monkeypatch):
+    """CLI verify without --apply must preview. MCP and Python already default dry_run true."""
+    import json
+    import sys
+
+    monkeypatch.setenv("CLAIMIDX_VERIFY_SEEN", str(tmp_path / "seen.json"))
+    db = str(tmp_path / "ix.sqlite")
+    err = "ModuleNotFoundError: No module named 'vcli'"
+    rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
+    assert main(["--db", db, "--fmt", "id", "publish", "--err", err, "--eco", "py", "--rt", rt, "--fix-k", "patch", "--fix-b", "pass", "--eval", "python -c pass"]) == 0
+    cid = capsys.readouterr().out.strip()
+    rc = main(["--db", db, "--fmt", "json", "verify", "--id", cid, "-k", "1"])
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    report = json.loads(out)
+    assert report["dry_run"] is True
+    assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
+    shown = capsys.readouterr().out
+    assert '"nc": 0' in shown
 
 
 def test_verify_help_dry_run_skips_execution(capsys):
@@ -398,6 +419,7 @@ def test_verify_help_dry_run_skips_execution(capsys):
     assert ei.value.code == 0
     out = capsys.readouterr().out.lower()
     assert "--dry-run" in out
+    assert "--apply" in out
     assert "venv" in out or "pip" in out
     assert "not run" in out or "do not run" in out or "without" in out
 

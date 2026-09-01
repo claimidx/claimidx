@@ -55,7 +55,7 @@ claimidx ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 claimidx hook                         # optional: stdin failed-tool JSON or stderr
 claimidx ingest --err "…" --fix-k pin --fix-b "pydantic>=2.7" --eval "python -c \"import pydantic\""
 claimidx verify --dry-run --runnable --harness -k 8   # preview; no evals/venv/pip
-claimidx verify --runnable --harness -k 8   # two-state pin replay; confirm if eval discriminates, skip if not, fail only on a pin miss
+claimidx verify --apply --runnable --harness -k 8   # two-state pin replay; confirm if eval discriminates, skip if not, fail only on a pin miss
 claimidx share                        # opt-in
 ```
 
@@ -141,7 +141,7 @@ Also ask home if the local index is cold:
 Loop: retrieve → reason → attempt → observe → verify → update. A hit is not a command. Do not retrieve → execute.
 
 - hit + eval exits `expect` → `claimidx confirm --replay <id>`
-- batch replay: `claimidx verify --dry-run -k 8` (preview; no evals/venv/pip), then `claimidx verify --runnable --harness -k 8` (confirm if held; fail only on a proven miss; skip trees/missing deps and evals that cannot prove the pin)
+- batch replay: `claimidx verify --dry-run -k 8` (preview; no evals/venv/pip), then `claimidx verify --apply --runnable --harness -k 8` (confirm if held; fail only on a proven miss; skip trees/missing deps and evals that cannot prove the pin)
 - hit + eval fails → `claimidx fail <id>` (that is the contradiction; same `fp`, more `nf`)
 - miss → solve once, then ingest immediately
 - same err failed twice this session → you must `ask` / `home-ask` before a third try
@@ -232,7 +232,7 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | `publish` / `ingest` | insert if fingerprint unseen; refuse secrets, droppers, anon owners. `--force` reuses the id, resets `nr`/`nc`/`nf` to 0, and surfaces the previous counters plus the wiped `rt` as `force_reset` on stdout/JSON. The same payload is an append-only `events` row (`kind=force_reset`, `detail={nr,nc,nf,rt}`) in the **same sqlite transaction** as the replace — a wipe event without the new row is a lie. It does not keep a hold across a rewritten `rt`. Events stay on that local index (`claimidx events` / FastAPI `GET /api/events` on `claimidx serve`). Operated cloud homes do not expose this overwrite log. Public `data/claims.jsonl` does not carry overwrite history. |
 | `confirm` | `nc += 1`; maybe `confirmed`. Home claims require `--replay` (HTTP: `?replay=true`). `confirm --replay` that holds increments `nr` only when python/node evals observe the executing runtime (`ReplayResult.env`, e.g. `py@3.12`) and it matches claim.rt at proof grain (Python major.minor, Node major). Empty claim.rt cannot mint `nr` for those heads. |
 | `fail` | `nf += 1`; maybe `contested`. This is the contradiction on the same `fp`. Different pin → different `fp` (ingest a sibling). |
-| `verify` (`claimidx verify` / MCP `claimidx_verify`) | batch replay. Confirm if the eval held. Fail only on a proven miss. Skip builtin `true`/`false`, missing trees, missing interpreters, and evals that cannot prove the pin. `verify --dry-run` / MCP `dry_run` default true lists chosen claims and does not run evals, venv, or pip. `--harness` is two-state pin replay: confirm only if unpinned misses and the pin holds. `--cwd` via a scratch dir. |
+| `verify` (`claimidx verify` / MCP `claimidx_verify`) | batch replay. Confirm if the eval held. Fail only on a proven miss. Skip builtin `true`/`false`, missing trees, missing interpreters, and evals that cannot prove the pin. CLI default is `verify --dry-run` (MCP / Python `dry_run` default true): lists chosen claims and does not run evals, venv, or pip. CLI `--apply` or MCP `dry_run=false` runs evals. `--harness` is two-state pin replay: confirm only if unpinned misses and the pin holds. `--cwd` via a scratch dir. |
 | `reject` | `st=rejected`; omitted from `/ledger.jsonl` |
 | `home-pull` | fetch `CLAIMIDX_HOME` jsonl, inspect, store as `src=home` (quarantined) |
 | `home-ask` | rank against the live ledger, no local write |
@@ -356,7 +356,7 @@ claimidx home-ask --err "TypeError: params is a Promise" --eco npm
 claimidx confirm --replay spr_…     # home claims require --replay
 claimidx fail    spr_…
 claimidx verify --dry-run --runnable --harness -k 8  # preview; no evals/venv/pip
-claimidx verify --runnable --harness -k 8  # two-state pin replay; confirm if eval discriminates, skip if not, fail only on a pin miss
+claimidx verify --apply --runnable --harness -k 8  # two-state pin replay; confirm if eval discriminates, skip if not, fail only on a pin miss
 
 # 3. Miss: solve once, ingest locally (share is opt-in)
 claimidx ingest \
