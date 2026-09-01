@@ -581,6 +581,16 @@ def test_mcp_verify_defaults_to_dry_run(tmp_path, monkeypatch):
     assert calls == []
 
 
+def test_mcp_verify_schema_says_how_to_run_evals():
+    """tools/list said dry_run=true lists; omitted dry_run=false so MCP agents never apply."""
+    import json
+
+    spec = next(t for t in TOOLS if t["name"] == "claimidx_verify")
+    blob = json.dumps(spec).lower()
+    assert "dry_run" in blob
+    assert "false" in blob
+
+
 def test_mcp_server_card_lists_every_tool():
     """Crawlers that read the MCP card must see the same tools as tools/list."""
     import json
