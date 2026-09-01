@@ -6,10 +6,20 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    Response,
+)
 from pydantic import BaseModel, Field
 
+from . import __version__
+from . import tokens as home_tokens
 from .dense import encode
+from .discovery import LINK_HEADER, ROOT, ROUTES
+from .discovery import resolve as resolve_discovery
 from .fingerprint import classify, fingerprint, normalize_error
 from .match import hit_row, rank
 from .models import Claim, EvalSpec, Fix
@@ -17,10 +27,8 @@ from .policy import PolicyError, require_identity
 from .public import refine_eval
 from .security import SecretError
 from .store import Store, force_reset_emits, force_reset_from
-from .team import resolve_owner, whoami as team_whoami
-from . import __version__
-from . import tokens as home_tokens
-from .discovery import LINK_HEADER, ROOT, ROUTES, resolve as resolve_discovery
+from .team import resolve_owner
+from .team import whoami as team_whoami
 
 WEB = Path(__file__).resolve().parents[2] / "web" / "index.html"
 
@@ -29,6 +37,7 @@ def _stripe_hook():
     """Stripe webhook lives in git extras/, not the pip wheel."""
     try:
         from .stripe_hook import WebhookError, handle_payload
+
         return WebhookError, handle_payload
     except ImportError:
         pass
@@ -124,17 +133,20 @@ def create_app(db: str | None = None) -> FastAPI:
             base = str(request.base_url).rstrip("/")
             data["url"] = base
             if isinstance(data.get("supportedInterfaces"), list):
-                data["supportedInterfaces"] = [{
-                    "url": base,
-                    "protocolBinding": "HTTP+JSON",
-                    "protocolVersion": "0.3.0",
-                }]
+                data["supportedInterfaces"] = [
+                    {
+                        "url": base,
+                        "protocolBinding": "HTTP+JSON",
+                        "protocolVersion": "0.3.0",
+                    }
+                ]
             if isinstance(data.get("serverInfo"), dict):
                 data.setdefault("websiteUrl", base)
             return JSONResponse(data, media_type=media)
         return FileResponse(path, media_type=media)
 
     for _path in ROUTES:
+
         def _serve(request: Request, p: str = _path):
             return _mount_discovery(p, request)
 
@@ -197,7 +209,11 @@ def create_app(db: str | None = None) -> FastAPI:
         hits = rank(q, store.all(), k=payload.k)
         store.log("ask", resolve_owner(None), hits[0][0].id if hits else "")
         return {
-            "hit": bool(hits), "fp": fp, "cls": cls, "err": normalize_error(payload.err), "n": len(hits),
+            "hit": bool(hits),
+            "fp": fp,
+            "cls": cls,
+            "err": normalize_error(payload.err),
+            "n": len(hits),
             "claims": [hit_row(q, c, s) for c, s in hits],
         }
 
@@ -210,7 +226,11 @@ def create_app(db: str | None = None) -> FastAPI:
             raise HTTPException(403, str(e)) from e
         if payload.force:
             cls, fp, existing = store.match_amend(
-                err=payload.err, cls=payload.cls, eco=payload.eco or "", rt=payload.rt or "", dep=payload.dep,
+                err=payload.err,
+                cls=payload.cls,
+                eco=payload.eco or "",
+                rt=payload.rt or "",
+                dep=payload.dep,
             )
         else:
             cls = payload.cls or classify(payload.err)
@@ -234,9 +254,19 @@ def create_app(db: str | None = None) -> FastAPI:
                 reset = force_reset_from(existing[0])
         try:
             c = Claim(
-                fp=fp, cls=cls, err=normalize_error(payload.err), eco=payload.eco, rt=payload.rt, dep=payload.dep,
-                tool=payload.tool, tried=payload.tried, fix=Fix(k=payload.fix_k, b=payload.fix_b),  # type: ignore[arg-type]
-                eval=EvalSpec(cmd=refine_eval(payload.eval, fix_k=payload.fix_k, fix_b=payload.fix_b, dep=payload.dep, eco=payload.eco), expect=payload.expect), own=own, model=payload.model, note=payload.note,
+                fp=fp,
+                cls=cls,
+                err=normalize_error(payload.err),
+                eco=payload.eco,
+                rt=payload.rt,
+                dep=payload.dep,
+                tool=payload.tool,
+                tried=payload.tried,
+                fix=Fix(k=payload.fix_k, b=payload.fix_b),  # type: ignore[arg-type]
+                eval=EvalSpec(cmd=refine_eval(payload.eval, fix_k=payload.fix_k, fix_b=payload.fix_b, dep=payload.dep, eco=payload.eco), expect=payload.expect),
+                own=own,
+                model=payload.model,
+                note=payload.note,
                 src="home",
                 **extra,
             )
@@ -317,4 +347,5 @@ def create_app(db: str | None = None) -> FastAPI:
 
 def run(host: str = "127.0.0.1", port: int = 7340, db: str | None = None) -> None:
     import uvicorn
+
     uvicorn.run(create_app(db), host=host, port=port, log_level="info")

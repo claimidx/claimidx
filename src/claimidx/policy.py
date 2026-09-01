@@ -50,26 +50,94 @@ _DROPPER_CODE = [
 _LONG_B64 = re.compile(rf"[A-Za-z0-9+/]{{{MAX_BASE64_RUN},}}={{0,2}}")
 
 ALLOWED_EVAL_HEADS = {
-    "true", "false", "test", "python", "python3", "pytest",
-    "npx", "npm", "node", "go", "uv", "cargo", "rustc", "docker",
+    "true",
+    "false",
+    "test",
+    "python",
+    "python3",
+    "pytest",
+    "npx",
+    "npm",
+    "node",
+    "go",
+    "uv",
+    "cargo",
+    "rustc",
+    "docker",
 }
 # cmd-kind fix.b is data, but naive agents may run it. Wider than eval; still no shell.
 ALLOWED_CMD_HEADS = ALLOWED_EVAL_HEADS | {
-    "git", "pip", "pip3", "bundle", "bundler", "composer", "make", "mvn", "gradle",
-    "alembic", "pnpm", "yarn", "yarnpkg", "apt-get", "apt", "keytool", "java", "javac",
-    "helm", "kubectl", "poetry", "pipenv", "corepack", "bun",
+    "git",
+    "pip",
+    "pip3",
+    "bundle",
+    "bundler",
+    "composer",
+    "make",
+    "mvn",
+    "gradle",
+    "alembic",
+    "pnpm",
+    "yarn",
+    "yarnpkg",
+    "apt-get",
+    "apt",
+    "keytool",
+    "java",
+    "javac",
+    "helm",
+    "kubectl",
+    "poetry",
+    "pipenv",
+    "corepack",
+    "bun",
 }
 
 DENIED_EVAL_HEADS = {
-    "curl", "wget", "nc", "ncat", "ssh", "scp", "rsync", "sudo",
-    "bash", "sh", "zsh", "pwsh", "powershell", "cmd", "mshta",
-    "certutil", "python2", "perl", "ruby", "php", "lua",
+    "curl",
+    "wget",
+    "nc",
+    "ncat",
+    "ssh",
+    "scp",
+    "rsync",
+    "sudo",
+    "bash",
+    "sh",
+    "zsh",
+    "pwsh",
+    "powershell",
+    "cmd",
+    "mshta",
+    "certutil",
+    "python2",
+    "perl",
+    "ruby",
+    "php",
+    "lua",
 }
 
 DENIED_EVAL_TOKENS = {
-    "sudo", "rm", "dd", "mkfs", "chmod", "chown", "curl", "wget",
-    "ssh", "nc", "ncat", "exec", "eval", "source", "os.system",
-    "urllib", "requests", "socket", "subprocess", "pty",
+    "sudo",
+    "rm",
+    "dd",
+    "mkfs",
+    "chmod",
+    "chown",
+    "curl",
+    "wget",
+    "ssh",
+    "nc",
+    "ncat",
+    "exec",
+    "eval",
+    "source",
+    "os.system",
+    "urllib",
+    "requests",
+    "socket",
+    "subprocess",
+    "pty",
 }
 
 
@@ -123,28 +191,6 @@ def _network_pip_install(parts: list[str]) -> bool:
     return False
 
 
-def _network_pkg_reason(parts: list[str]) -> str | None:
-    """Deny registry fetches in eval.cmd. Tree recipes (tsc, cargo check, go test) stay."""
-    if _network_pip_install(parts):
-        return "eval network pip install denied"
-    lower = [p.lower() for p in parts]
-    if not lower:
-        return None
-    head = _norm_head(parts[0])
-    flags = {p for p in lower if p.startswith("-")}
-    if head == "npm":
-        rest = lower[1:]
-        if rest and rest[0] in ("install", "i", "ci", "add"):
-            return "eval network npm install denied"
-    if head == "go" and len(lower) > 1 and lower[1] == "get":
-        return "eval network go get denied"
-    if head == "cargo" and len(lower) > 1:
-        if lower[1] == "add":
-            return "eval network cargo add denied"
-        if lower[1] == "install" and "--path" not in flags:
-            return "eval network cargo install denied"
-    return None
-
 _ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.")
 ALLOWED_EVAL_ENV = {
     "GOTOOLCHAIN",
@@ -196,9 +242,8 @@ def eval_allowed(cmd: str, *, heads: set[str] | None = None) -> tuple[bool, str]
         return False, f"eval head denied: {head}"
     if head not in allowed:
         return False, f"eval head not allowlisted: {head}"
-    net = _network_pkg_reason(parts)
-    if net:
-        return False, net
+    if _network_pip_install(parts):
+        return False, "eval network pip install denied"
     lower = {p.lower() for p in parts}
     if lower & DENIED_EVAL_TOKENS:
         return False, "eval token denied"
@@ -248,11 +293,7 @@ def inspect_claim(*, err: str, fix_k: str, fix_b: str, eval_cmd: str, note: str 
     if bad_pin:
         raise PolicyError(bad_pin)
     if fix_k == "cmd":
-        ok, reason = (
-            eval_allowed(fix_b, heads=ALLOWED_CMD_HEADS)
-            if len(fix_b) <= MAX_EVAL
-            else (False, "cmd fix too long")
-        )
+        ok, reason = eval_allowed(fix_b, heads=ALLOWED_CMD_HEADS) if len(fix_b) <= MAX_EVAL else (False, "cmd fix too long")
         if not ok:
             if not _seed_cmd_ok(fix_b):
                 raise PolicyError(f"cmd fix denied: {reason.replace('eval head', 'cmd head', 1)}")

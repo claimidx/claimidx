@@ -4,15 +4,16 @@ import argparse
 import json
 import os
 import sys
+from typing import Any
 
 from . import __version__
 from .dense import encode
 from .fingerprint import classify, fingerprint, normalize_error
 from .match import annotate, hit_row, rank
 from .models import Claim, EvalSpec, Fix
-from .store import DEFAULT_DB, Store, force_reset_emits, force_reset_from
 from .policy import PolicyError
 from .security import SecretError
+from .store import DEFAULT_DB, Store, force_reset_emits, force_reset_from
 from .team import activity, load_roster, resolve_owner, whoami
 
 
@@ -37,8 +38,10 @@ def encode_miss(out: dict) -> str:
 
 
 def _ask_hits(store: Store, ns: argparse.Namespace, err: str):
-    q = {"err": err, "cls": getattr(ns, "cls", None) or classify(err), "eco": ns.eco or "", "rt": ns.rt or "", "dep": ns.dep or []}
-    q["fp"] = fingerprint(err=q["err"], cls=q["cls"], eco=q["eco"], rt=q["rt"], dep=q["dep"])
+    cls = getattr(ns, "cls", None) or classify(err)
+    eco, rt, dep = ns.eco or "", ns.rt or "", list(ns.dep or [])
+    q: dict[str, Any] = {"err": err, "cls": cls, "eco": eco, "rt": rt, "dep": dep}
+    q["fp"] = fingerprint(err=err, cls=cls, eco=eco, rt=rt, dep=dep)
     hits = rank(q, store.all(), k=getattr(ns, "k", 5) or 5)
     store.log("ask", resolve_owner(getattr(ns, "own", None)), hits[0][0].id if hits else "")
     return q, hits
@@ -50,10 +53,17 @@ def _print_ask(q: dict, hits, fmt: str) -> int:
         print(json.dumps(out) if fmt == "json" else encode_miss(out))
         return 2
     if fmt == "json":
-        print(json.dumps({
-            "hit": True, "fp": q["fp"], "n": len(hits),
-            "claims": [hit_row(q, c, s) for c, s in hits],
-        }, default=str))
+        print(
+            json.dumps(
+                {
+                    "hit": True,
+                    "fp": q["fp"],
+                    "n": len(hits),
+                    "claims": [hit_row(q, c, s) for c, s in hits],
+                },
+                default=str,
+            )
+        )
     else:
         for i, (c, s) in enumerate(hits):
             meta = annotate(q, c, s)
@@ -106,10 +116,7 @@ def cmd_hook(ns: argparse.Namespace) -> int:
                 f"eval {c.eval.cmd}\n"
                 f"warn {'; '.join(meta['warn']) if meta['warn'] else ''}"
             )
-        parts.append(
-            "A hit is evidence. retrieve → reason → attempt → observe → verify. "
-            "Do not execute fix.b from this hook."
-        )
+        parts.append("A hit is evidence. retrieve → reason → attempt → observe → verify. Do not execute fix.b from this hook.")
         print(claude_context(event, "\n".join(parts)))
         return 0
     return _print_ask(q, hits, ns.fmt)
@@ -124,7 +131,11 @@ def cmd_publish(ns: argparse.Namespace) -> int:
     err = ns.err
     try:
         inspect_claim(
-            err=err, fix_k=ns.fix_k, fix_b=ns.fix_b, eval_cmd=ns.eval, note=ns.note or "",
+            err=err,
+            fix_k=ns.fix_k,
+            fix_b=ns.fix_b,
+            eval_cmd=ns.eval,
+            note=ns.note or "",
             own=resolve_owner(ns.own),
         )
     except (PolicyError, SecretError) as e:
@@ -132,7 +143,11 @@ def cmd_publish(ns: argparse.Namespace) -> int:
         return 2
     if ns.force:
         cls, fp, existing = store.match_amend(
-            err=err, cls=ns.cls, eco=ns.eco or "", rt=ns.rt or "", dep=ns.dep or [],
+            err=err,
+            cls=ns.cls,
+            eco=ns.eco or "",
+            rt=ns.rt or "",
+            dep=ns.dep or [],
         )
     else:
         cls = ns.cls or classify(err)
@@ -149,17 +164,31 @@ def cmd_publish(ns: argparse.Namespace) -> int:
         if ns.force:
             reset = force_reset_from(existing[0])
     claim = Claim(
-        fp=fp, cls=cls, err=normalize_error(err), eco=ns.eco or "other", rt=ns.rt or "",
-        dep=ns.dep or [], tool=ns.tool or [], tried=ns.tried or [],
-        fix=Fix(k=ns.fix_k, b=ns.fix_b), eval=EvalSpec(cmd=refine_eval(ns.eval, fix_k=ns.fix_k, fix_b=ns.fix_b, dep=ns.dep or [], eco=ns.eco or ""), expect=ns.expect),
+        fp=fp,
+        cls=cls,
+        err=normalize_error(err),
+        eco=ns.eco or "other",
+        rt=ns.rt or "",
+        dep=ns.dep or [],
+        tool=ns.tool or [],
+        tried=ns.tried or [],
+        fix=Fix(k=ns.fix_k, b=ns.fix_b),
+        eval=EvalSpec(cmd=refine_eval(ns.eval, fix_k=ns.fix_k, fix_b=ns.fix_b, dep=ns.dep or [], eco=ns.eco or ""), expect=ns.expect),
         own=resolve_owner(ns.own),
-        model=ns.model or "", note=ns.note or "",
+        model=ns.model or "",
+        note=ns.note or "",
         **extra,
     )
     store.publish(claim, claim.own, reset)
     from .home import maybe_share
 
     shared = maybe_share(store, claim)
+    from .public import eval_is_proof, ingest_warnings
+
+    proof = eval_is_proof(claim.eval.cmd)
+    warns = ingest_warnings(err, claim.eval.cmd)
+    for w in warns:
+        print(f"# {w}", file=sys.stderr)
     if force_reset_emits(reset):
         print(
             f"force reset nr={reset['nr']} nc={reset['nc']} nf={reset['nf']} rt={reset.get('rt') or ''}",
@@ -167,6 +196,9 @@ def cmd_publish(ns: argparse.Namespace) -> int:
         )
     if ns.fmt == "json":
         payload = json.loads(claim.model_dump_json())
+        payload["eval_proof"] = proof
+        if warns:
+            payload["warn"] = "; ".join(warns)
         if shared:
             payload["share"] = shared
         if force_reset_emits(reset):
@@ -191,6 +223,7 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
     replay_info = None
     if getattr(ns, "replay", False):
         from .sandbox import replay, replay_records_hold
+
         result = replay(c.eval.cmd, c.eval.expect, cwd=getattr(ns, "cwd", None))
         replay_info = result.as_dict()
         if result.is_hint():
@@ -264,8 +297,13 @@ def cmd_scan(ns: argparse.Namespace) -> int:
 
     try:
         inspect_claim(
-            err=ns.err, fix_k=ns.fix_k, fix_b=ns.fix_b, eval_cmd=ns.eval, note=ns.note,
-            own="did:claimidx:seed", src="seed",
+            err=ns.err,
+            fix_k=ns.fix_k,
+            fix_b=ns.fix_b,
+            eval_cmd=ns.eval,
+            note=ns.note,
+            own="did:claimidx:seed",
+            src="seed",
         )
     except (PolicyError, SecretError) as e:
         print(json.dumps({"ok": False, "reason": str(e)}))
@@ -358,6 +396,7 @@ def cmd_seed(ns: argparse.Namespace) -> int:
         n = store.import_jsonl(ns.path)
     else:
         from .seed_data import materialize
+
         n = 0
         for c in materialize():
             store.put(c)
@@ -372,8 +411,8 @@ def cmd_export(ns: argparse.Namespace) -> int:
 
 
 def cmd_serve(ns: argparse.Namespace) -> int:
-    from .api import run
     from . import tokens as home_tokens
+    from .api import run
 
     host = (ns.host or "").strip().lower()
     if host not in {"127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1"} and not home_tokens.write_protection_enabled():
@@ -498,7 +537,6 @@ def cmd_init(ns: argparse.Namespace) -> int:
     from . import config
     from .home import HomeError, pull
     from .seed_data import materialize
-
     from .team import agent_slug, did_for_agent
 
     raw_agent = (ns.agent or os.environ.get("CLAIMIDX_AGENT") or "").strip()
@@ -542,22 +580,28 @@ def cmd_init(ns: argparse.Namespace) -> int:
 
         harness = install_harness(own=own, agent=agent)
         hook = (harness or {}).get("claude")
-    print(json.dumps({
-        "config": str(path),
-        "owner": own,
-        "agent": agent,
-        "seeded": n,
-        "db": str(store.path),
-        "pull": pulled,
-        "whoami": whoami(own),
-        "hook": hook,
-        "harness": harness,
-    }, default=str, indent=2))
+    print(
+        json.dumps(
+            {
+                "config": str(path),
+                "owner": own,
+                "agent": agent,
+                "seeded": n,
+                "db": str(store.path),
+                "pull": pulled,
+                "whoami": whoami(own),
+                "hook": hook,
+                "harness": harness,
+            },
+            default=str,
+            indent=2,
+        )
+    )
     return 0
 
 
 def cmd_doctor(ns: argparse.Namespace) -> int:
-    from . import config, __version__
+    from . import __version__, config
     from .home import DEFAULT_LEDGER, api_url, ledger_url
     from .sandbox import replay
 
@@ -722,7 +766,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"claimidx {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    a = sub.add_parser("ask"); a.add_argument("--err", required=True); a.add_argument("--cls"); a.add_argument("--eco"); a.add_argument("--rt"); a.add_argument("--dep", action=_AppendCsv, default=None); a.add_argument("-k", type=int, default=5); a.set_defaults(func=cmd_ask)
+    a = sub.add_parser("ask")
+    a.add_argument("--err", required=True)
+    a.add_argument("--cls")
+    a.add_argument("--eco")
+    a.add_argument("--rt")
+    a.add_argument("--dep", action=_AppendCsv, default=None)
+    a.add_argument("-k", type=int, default=5)
+    a.set_defaults(func=cmd_ask)
     hk = sub.add_parser("hook", help="Harness sensor: stdin failed-tool JSON or stderr → ask. Never applies fix.b.")
     hk.add_argument("--err")
     hk.add_argument("--cls")
@@ -732,10 +783,41 @@ def build_parser() -> argparse.ArgumentParser:
     hk.add_argument("-k", type=int, default=5)
     hk.add_argument("--install", action="store_true", help="Write Claude Code PostToolUseFailure into settings.json")
     hk.set_defaults(func=cmd_hook)
-    pub = sub.add_parser("publish"); pub.add_argument("--err", required=True); pub.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"]); pub.add_argument("--fix-b", required=True); pub.add_argument("--eval", required=True); pub.add_argument("--expect", type=int, default=0); pub.add_argument("--cls"); pub.add_argument("--eco"); pub.add_argument("--rt"); pub.add_argument("--dep", action=_AppendCsv, default=None); pub.add_argument("--tool", action=_AppendCsv, default=None); pub.add_argument("--tried", action=_AppendTried, default=None); pub.add_argument("--own"); pub.add_argument("--model"); pub.add_argument("--note"); pub.add_argument("--force", action="store_true"); pub.set_defaults(func=cmd_publish)
-    c = sub.add_parser("confirm"); c.add_argument("id"); c.add_argument("--own"); c.add_argument("--replay", action="store_true"); c.add_argument("--cwd"); c.set_defaults(func=cmd_confirm)
-    sc = sub.add_parser("scan"); sc.add_argument("--err", default=""); sc.add_argument("--fix-k", default="constraint"); sc.add_argument("--fix-b", default="ok"); sc.add_argument("--eval", default="true"); sc.add_argument("--note", default=""); sc.set_defaults(func=cmd_scan)
-    f = sub.add_parser("fail"); f.add_argument("id"); f.add_argument("--own"); f.add_argument("--note", default=""); f.set_defaults(func=cmd_fail)
+    pub = sub.add_parser("publish")
+    pub.add_argument("--err", required=True)
+    pub.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"])
+    pub.add_argument("--fix-b", required=True)
+    pub.add_argument("--eval", required=True)
+    pub.add_argument("--expect", type=int, default=0)
+    pub.add_argument("--cls")
+    pub.add_argument("--eco")
+    pub.add_argument("--rt")
+    pub.add_argument("--dep", action=_AppendCsv, default=None)
+    pub.add_argument("--tool", action=_AppendCsv, default=None)
+    pub.add_argument("--tried", action=_AppendTried, default=None)
+    pub.add_argument("--own")
+    pub.add_argument("--model")
+    pub.add_argument("--note")
+    pub.add_argument("--force", action="store_true")
+    pub.set_defaults(func=cmd_publish)
+    c = sub.add_parser("confirm")
+    c.add_argument("id")
+    c.add_argument("--own")
+    c.add_argument("--replay", action="store_true")
+    c.add_argument("--cwd")
+    c.set_defaults(func=cmd_confirm)
+    sc = sub.add_parser("scan")
+    sc.add_argument("--err", default="")
+    sc.add_argument("--fix-k", default="constraint")
+    sc.add_argument("--fix-b", default="ok")
+    sc.add_argument("--eval", default="true")
+    sc.add_argument("--note", default="")
+    sc.set_defaults(func=cmd_scan)
+    f = sub.add_parser("fail")
+    f.add_argument("id")
+    f.add_argument("--own")
+    f.add_argument("--note", default="")
+    f.set_defaults(func=cmd_fail)
     vf = sub.add_parser("verify", help="Replay evals. Default --dry-run lists claims; no evals/venv/pip. --apply to confirm/fail.")
     vf.add_argument("--id", action="append", default=None, help="claim id; repeatable")
     vf.add_argument("-k", type=int, default=8)
@@ -745,33 +827,65 @@ def build_parser() -> argparse.ArgumentParser:
     vf_mode.add_argument("--apply", action="store_false", dest="dry_run", help="run evals; confirm if held, fail on a proven miss")
     vf.add_argument("--ledger", help="optional public jsonl to project nc/nf/st into")
     vf.add_argument("--runnable", action="store_true", help="only self-contained python -c evals; confirm or fail, do not pick tree recipes")
-    vf.add_argument("--harness", action="store_true", help="two-state pin replay: confirm only if unpinned misses and pin holds; skip if the eval cannot prove the pin; fail only on a proven pin miss")
+    vf.add_argument(
+        "--harness",
+        action="store_true",
+        help="two-state pin replay: confirm only if unpinned misses and pin holds; skip if the eval cannot prove the pin; fail only on a proven pin miss",
+    )
     vf.add_argument("--cwd", help="working directory for tree-scoped evals (default: isolated scratch)")
     vf.set_defaults(func=cmd_verify, dry_run=True)
-    rj = sub.add_parser("reject"); rj.add_argument("id"); rj.add_argument("--own"); rj.set_defaults(func=cmd_reject)
-    s = sub.add_parser("show"); s.add_argument("id"); s.set_defaults(func=cmd_show)
+    rj = sub.add_parser("reject")
+    rj.add_argument("id")
+    rj.add_argument("--own")
+    rj.set_defaults(func=cmd_reject)
+    s = sub.add_parser("show")
+    s.add_argument("id")
+    s.set_defaults(func=cmd_show)
     ls = sub.add_parser("ls")
     ls.add_argument("--st")
     ls.add_argument("--eco")
     ls.add_argument("--own")
     ls.add_argument("-k", "--limit", dest="k", type=int, default=50, help="max rows (also --limit)")
     ls.set_defaults(func=cmd_ls)
-    fp = sub.add_parser("fp"); fp.add_argument("--err", required=True); fp.add_argument("--cls"); fp.add_argument("--eco"); fp.add_argument("--rt"); fp.add_argument("--dep", action=_AppendCsv, default=None); fp.set_defaults(func=cmd_fp)
-    st = sub.add_parser("stats"); st.set_defaults(func=cmd_stats)
-    sd = sub.add_parser("seed"); sd.add_argument("--path"); sd.set_defaults(func=cmd_seed)
-    ex = sub.add_parser("export"); ex.add_argument("path"); ex.set_defaults(func=cmd_export)
-    sv = sub.add_parser("serve"); sv.add_argument("--host", default="127.0.0.1"); sv.add_argument("--port", type=int, default=7340); sv.set_defaults(func=cmd_serve)
-    w = sub.add_parser("whoami"); w.add_argument("--own"); w.set_defaults(func=cmd_whoami)
-    tm = sub.add_parser("team"); tm.set_defaults(func=cmd_team)
+    fp = sub.add_parser("fp")
+    fp.add_argument("--err", required=True)
+    fp.add_argument("--cls")
+    fp.add_argument("--eco")
+    fp.add_argument("--rt")
+    fp.add_argument("--dep", action=_AppendCsv, default=None)
+    fp.set_defaults(func=cmd_fp)
+    st = sub.add_parser("stats")
+    st.set_defaults(func=cmd_stats)
+    sd = sub.add_parser("seed")
+    sd.add_argument("--path")
+    sd.set_defaults(func=cmd_seed)
+    ex = sub.add_parser("export")
+    ex.add_argument("path")
+    ex.set_defaults(func=cmd_export)
+    sv = sub.add_parser("serve")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--port", type=int, default=7340)
+    sv.set_defaults(func=cmd_serve)
+    w = sub.add_parser("whoami")
+    w.add_argument("--own")
+    w.set_defaults(func=cmd_whoami)
+    tm = sub.add_parser("team")
+    tm.set_defaults(func=cmd_team)
     ing = sub.add_parser("ingest")
     ing.add_argument("--err", required=True)
     ing.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"])
     ing.add_argument("--fix-b", required=True)
     ing.add_argument("--eval", required=True)
     ing.add_argument("--expect", type=int, default=0)
-    ing.add_argument("--cls"); ing.add_argument("--eco"); ing.add_argument("--rt")
-    ing.add_argument("--dep", action=_AppendCsv, default=None); ing.add_argument("--tool", action=_AppendCsv, default=None); ing.add_argument("--tried", action=_AppendTried, default=None)
-    ing.add_argument("--own"); ing.add_argument("--model"); ing.add_argument("--note")
+    ing.add_argument("--cls")
+    ing.add_argument("--eco")
+    ing.add_argument("--rt")
+    ing.add_argument("--dep", action=_AppendCsv, default=None)
+    ing.add_argument("--tool", action=_AppendCsv, default=None)
+    ing.add_argument("--tried", action=_AppendTried, default=None)
+    ing.add_argument("--own")
+    ing.add_argument("--model")
+    ing.add_argument("--note")
     ing.add_argument("--force", action="store_true")
     ing.set_defaults(func=cmd_ingest)
     hp = sub.add_parser("home-pull")

@@ -32,9 +32,7 @@ from .models import Claim
 from .policy import PolicyError
 from .security import SecretError
 
-DEFAULT_LEDGER = (
-    "https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl"
-)
+DEFAULT_LEDGER = "https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl"
 USER_AGENT = f"claimidx-home/{__version__}"
 
 
@@ -224,10 +222,7 @@ def ask_home(query: dict, k: int = 5, url: str | None = None) -> dict[str, Any]:
         "n": len(hits),
         "pool": len(claims),
         "skipped_n": len(skipped),
-        "claims": [
-            {**hit_compact(query, c, s), "own": c.own, "src": "home"}
-            for c, s in hits
-        ],
+        "claims": [{**hit_compact(query, c, s), "own": c.own, "src": "home"} for c, s in hits],
     }
 
 
@@ -247,10 +242,7 @@ def publish_home(claim: Claim, api: str | None = None, token: str | None = None,
     """POST a local claim to a live home API. Never hits GitHub directly."""
     base = (api or api_url()).rstrip("/")
     if not base:
-        raise HomeError(
-            "no CLAIMIDX_HOME_API; print a PR line with home-propose or point "
-            "CLAIMIDX_HOME_API at a `claimidx serve` you control"
-        )
+        raise HomeError("no CLAIMIDX_HOME_API; print a PR line with home-propose or point CLAIMIDX_HOME_API at a `claimidx serve` you control")
     body = {
         "id": claim.id,
         "err": claim.err,
@@ -290,8 +282,12 @@ def share_claim(store, claim: Claim, *, api: str | None = None, token: str | Non
         result = publish_home(claim, api=base, token=token, force=force)
         store.log("home-push", claim.own, claim.id)
         return {"status": "pushed", "id": claim.id, "home": result}
-    from .public import PublicSkip
+    from .public import HINT_WARN, PublicSkip, eval_is_proof
 
+    if not force and not eval_is_proof(claim.eval.cmd):
+        # The public ledger is prior art other agents replay. A `true` eval
+        # cannot be replayed, so it stays local until it carries a recipe.
+        return {"status": "skipped", "id": claim.id, "reason": HINT_WARN + " (or share --force)"}
     try:
         line = propose_line(claim)
     except PublicSkip as e:

@@ -27,6 +27,7 @@ def test_init_offline_seeds_and_writes_config(tmp_path: Path, capsys, monkeypatc
     hook = tmp_path / "claude" / "settings.json"
     assert hook.exists()
     import json
+
     data = json.loads(hook.read_text(encoding="utf-8"))
     blob = json.dumps(data)
     assert "PostToolUseFailure" in blob
@@ -44,7 +45,7 @@ def test_init_wires_cursor_and_grok_mcp(tmp_path: Path, capsys, monkeypatch):
     monkeypatch.setenv("CLAIMIDX_CURSOR_MCP", str(cursor))
     monkeypatch.setenv("CLAIMIDX_GROK_CONFIG", str(grok))
     grok.parent.mkdir(parents=True)
-    grok.write_text("[cli]\ntheme = \"dark\"\n", encoding="utf-8")
+    grok.write_text('[cli]\ntheme = "dark"\n', encoding="utf-8")
     db = str(tmp_path / "ix.sqlite")
     rc = main(["--db", db, "init", "--agent", "wiretest", "--offline"])
     assert rc == 0
@@ -106,7 +107,7 @@ def test_init_updates_mcp_owner_on_reinit(tmp_path: Path, capsys, monkeypatch):
     monkeypatch.setenv("CLAIMIDX_OPENCODE_CONFIG", str(oc))
     monkeypatch.setenv("CLAIMIDX_VSCODE_MCP", str(vs))
     grok.parent.mkdir(parents=True)
-    grok.write_text("[cli]\ntheme = \"dark\"\n", encoding="utf-8")
+    grok.write_text('[cli]\ntheme = "dark"\n', encoding="utf-8")
     oc.parent.mkdir(parents=True)
     oc.write_text('{"mcp": {}}\n', encoding="utf-8")
     db = str(tmp_path / "ix.sqlite")

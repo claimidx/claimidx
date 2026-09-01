@@ -49,7 +49,7 @@ def test_harness_confirms_when_eval_discriminates(tmp_path: Path, monkeypatch):
         stdout = ""
 
     monkeypatch.setattr("claimidx.replay.subprocess.run", lambda *a, **k: R())
-    c = _claim("ModuleNotFoundError: No module named 'demo'", "python -c \"import demo\"", fix_k="pin", fix_b="demo<2")
+    c = _claim("ModuleNotFoundError: No module named 'demo'", 'python -c "import demo"', fix_k="pin", fix_b="demo<2")
     d = harness(c, tmp_path / "h")
     assert d["action"] == "confirm"
     assert d["reason"] == "harness-discriminates"
@@ -70,7 +70,7 @@ def test_harness_skips_when_eval_holds_without_pin(tmp_path: Path, monkeypatch):
         stdout = ""
 
     monkeypatch.setattr("claimidx.replay.subprocess.run", lambda *a, **k: R())
-    c = _claim("ModuleNotFoundError: No module named 'demo'", "python -c \"import demo\"", fix_k="pin", fix_b="demo<2")
+    c = _claim("ModuleNotFoundError: No module named 'demo'", 'python -c "import demo"', fix_k="pin", fix_b="demo<2")
     d = harness(c, tmp_path / "h")
     assert d["action"] == "skip"
     assert d["reason"] == "harness-no-discriminate"
@@ -100,7 +100,7 @@ def test_harness_fails_when_pin_misses_targeted_eval(tmp_path: Path, monkeypatch
     monkeypatch.setattr("claimidx.replay.subprocess.run", lambda *a, **k: R())
     c = _claim(
         "ModuleNotFoundError: No module named 'pandas.util.testing'",
-        "python -c \"from pandas.util.testing import assert_frame_equal\"",
+        'python -c "from pandas.util.testing import assert_frame_equal"',
         fix_k="pin",
         fix_b="pandas<2.0 and numpy<2",
     )
@@ -127,7 +127,7 @@ def test_harness_skips_when_eval_does_not_target_pin(tmp_path: Path, monkeypatch
     monkeypatch.setattr("claimidx.replay.subprocess.run", lambda *a, **k: R())
     c = _claim(
         "ImportError: cannot import name Undefined",
-        "python3 -c \"import app\"",
+        'python3 -c "import app"',
         fix_k="pin",
         fix_b="fastapi>=0.100.0",
     )
@@ -151,7 +151,7 @@ def test_harness_fails_on_pin_regression(tmp_path: Path, monkeypatch):
         stdout = ""
 
     monkeypatch.setattr("claimidx.replay.subprocess.run", lambda *a, **k: R())
-    c = _claim("ModuleNotFoundError: No module named 'demo'", "python -c \"import demo\"", fix_k="pin", fix_b="demo==9")
+    c = _claim("ModuleNotFoundError: No module named 'demo'", 'python -c "import demo"', fix_k="pin", fix_b="demo==9")
     d = harness(c, tmp_path / "h")
     assert d["action"] == "fail"
     assert d["reason"] == "harness-eval-miss"
@@ -173,7 +173,7 @@ def test_harness_skips_broken_install(tmp_path: Path, monkeypatch):
         return R(1)
 
     monkeypatch.setattr("claimidx.replay.subprocess.run", fake_run)
-    c = _claim("ModuleNotFoundError: No module named 'demo'", "python -c \"import demo\"", fix_k="pin", fix_b="demo<2")
+    c = _claim("ModuleNotFoundError: No module named 'demo'", 'python -c "import demo"', fix_k="pin", fix_b="demo<2")
     d = harness(c, tmp_path / "h")
     assert d["action"] == "skip"
     assert d["reason"] == "harness-broken-install"
@@ -181,7 +181,7 @@ def test_harness_skips_broken_install(tmp_path: Path, monkeypatch):
 
 def test_pin_spec_takes_first_requirement():
     assert _pin_spec("setuptools<81") == "setuptools<81"
-    assert _pin_spec('numpy<2  (scipy 1.10.1 declares numpy<1.27)') == "numpy<2"
+    assert _pin_spec("numpy<2  (scipy 1.10.1 declares numpy<1.27)") == "numpy<2"
     assert _pin_spec("pip install setuptools") == "setuptools"
     assert _pin_spec("pip install standard-imghdr  # PEP 594") == "standard-imghdr"
     assert _pin_spec("pandas<2.0 and numpy<2  (both pins are required)") == "pandas<2.0"
@@ -236,7 +236,7 @@ def test_harness_installs_dep_then_pin(tmp_path: Path, monkeypatch):
     monkeypatch.setattr("claimidx.replay.subprocess.run", fake_run)
     c = _claim(
         "ImportError: huggingface-hub is required",
-        "python -c \"import transformers\"",
+        'python -c "import transformers"',
         fix_k="pin",
         fix_b="huggingface_hub<1.0",
     )
@@ -260,8 +260,8 @@ def test_pick_runnable_only_self_contained_python():
 
 
 def test_pick_harness_only_pin_specs():
-    pin = _claim("ModuleNotFoundError: No module named 'demo'", "python -c \"import demo\"", fix_k="pin", fix_b="demo<2")
-    patch = _claim("TypeError: x", "python -c \"import app\"", fix_k="patch", fix_b="await x")
+    pin = _claim("ModuleNotFoundError: No module named 'demo'", 'python -c "import demo"', fix_k="pin", fix_b="demo<2")
+    patch = _claim("TypeError: x", 'python -c "import app"', fix_k="patch", fix_b="await x")
     taut = _claim("ModuleNotFoundError: No module named 'va'", "true", fix_k="pin", fix_b="va==1")
     got = pick([pin, patch, taut], k=8, ids=None, seen=set(), harness_mode=True)
     assert [x.err for x in got] == [pin.err]
@@ -272,7 +272,7 @@ def test_run_harness_skip_does_not_mint_nf(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("CLAIMIDX_VERIFY_SEEN", str(tmp_path / "seen.json"))
     monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:test")
     store = Store(tmp_path / "ix.sqlite")
-    c = _claim("ModuleNotFoundError: No module named 'demo'", "python -c \"import demo\"", fix_k="pin", fix_b="demo<2")
+    c = _claim("ModuleNotFoundError: No module named 'demo'", 'python -c "import demo"', fix_k="pin", fix_b="demo<2")
     store.put(c)
     monkeypatch.setattr(
         "claimidx.replay.harness",
@@ -291,7 +291,7 @@ def test_decide_runnable_python_miss_is_fail(tmp_path: Path):
     scratch.mkdir()
     c = _claim(
         "ModuleNotFoundError: No module named 'no_such_cix_mod_zzz'",
-        "python -c \"import no_such_cix_mod_zzz\"",
+        'python -c "import no_such_cix_mod_zzz"',
         fix_k="patch",
         fix_b="install it",
     )
@@ -378,7 +378,10 @@ def test_verify_confirms_python_c(tmp_path: Path, capsys, monkeypatch):
     db = str(tmp_path / "ix.sqlite")
     err = "ModuleNotFoundError: No module named 'vok'"
     rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
-    assert main(["--db", db, "--fmt", "id", "publish", "--err", err, "--eco", "py", "--rt", rt, "--fix-k", "patch", "--fix-b", "pass", "--eval", "python -c pass"]) == 0
+    assert (
+        main(["--db", db, "--fmt", "id", "publish", "--err", err, "--eco", "py", "--rt", rt, "--fix-k", "patch", "--fix-b", "pass", "--eval", "python -c pass"])
+        == 0
+    )
     cid = capsys.readouterr().out.strip()
     rc = main(["--db", db, "--fmt", "json", "verify", "--apply", "--id", cid, "-k", "1"])
     out = capsys.readouterr().out
@@ -401,12 +404,31 @@ def test_verify_cwd_replays_tree_recipe(tmp_path: Path, capsys, monkeypatch):
     (tree / "marker.txt").write_text("ok", encoding="utf-8")
     err = "ModuleNotFoundError: No module named 'vcwd'"
     rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
-    eval_cmd = 'python -c "open(\'marker.txt\').read()"'
-    assert main([
-        "--db", db, "--fmt", "id", "publish",
-        "--err", err, "--eco", "py", "--rt", rt,
-        "--fix-k", "patch", "--fix-b", "pass", "--eval", eval_cmd,
-    ]) == 0
+    eval_cmd = "python -c \"open('marker.txt').read()\""
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                err,
+                "--eco",
+                "py",
+                "--rt",
+                rt,
+                "--fix-k",
+                "patch",
+                "--fix-b",
+                "pass",
+                "--eval",
+                eval_cmd,
+            ]
+        )
+        == 0
+    )
     cid = capsys.readouterr().out.strip()
     rc = main(["--db", db, "--fmt", "json", "verify", "--apply", "--id", cid, "-k", "1"])
     miss = json.loads(capsys.readouterr().out)
@@ -428,7 +450,10 @@ def test_cli_verify_defaults_to_dry_run(tmp_path: Path, capsys, monkeypatch):
     db = str(tmp_path / "ix.sqlite")
     err = "ModuleNotFoundError: No module named 'vcli'"
     rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
-    assert main(["--db", db, "--fmt", "id", "publish", "--err", err, "--eco", "py", "--rt", rt, "--fix-k", "patch", "--fix-b", "pass", "--eval", "python -c pass"]) == 0
+    assert (
+        main(["--db", db, "--fmt", "id", "publish", "--err", err, "--eco", "py", "--rt", rt, "--fix-k", "patch", "--fix-b", "pass", "--eval", "python -c pass"])
+        == 0
+    )
     cid = capsys.readouterr().out.strip()
     rc = main(["--db", db, "--fmt", "json", "verify", "--id", cid, "-k", "1"])
     out = capsys.readouterr().out
@@ -459,8 +484,12 @@ def test_verify_dry_run_does_not_write(tmp_path: Path, capsys, monkeypatch):
     db = str(tmp_path / "ix.sqlite")
     err = "ModuleNotFoundError: No module named 'vdry'"
     import sys
+
     rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
-    assert main(["--db", db, "--fmt", "id", "publish", "--err", err, "--eco", "py", "--rt", rt, "--fix-k", "patch", "--fix-b", "pass", "--eval", "python -c pass"]) == 0
+    assert (
+        main(["--db", db, "--fmt", "id", "publish", "--err", err, "--eco", "py", "--rt", rt, "--fix-k", "patch", "--fix-b", "pass", "--eval", "python -c pass"])
+        == 0
+    )
     cid = capsys.readouterr().out.strip()
     assert main(["--db", db, "--fmt", "json", "verify", "--dry-run", "--id", cid]) == 0
     capsys.readouterr()
@@ -480,12 +509,30 @@ def test_verify_dry_run_harness_does_not_create_venv(tmp_path: Path, capsys, mon
     rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
     err = "ModuleNotFoundError: No module named 'pydantic_core'"
     eval_cmd = 'python -c "import pydantic"'
-    assert main([
-        "--db", db, "--fmt", "id", "publish",
-        "--err", err, "--eco", "py", "--rt", rt,
-        "--fix-k", "pin", "--fix-b", "pydantic>=2.6",
-        "--eval", eval_cmd,
-    ]) == 0
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                err,
+                "--eco",
+                "py",
+                "--rt",
+                rt,
+                "--fix-k",
+                "pin",
+                "--fix-b",
+                "pydantic>=2.6",
+                "--eval",
+                eval_cmd,
+            ]
+        )
+        == 0
+    )
     cid = capsys.readouterr().out.strip()
     calls: list[list] = []
 
@@ -496,10 +543,22 @@ def test_verify_dry_run_harness_does_not_create_venv(tmp_path: Path, capsys, mon
 
     monkeypatch.setattr(subprocess, "run", _blocked)
     monkeypatch.setattr("claimidx.replay.subprocess.run", _blocked)
-    rc = main([
-        "--db", db, "--fmt", "json", "verify", "--dry-run",
-        "--runnable", "--harness", "--id", cid, "-k", "1",
-    ])
+    rc = main(
+        [
+            "--db",
+            db,
+            "--fmt",
+            "json",
+            "verify",
+            "--dry-run",
+            "--runnable",
+            "--harness",
+            "--id",
+            cid,
+            "-k",
+            "1",
+        ]
+    )
     out = capsys.readouterr().out
     assert rc == 0, out
     report = json.loads(out)

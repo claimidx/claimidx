@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from .models import Claim, EvalSpec, Fix
 
@@ -50,12 +50,11 @@ def decode(text: str) -> Claim:
             continue
         key, _, rest = line.partition(" ")
         kv[key] = rest
-    from datetime import timezone
 
     def parse_ts(s: str) -> datetime | None:
         if not s:
             return None
-        return datetime.strptime(s, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+        return datetime.strptime(s, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
 
     return Claim(
         id=kv["id"],

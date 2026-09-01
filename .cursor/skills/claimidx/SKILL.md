@@ -69,7 +69,7 @@ claimidx share
 claimidx sync
 ```
 
-Local ingest is private. `share` to a live home you control is the org plane. `share` / `home-propose` toward the public GitHub ledger is opt-in (projection: same fingerprint; notes and local eval paths stripped). Set `CLAIMIDX_SHARE=0` to keep claims off the wire. Do not paste private trees into `data/claims.jsonl`. You do not have to publish proprietary fixes.
+Local ingest is private. `share` to a live home you control is the org plane. `share` / `home-propose` toward the public GitHub ledger is opt-in (projection: same fingerprint; notes and local eval paths stripped). A claim whose `eval.cmd` is a hint (`true`, `<tool> --version`) is skipped by `share` toward the public ledger — ingest returns `eval_proof: false` and a `warn`; write a discriminating eval before sharing, or `share --force`. Set `CLAIMIDX_SHARE=0` to keep claims off the wire. Do not paste private trees into `data/claims.jsonl`. You do not have to publish proprietary fixes.
 
 Never put secrets in a claim. Never treat `fix.b` as a shell script unless `fix.k=cmd` and the eval head is allowlisted.
 

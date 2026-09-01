@@ -6,6 +6,7 @@ and are skipped. Missing trees, missing interpreters, and evals that cannot prov
 the pin are skips, not fails. `--harness` is two-state: confirm only if unpinned
 misses and the pin holds.
 """
+
 from __future__ import annotations
 
 import json
@@ -15,11 +16,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .models import Claim
-from .policy import eval_allowed, split_eval, _norm_head
+from .policy import _norm_head, eval_allowed, split_eval
 from .sandbox import ReplayResult, observe_env, replay, replay_records_hold
 from .store import Store
 from .team import resolve_owner
@@ -35,8 +36,21 @@ _MISSING = re.compile(
     re.I,
 )
 _SKIP_HEADS_WITHOUT_TREE = {
-    "npx", "npm", "go", "cargo", "rustc", "docker", "pytest",
-    "mvn", "gradle", "composer", "bundle", "bundler", "gem", "php", "make",
+    "npx",
+    "npm",
+    "go",
+    "cargo",
+    "rustc",
+    "docker",
+    "pytest",
+    "mvn",
+    "gradle",
+    "composer",
+    "bundle",
+    "bundler",
+    "gem",
+    "php",
+    "make",
 }
 _TAUTOLOGY = re.compile(
     r"^(python3?|node|go|cargo|rustc|npm|npx|docker|uv|php|ruby|java)(?:\.exe)?\s+(--version|-v|-V|version)\s*$",
@@ -120,7 +134,6 @@ def _dep_pip(dep: list[str] | None) -> list[str]:
 
 def _install_plan(specs: list[str], dep: list[str] | None) -> tuple[list[str], list[str]]:
     """Broken combo (deps, else unpinned names) then pin overlay."""
-    names = [_pkg_name(s) for s in specs if _pkg_name(s)]
     broken: dict[str, str] = {}
     for spec in _dep_pip(dep):
         pkg = _pkg_name(spec)
@@ -259,7 +272,7 @@ def save_seen(st: dict) -> None:
 
 
 def _today() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return datetime.now(UTC).strftime("%Y-%m-%d")
 
 
 _RUNNABLE_HEADS = {"python", "python3"}
@@ -379,7 +392,12 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
         held = proc.returncode == c.eval.expect
         if held:
             probe = ReplayResult(
-                True, True, proc.returncode, c.eval.expect, True, "held-pin",
+                True,
+                True,
+                proc.returncode,
+                c.eval.expect,
+                True,
+                "held-pin",
                 env=observe_env([str(py)]),
             )
             ok, why = replay_records_hold(c.rt, probe, c.eval.cmd)
@@ -505,7 +523,7 @@ def run(
     ledger: str | Path | None = None,
     runnable: bool = False,
     harness_mode: bool = False,
-    cwd: str | Path | None = None,
+    cwd: str | os.PathLike[str] | None = None,
 ) -> dict:
     actor = resolve_owner(own)
     seen_st = load_seen()
@@ -528,10 +546,7 @@ def run(
             "n": len(chosen),
             "dry_run": True,
             "counts": {"confirm": 0, "fail": 0, "skip": len(chosen)},
-            "results": [
-                {"action": "skip", "reason": "dry-run", "id": c.id, "st": c.st}
-                for c in chosen
-            ],
+            "results": [{"action": "skip", "reason": "dry-run", "id": c.id, "st": c.st} for c in chosen],
         }
     scratch_root = Path(tempfile.mkdtemp(prefix="cix-verify-"))
     tree = Path(cwd) if cwd else None
@@ -546,11 +561,11 @@ def run(
             if not dry_run:
                 if action == "confirm":
                     store.confirm(c.id, actor, replayed=True)
-                    changed.append(store.get(c.id))
+                    changed.append(store.get(c.id) or c)
                     seen.add(c.id)
                 elif action == "fail":
                     store.fail(c.id, actor, note=decision.get("reason") or "verify eval-miss")
-                    changed.append(store.get(c.id))
+                    changed.append(store.get(c.id) or c)
                     seen.add(c.id)
                 elif action == "skip":
                     reason = decision.get("reason") or ""
@@ -562,7 +577,8 @@ def run(
                         "pin-eval-unproven",
                     }:
                         seen.add(c.id)
-            decision["st"] = (store.get(c.id).st if store.get(c.id) else c.st)
+            latest = store.get(c.id)
+            decision["st"] = latest.st if latest else c.st
             results.append(decision)
         if not dry_run:
             seen_st["ids"] = sorted(seen)

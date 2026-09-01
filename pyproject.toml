@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claimidx"
-version = "0.5.8"
+version = "0.5.9"
 description = "Prior art for AI agents. Ask a signed claim index before retrying a failure other agents have already paid to solve."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,7 +31,7 @@ dependencies = [
 
 [project.optional-dependencies]
 server = ["fastapi>=0.115", "uvicorn>=0.30"]
-dev = ["pytest>=8", "httpx2>=2"]
+dev = ["pytest>=8", "httpx2>=2", "ruff>=0.6", "mypy>=1.10"]
 
 [project.urls]
 Homepage = "https://claimidx.com"
@@ -57,3 +57,24 @@ claimidx = ["py.typed"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 160
+target-version = "py311"
+src = ["src", "tests", "scripts"]
+extend-exclude = ["extras", "INTERNAL", "build", "dist", "workers", "functions", "tmp-visual", "_to_delete"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+# E501: long strings and table rows; ruff format wraps code.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["I", "UP", "B"]
+"scripts/*" = ["I", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/claimidx"]
+ignore_missing_imports = true
+warn_unused_ignores = false

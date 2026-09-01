@@ -33,7 +33,6 @@ def test_live_home_serves_agent_discovery_docs(tmp_path):
 
 
 def test_skill_drops_match_canonical():
-    from pathlib import Path
     from claimidx.discovery import ROOT
 
     canon = (ROOT / "skills" / "claimidx" / "SKILL.md").read_bytes()
@@ -72,10 +71,7 @@ def test_agent_facing_docs_cover_current_surface():
     """A new verb that is not in README/AGENTS/SKILL/PROTOCOL/llms.txt did not ship."""
     from claimidx.discovery import ROOT
 
-    texts = {
-        name: (ROOT / name).read_text(encoding="utf-8")
-        for name in ("README.md", "AGENTS.md", "skills/claimidx/SKILL.md", "PROTOCOL.md", "llms.txt")
-    }
+    texts = {name: (ROOT / name).read_text(encoding="utf-8") for name in ("README.md", "AGENTS.md", "skills/claimidx/SKILL.md", "PROTOCOL.md", "llms.txt")}
     required = (
         "claimidx hook",
         "claimidx_hook",
@@ -156,7 +152,6 @@ def test_repo_has_no_machine_home_paths():
 
 
 def test_all_declared_routes_exist():
-    from pathlib import Path
     from claimidx.discovery import ROOT
 
     missing = [rel for rel, _ in ROUTES.values() if not (ROOT / rel).is_file()]
@@ -470,11 +465,7 @@ def test_api_catalog_lists_protocol_docs():
     from claimidx.discovery import ROOT
 
     body = json.loads((ROOT / ".well-known" / "api-catalog").read_text(encoding="utf-8"))
-    hrefs = [
-        item.get("href") or ""
-        for block in body.get("linkset") or []
-        for item in block.get("item") or []
-    ]
+    hrefs = [item.get("href") or "" for block in body.get("linkset") or [] for item in block.get("item") or []]
     joined = " ".join(hrefs)
     missing = [
         n
@@ -572,8 +563,8 @@ def test_mcp_ingest_stores_expect(tmp_path, monkeypatch):
                 "arguments": {
                     "err": "MCP ingest omitted expect so eval.expect stayed 0",
                     "fix_k": "cmd",
-                    "fix_b": "python -c \"import sys; sys.exit(1)\"",
-                    "eval": "python -c \"import sys; sys.exit(1)\"",
+                    "fix_b": 'python -c "import sys; sys.exit(1)"',
+                    "eval": 'python -c "import sys; sys.exit(1)"',
                     "expect": 1,
                     "eco": "py",
                     "own": "did:claimidx:test",
@@ -708,15 +699,17 @@ def test_mcp_force_keeps_stored_cls(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAIMIDX_SHARE", "0")
     store = Store(tmp_path / "ix.sqlite")
     err = "TypeError: x is not a function"
-    c = store.put(Claim(
-        fp=fingerprint(err=err, cls="other", eco="npm"),
-        cls="other",
-        err=normalize_error(err),
-        eco="npm",
-        fix=Fix(k="patch", b="await x()"),
-        eval=EvalSpec(cmd="true"),
-        own="did:claimidx:test",
-    ))
+    c = store.put(
+        Claim(
+            fp=fingerprint(err=err, cls="other", eco="npm"),
+            cls="other",
+            err=normalize_error(err),
+            eco="npm",
+            fix=Fix(k="patch", b="await x()"),
+            eval=EvalSpec(cmd="true"),
+            own="did:claimidx:test",
+        )
+    )
     rec = handle(
         {
             "jsonrpc": "2.0",
@@ -792,3 +785,13 @@ def test_mcp_prompts_and_resources(tmp_path):
     assert "recommend" in init["result"]["instructions"].lower()
     assert "verify --dry-run" in init["result"]["instructions"]
     assert "claimidx_verify" in init["result"]["instructions"]
+
+
+def test_doc_copies_are_in_sync():
+    """Every harness skill drop, docs/ mirror and llms-full dump is a copy. `python scripts/sync_docs.py` rewrites them."""
+    import subprocess
+    import sys
+    from claimidx.discovery import ROOT
+
+    proc = subprocess.run([sys.executable, "scripts/sync_docs.py", "--check"], cwd=ROOT, capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr

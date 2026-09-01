@@ -42,9 +42,25 @@ class PublicSkip(ValueError):
 
 
 _TAUTOLOGY_CMD = re.compile(
-    r"^(true|false|(?:python3?|node|go|cargo|rustc|npm|npx|docker|uv)(?:\.exe)?\s+(?:--version|-v|-V|version))\s*$",
+    r"^(true|false|(?:python3?|node|go|cargo|rustc|npm|npx|pnpm|yarn|bun|docker|uv|pip3?|pytest|java|javac|mvn|gradle|git)"
+    r"(?:\.exe)?\s+(?:--version|-version|-v|-V|version))\s*$",
     re.I,
 )
+
+HINT_WARN = "eval is a hint; confirm --replay cannot prove this claim. Supply a discriminating eval.cmd"
+PLACEHOLDER_WARN = "err contains placeholders; ingest the raw error string, normalize_error keeps identifiers and error codes"
+
+
+def ingest_warnings(raw_err: str, eval_cmd: str) -> list[str]:
+    """What the author should fix before this claim is worth sharing."""
+    from .fingerprint import PLACEHOLDERS
+
+    warns: list[str] = []
+    if not eval_is_proof(eval_cmd):
+        warns.append(HINT_WARN)
+    if any(tok in (raw_err or "") for tok in PLACEHOLDERS):
+        warns.append(PLACEHOLDER_WARN)
+    return warns
 
 
 def eval_is_proof(cmd: str | None) -> bool:
@@ -158,7 +174,8 @@ def _compatible_release(ver: str) -> list[tuple[str, tuple[int, int, int]]] | No
         return None
     prefix = [int(p) for p in parts[:-1]]
     prefix[-1] += 1
-    upper = tuple((prefix + [0, 0])[:3])
+    padded = (prefix + [0, 0])[:3]
+    upper = (padded[0], padded[1], padded[2])
     return [(">=", lower), ("<", upper)]
 
 
@@ -268,12 +285,9 @@ def refine_eval(
             import json as _json
 
             req = _json.dumps(name + "/package.json")
-            return f"node -e \"if(require({req}).version!=={_json.dumps(ver)}) process.exit(1)\""
+            return f'node -e "if(require({req}).version!=={_json.dumps(ver)}) process.exit(1)"'
         if re.match(r"^[A-Za-z0-9._-]+$", name):
-            return (
-                'python -c "from importlib.metadata import version; '
-                f'raise SystemExit(version({name!r})!={ver!r})"'
-            )
+            return f'python -c "from importlib.metadata import version; raise SystemExit(version({name!r})!={ver!r})"'
     rng = _range_pin(pin_src) if pin_src else None
     if not rng and not _pkg_token(pin_src):
         for d in dep or []:
@@ -297,7 +311,7 @@ def refine_eval(
     if eco in {"npm", "node"} or token.startswith("@"):
         import json as _json
 
-        return "node -e \"require(" + _json.dumps(token) + ")\""
+        return 'node -e "require(' + _json.dumps(token) + ')"'
     mod = token.replace("-", "_")
     if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", mod):
         return f'python -c "import {mod}"'

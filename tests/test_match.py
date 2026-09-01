@@ -134,16 +134,10 @@ def test_eval_proof_warns_only_when_query_err_differs():
 def test_eval_proof_warns_when_quoted_value_only_matches_after_normalize():
     from claimidx.match import annotate
 
-    raw = (
-        "pydantic.ValidationError: 1 validation error for Model\n"
-        "status\n  Input should be 'thumbs_up' [type=literal_error, input_value='👍']"
-    )
-    other = (
-        "pydantic.ValidationError: 1 validation error for Model\n"
-        "status\n  Input should be 'thumbs_up' [type=literal_error, input_value='👎']"
-    )
+    raw = "pydantic.ValidationError: 1 validation error for Model\nstatus\n  Input should be 'thumbs_up' [type=literal_error, input_value='👍']"
+    other = "pydantic.ValidationError: 1 validation error for Model\nstatus\n  Input should be 'thumbs_up' [type=literal_error, input_value='👎']"
     proof = _claim(raw, eco="py")
-    proof.eval.cmd = "python -c \"import pydantic\""
+    proof.eval.cmd = 'python -c "import pydantic"'
     assert "<STR>" in proof.err
     assert normalize_error(other) == proof.err
     other_meta = annotate({"err": other, "eco": "py"}, proof, 0.9)

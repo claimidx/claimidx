@@ -10,7 +10,7 @@ import sys
 from dataclasses import dataclass
 
 from .fingerprint import runtime_proof_key
-from .policy import eval_allowed, split_eval, _norm_head
+from .policy import _norm_head, eval_allowed, split_eval
 
 
 def resolve_argv(parts: list[str]) -> list[str]:
@@ -249,8 +249,13 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
         return ReplayResult(True, False, None, expect, False, f"exec-error:{e}", env=observed)
     held = proc.returncode == expect
     return ReplayResult(
-        True, True, proc.returncode, expect, held,
+        True,
+        True,
+        proc.returncode,
+        expect,
+        held,
         "held" if held else "eval-miss",
-        proc.stdout or "", proc.stderr or "",
+        proc.stdout or "",
+        proc.stderr or "",
         observed,
     )

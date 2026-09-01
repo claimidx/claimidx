@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+
 def _roots() -> list[Path]:
     here = Path(__file__).resolve()
     return [here.parents[2], Path.cwd(), Path.home() / ".claimidx"]

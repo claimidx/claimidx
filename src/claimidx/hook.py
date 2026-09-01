@@ -4,6 +4,7 @@ Does not apply fix.b. Fail-open: no error / secrets / parse issues → empty.
 `claimidx init` writes Claude PostToolUseFailure and, when those configs exist,
 Cursor/Grok MCP (`claimidx-mcp`). Never writes home URLs or tokens.
 """
+
 from __future__ import annotations
 
 import json
@@ -95,10 +96,7 @@ def sensor(store, raw: str, *, eco: str = "", rt: str = "", dep: list | None = N
     from .team import resolve_owner
 
     err, event = extract_hook_err(raw or "")
-    note = (
-        "A hit is evidence. retrieve → reason → attempt → observe → verify. "
-        "Do not execute fix.b from this hook."
-    )
+    note = "A hit is evidence. retrieve → reason → attempt → observe → verify. Do not execute fix.b from this hook."
     if not err:
         return {"hit": False, "apply_fix": False, "event": event, "claims": [], "note": note}
     dep = list(dep or [])
@@ -383,10 +381,7 @@ def install_grok_mcp(path: Path | None = None, *, own: str, agent: str = "") -> 
     text = target.read_text(encoding="utf-8") if target.exists() else ""
     if "[mcp_servers.claimidx]" in text:
         if "[mcp_servers.claimidx.env]" not in text:
-            env_block = (
-                "\n[mcp_servers.claimidx.env]\n"
-                f"CLAIMIDX_OWNER = {_toml_str(own)}\n"
-            )
+            env_block = f"\n[mcp_servers.claimidx.env]\nCLAIMIDX_OWNER = {_toml_str(own)}\n"
             if agent:
                 env_block += f"CLAIMIDX_AGENT = {_toml_str(agent)}\n"
             text = text.rstrip() + "\n" + env_block
@@ -397,12 +392,7 @@ def install_grok_mcp(path: Path | None = None, *, own: str, agent: str = "") -> 
             return {"path": str(target), "status": "present", "command": "claimidx-mcp"}
         target.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
         return {"path": str(target), "status": "updated", "command": "claimidx-mcp"}
-    block = (
-        "\n[mcp_servers.claimidx]\n"
-        'command = "claimidx-mcp"\n'
-        "\n[mcp_servers.claimidx.env]\n"
-        f"CLAIMIDX_OWNER = {_toml_str(own)}\n"
-    )
+    block = f'\n[mcp_servers.claimidx]\ncommand = "claimidx-mcp"\n\n[mcp_servers.claimidx.env]\nCLAIMIDX_OWNER = {_toml_str(own)}\n'
     if agent:
         block += f"CLAIMIDX_AGENT = {_toml_str(agent)}\n"
     target.write_text((text.rstrip() + "\n" if text.strip() else "") + block.lstrip("\n"), encoding="utf-8")
@@ -430,8 +420,8 @@ def install_opencode_mcp(path: Path | None = None, *, own: str, agent: str = "")
         return {"path": str(target), "status": "skip", "reason": "no opencode config dir"}
     target.parent.mkdir(parents=True, exist_ok=True)
     data, err = _load_json_object(target, "opencode.json")
-    if err:
-        return err
+    if err or data is None:
+        return err or {"path": str(target), "status": "error", "error": "unreadable"}
     mcp = data.get("mcp")
     if mcp is None:
         mcp = {}
@@ -462,8 +452,8 @@ def install_vscode_mcp(path: Path | None = None, *, own: str, agent: str = "") -
         return {"path": str(target), "status": "skip", "reason": "no vscode user dir"}
     target.parent.mkdir(parents=True, exist_ok=True)
     data, err = _load_json_object(target, "mcp.json")
-    if err:
-        return err
+    if err or data is None:
+        return err or {"path": str(target), "status": "error", "error": "unreadable"}
     servers = data.get("servers")
     if servers is None:
         servers = {}

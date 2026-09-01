@@ -16,42 +16,50 @@ def test_extract_raw_error_line():
 
 
 def test_extract_tool_result_field():
-    raw = json.dumps({
-        "hook_event_name": "PostToolUseFailure",
-        "tool_result": "ImportError: No module named 'cgi'\n",
-    })
+    raw = json.dumps(
+        {
+            "hook_event_name": "PostToolUseFailure",
+            "tool_result": "ImportError: No module named 'cgi'\n",
+        }
+    )
     err, event = extract_hook_err(raw)
     assert event == "PostToolUseFailure"
     assert err and "cgi" in err
 
 
 def test_extract_claude_failure_json():
-    raw = json.dumps({
-        "hook_event_name": "PostToolUseFailure",
-        "tool_name": "Bash",
-        "tool_response": "Traceback (most recent call last):\nModuleNotFoundError: No module named 'cgi'\n",
-    })
+    raw = json.dumps(
+        {
+            "hook_event_name": "PostToolUseFailure",
+            "tool_name": "Bash",
+            "tool_response": "Traceback (most recent call last):\nModuleNotFoundError: No module named 'cgi'\n",
+        }
+    )
     err, event = extract_hook_err(raw)
     assert event == "PostToolUseFailure"
     assert err and "cgi" in err
 
 
 def test_extract_skips_successful_posttooluse():
-    raw = json.dumps({
-        "hook_event_name": "PostToolUse",
-        "tool_name": "Bash",
-        "tool_response": "ok\n",
-    })
+    raw = json.dumps(
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_response": "ok\n",
+        }
+    )
     err, event = extract_hook_err(raw)
     assert err is None
     assert event == "PostToolUse"
 
 
 def test_extract_refuses_secret_shaped_stderr():
-    raw = json.dumps({
-        "hook_event_name": "PostToolUseFailure",
-        "tool_response": "error: Bearer supersecrettokenvalue123456\n",
-    })
+    raw = json.dumps(
+        {
+            "hook_event_name": "PostToolUseFailure",
+            "tool_response": "error: Bearer supersecrettokenvalue123456\n",
+        }
+    )
     err, event = extract_hook_err(raw)
     assert err is None
     assert event == "PostToolUseFailure"
@@ -61,10 +69,12 @@ def test_hook_cli_hit_and_claude_context(tmp_path, capsys, monkeypatch):
     db = str(tmp_path / "ix.sqlite")
     assert main(["--db", db, "seed"]) == 0
     capsys.readouterr()
-    payload = json.dumps({
-        "hook_event_name": "PostToolUseFailure",
-        "tool_response": "TypeError: params is a Promise\n",
-    })
+    payload = json.dumps(
+        {
+            "hook_event_name": "PostToolUseFailure",
+            "tool_response": "TypeError: params is a Promise\n",
+        }
+    )
     monkeypatch.setattr("sys.stdin", StringIO(payload))
     rc = main(["--db", db, "hook", "--eco", "npm", "--dep", "next@15.0.0"])
     out = capsys.readouterr().out
@@ -78,23 +88,67 @@ def test_hook_cli_hit_and_claude_context(tmp_path, capsys, monkeypatch):
 def test_hook_cli_near_tie_surfaces_both(tmp_path, capsys, monkeypatch):
     db = str(tmp_path / "ix.sqlite")
     err = "TypeError: params is a Promise"
-    assert main([
-        "--db", db, "--fmt", "id", "publish",
-        "--err", err, "--eco", "npm", "--rt", "node@18", "--dep", "next@15.0.0",
-        "--fix-k", "patch", "--fix-b", "await params", "--eval", "true",
-    ]) == 0
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                err,
+                "--eco",
+                "npm",
+                "--rt",
+                "node@18",
+                "--dep",
+                "next@15.0.0",
+                "--fix-k",
+                "patch",
+                "--fix-b",
+                "await params",
+                "--eval",
+                "true",
+            ]
+        )
+        == 0
+    )
     a = capsys.readouterr().out.strip()
-    assert main([
-        "--db", db, "--fmt", "id", "publish",
-        "--err", err, "--eco", "npm", "--rt", "node@20", "--dep", "next@15.0.0",
-        "--fix-k", "patch", "--fix-b", "await searchParams", "--eval", "true",
-    ]) == 0
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                err,
+                "--eco",
+                "npm",
+                "--rt",
+                "node@20",
+                "--dep",
+                "next@15.0.0",
+                "--fix-k",
+                "patch",
+                "--fix-b",
+                "await searchParams",
+                "--eval",
+                "true",
+            ]
+        )
+        == 0
+    )
     b = capsys.readouterr().out.strip()
     assert a != b
-    payload = json.dumps({
-        "hook_event_name": "PostToolUseFailure",
-        "tool_response": err + "\n",
-    })
+    payload = json.dumps(
+        {
+            "hook_event_name": "PostToolUseFailure",
+            "tool_response": err + "\n",
+        }
+    )
     monkeypatch.setattr("sys.stdin", StringIO(payload))
     rc = main(["--db", db, "hook", "--eco", "npm", "--dep", "next@15.0.0"])
     out = capsys.readouterr().out
@@ -215,16 +269,18 @@ def test_hook_cli_miss_is_silent(tmp_path, capsys, monkeypatch):
 def test_mcp_hook_is_evidence_only(tmp_path):
     store = Store(tmp_path / "ix.sqlite")
     err = "TypeError: params is a Promise"
-    store.put(Claim(
-        fp=fingerprint(err=err, cls="type_error", eco="npm", dep=["next@15.0.0"]),
-        cls="type_error",
-        err=normalize_error(err),
-        eco="npm",
-        dep=["next@15.0.0"],
-        fix=Fix(k="patch", b="await params"),
-        eval=EvalSpec(cmd="true"),
-        own="did:claimidx:test",
-    ))
+    store.put(
+        Claim(
+            fp=fingerprint(err=err, cls="type_error", eco="npm", dep=["next@15.0.0"]),
+            cls="type_error",
+            err=normalize_error(err),
+            eco="npm",
+            dep=["next@15.0.0"],
+            fix=Fix(k="patch", b="await params"),
+            eval=EvalSpec(cmd="true"),
+            own="did:claimidx:test",
+        )
+    )
     rec = handle(
         {
             "jsonrpc": "2.0",
@@ -233,10 +289,12 @@ def test_mcp_hook_is_evidence_only(tmp_path):
             "params": {
                 "name": "claimidx_hook",
                 "arguments": {
-                    "raw": json.dumps({
-                        "hook_event_name": "PostToolUseFailure",
-                        "tool_response": err + "\n",
-                    }),
+                    "raw": json.dumps(
+                        {
+                            "hook_event_name": "PostToolUseFailure",
+                            "tool_response": err + "\n",
+                        }
+                    ),
                     "eco": "npm",
                     "dep": ["next@15.0.0"],
                 },

@@ -40,13 +40,13 @@ When you add a verb, MCP tool, Python export, or harness drop, update **all** of
 
 - `README.md`
 - `AGENTS.md` (and `docs/AGENTS.md`)
-- `skills/claimidx/SKILL.md` (then copy to every `.*/skills/claimidx/SKILL.md`)
+- `skills/claimidx/SKILL.md` (then `python scripts/sync_docs.py` — it copies every `.*/skills/claimidx/SKILL.md`, `docs/AGENTS.md`, `docs/llms.txt`, and regenerates both `llms-full.txt`; `--check` is the CI gate)
 - `PROTOCOL.md`
 - `llms.txt` (and `docs/llms.txt`)
 - `CLAUDE.md` · `.github/copilot-instructions.md` if the surface is Claude/Copilot
 - `ai.txt` if the loop or connect line changes
 
-A test in `tests/test_discovery.py` fails if README / AGENTS / SKILL / PROTOCOL / llms.txt omit `claimidx hook` or `from claimidx import ask`.
+A test in `tests/test_discovery.py` fails if README / AGENTS / SKILL / PROTOCOL / llms.txt omit `claimidx hook` or `from claimidx import ask`, or if any copy is stale.
 
 ## Fix gate
 
@@ -54,7 +54,7 @@ A suggested change is not a fix until all three hold:
 
 1. A test or allowlisted eval **fails on the current tree** (HEAD / `origin/main` before the patch). Reproduce first.
 2. The **same** test holds after the patch.
-3. `python -m pytest -q` is green.
+3. `python -m pytest -q` is green, and so are `ruff check .`, `ruff format --check src tests scripts`, `mypy`, and `python scripts/sync_docs.py --check` (CI runs all four on 3.11–3.13).
 
 A comment, a review note, or a new assertion that only encodes taste is **not a miss**. Do not add a test that already passes on current main and call that a bug. Do not ship protocol prose that current tests do not enforce. A comment is not `eval.cmd`.
 
@@ -75,6 +75,8 @@ from claimidx import ask, ingest
 
 `share` against a live home POSTs the full secret-scanned claim.
 `share` without a home writes `~/.claimidx/outbox.jsonl` — a **public projection** (same fingerprint, no notes, no local paths). Open a PR that appends that line to `data/claims.jsonl`.
+
+Claims about Claimidx's own tree — a schema that omitted a field, a doc that omitted a flag, a leaked sdist — are changelog, not prior art another agent will hit. Append those to `data/claims-claimidx.jsonl` instead. A row whose `err` is only a skeleton (`KeyError: <STR>`, `AttributeError: <STR> object has no attribute <STR>`) matches every error of that class and pushes one arbitrary fix at all of them; those are retired to `data/claims-retired.jsonl`, never served, and can come back only re-ingested from the raw error; `python scripts/ledger_report.py` counts what slipped into the public ledger.
 
 ## Rules for the public ledger
 

@@ -216,7 +216,7 @@ Replay is the product. The ledger is not a verified knowledge base.
 ```
 src/claimidx/     CLI, store, policy, home, MCP, HTTP, hook, in-process ask/ingest
 tests/         pytest
-data/          public claims.jsonl ledger
+data/          public claims.jsonl ledger; claims-claimidx.jsonl is this repo's own changelog claims; claims-retired.jsonl is rows pulled for skeleton keys or duplication
 schema/        claim.v1.json
 skills/claimidx/  agent skill (canonical; copies under .claude/.opencode/…)
 examples/      MCP configs, claude-hooks.json
@@ -225,6 +225,7 @@ web/           inspector (hits show age, src, warn)
 
 ## Status
 
+v0.5.9 — `share` keeps hint evals (`true`, `<tool> --version`) off the public ledger; ingest returns `eval_proof` + `warn`; `normalize_error` keeps error codes (`Errno 2` ≠ `Errno 13`); repo changelog claims and skeleton-key rows leave `data/claims.jsonl`; `scripts/ledger_report.py`, `scripts/sync_docs.py`; CI on 3.11–3.13 with ruff + mypy.
 v0.5.8 — SECURITY.md: do not pin leaked wheels (0.5.0-0.5.2, 0.5.6).
 v0.5.7 — pip wheel matches the sdist: operated-home extras stay in git, off PyPI.
 v0.5.6 — PyPI README carries mcp-name so the official MCP registry can list io.github.claimidx/claimidx.
@@ -236,7 +237,7 @@ v0.5.1 — PyPI project links and sdist include the same agent docs as GitHub (`
 v0.5.0 — `eval_proof` and proof-weighted ask; `nr` counts held `confirm --replay`; `normalization_risk` when normalize_error erases a path/URL/int/hex/quoted token; pull skips `fp` mismatch; public tree evals blank instead of rewriting to `true`; pin ingest with `eval=true` upgrades to `python -c "import pkg"` / `node -e "require('pkg')"`.
 v0.4.1 — larger public seed ledger, site discovery (`llms.txt`, well-known), git install path. Also: `claimidx hook` (harness sensor), `from claimidx import ask, ingest` (ingest does not share unless `share=True`), ask surfaces `age_days` / `dep_drift` / `warn`, Cline skill drop.
 
-Public ledger (`data/claims.jsonl`): each row has `src`. `seed` is corpus; `home` is harvested from agents that actually hit the wall. Ask treats pulled claims as `proposed`. `nc` is confirms after replay — that is the number. **The index gets better with every unique projected claim** from any provider DID. Dense slice today: MCP, Windows paths, Python packaging, Next 15; Go / browser / CI are growing. Misses outside a dense slice are expected. Agents: read `/llms.txt` and `/AGENTS.md` before the HTML.
+Public ledger (`data/claims.jsonl`): each row has `src`. `seed` is corpus; `home` is harvested from agents that actually hit the wall. Ask treats pulled claims as `proposed`. `nc` is confirms after replay — that is the number. `python scripts/ledger_report.py` prints the honest mix: how many rows carry a replayable `eval.cmd` versus a `true` hint, how many are confirmed, how many are about Claimidx itself. A hint eval is still a hit, but `share` keeps it off the public ledger until it carries a recipe (`share --force` overrides). **The index gets better with every unique projected claim** from any provider DID. Dense slice today: MCP, Windows paths, Python packaging, Next 15; Go / browser / CI are growing. Misses outside a dense slice are expected. Agents: read `/llms.txt` and `/AGENTS.md` before the HTML.
 v0.4.0 — public name is Claimidx (`pip`/`CLI`/`MCP`). `cix_` ids; existing `spr_` ledger ids still resolve.
 v0.3.0 — identity-required writes, `init`/`doctor`/`share`/`sync`, auto-share to a live home, outbox for the public ledger, home write tokens, Windows-safe `true` replay, MCP share/sync, public GitHub ledger, seeded failures.
 

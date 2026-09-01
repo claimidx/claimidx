@@ -20,7 +20,7 @@ def _local_claim(own: str = "did:claimidx:grok") -> Claim:
         rt="py@3.13",
         dep=["share-demo@1.0"],
         fix=Fix(k="pin", b="pip install share-demo"),
-        eval=EvalSpec(cmd="true"),
+        eval=EvalSpec(cmd='python -c "import share_demo"'),
         own=own,
         src="local",
     )
@@ -51,12 +51,27 @@ def test_cli_share_and_second_agent_pull(tmp_path: Path, monkeypatch):
     client = TestClient(app)
 
     monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:grok")
-    rc = main([
-        "--db", agent_db, "--fmt", "id", "publish",
-        "--err", "ModuleNotFoundError: No module named 'federate_mod'",
-        "--eco", "py", "--rt", "py@3.13",
-        "--fix-k", "pin", "--fix-b", "pip install federate-mod", "--eval", "true",
-    ])
+    rc = main(
+        [
+            "--db",
+            agent_db,
+            "--fmt",
+            "id",
+            "publish",
+            "--err",
+            "ModuleNotFoundError: No module named 'federate_mod'",
+            "--eco",
+            "py",
+            "--rt",
+            "py@3.13",
+            "--fix-k",
+            "pin",
+            "--fix-b",
+            "pip install federate-mod",
+            "--eval",
+            "true",
+        ]
+    )
     assert rc == 0
 
     # share by POSTing the same claim the CLI would send
@@ -89,24 +104,35 @@ def test_cli_share_and_second_agent_pull(tmp_path: Path, monkeypatch):
     assert stored[0].src == "home"
     assert stored[0].st == "proposed"
 
-    rc = main([
-        "--db", str(peer_db), "--fmt", "json", "ask",
-        "--err", "ModuleNotFoundError: No module named 'federate_mod'",
-        "--eco", "py",
-    ])
+    rc = main(
+        [
+            "--db",
+            str(peer_db),
+            "--fmt",
+            "json",
+            "ask",
+            "--err",
+            "ModuleNotFoundError: No module named 'federate_mod'",
+            "--eco",
+            "py",
+        ]
+    )
     assert rc == 0
 
 
 def test_home_api_refuses_anon(tmp_path: Path):
     app = create_app(str(tmp_path / "home.sqlite"))
     client = TestClient(app)
-    r = client.post("/api/publish", json={
-        "err": "x failed",
-        "fix_k": "constraint",
-        "fix_b": "do not retry blindly",
-        "eval": "true",
-        "own": "did:claimidx:anon",
-    })
+    r = client.post(
+        "/api/publish",
+        json={
+            "err": "x failed",
+            "fix_k": "constraint",
+            "fix_b": "do not retry blindly",
+            "eval": "true",
+            "own": "did:claimidx:anon",
+        },
+    )
     assert r.status_code == 403
 
 
@@ -153,27 +179,33 @@ def test_api_force_keeps_stored_cls(tmp_path: Path):
     app = create_app(str(tmp_path / "home.sqlite"))
     client = TestClient(app)
     err = "TypeError: x is not a function"
-    first = client.post("/api/publish", json={
-        "err": err,
-        "cls": "other",
-        "eco": "npm",
-        "fix_k": "patch",
-        "fix_b": "await x()",
-        "eval": "true",
-        "own": "did:claimidx:harper",
-    })
+    first = client.post(
+        "/api/publish",
+        json={
+            "err": err,
+            "cls": "other",
+            "eco": "npm",
+            "fix_k": "patch",
+            "fix_b": "await x()",
+            "eval": "true",
+            "own": "did:claimidx:harper",
+        },
+    )
     assert first.status_code == 200, first.text
     cid = first.json()["claim"]["id"]
     assert first.json()["claim"]["cls"] == "other"
-    second = client.post("/api/publish", json={
-        "err": err,
-        "eco": "npm",
-        "fix_k": "patch",
-        "fix_b": "await x().catch(()=>{})",
-        "eval": "true",
-        "force": True,
-        "own": "did:claimidx:harper",
-    })
+    second = client.post(
+        "/api/publish",
+        json={
+            "err": err,
+            "eco": "npm",
+            "fix_k": "patch",
+            "fix_b": "await x().catch(()=>{})",
+            "eval": "true",
+            "force": True,
+            "own": "did:claimidx:harper",
+        },
+    )
     assert second.status_code == 200, second.text
     assert second.json()["claim"]["id"] == cid
     assert second.json()["claim"]["cls"] == "other"
@@ -183,14 +215,17 @@ def test_api_force_keeps_stored_cls(tmp_path: Path):
 def test_api_confirm_replay(tmp_path: Path):
     app = create_app(str(tmp_path / "home.sqlite"))
     client = TestClient(app)
-    posted = client.post("/api/publish", json={
-        "err": "x failed replay",
-        "fix_k": "constraint",
-        "fix_b": "ok",
-        "eval": "python -c \"print(1)\"",
-        "own": "did:claimidx:lucas",
-        "rt": "py@3.13",
-    })
+    posted = client.post(
+        "/api/publish",
+        json={
+            "err": "x failed replay",
+            "fix_k": "constraint",
+            "fix_b": "ok",
+            "eval": 'python -c "print(1)"',
+            "own": "did:claimidx:lucas",
+            "rt": "py@3.13",
+        },
+    )
     cid = posted.json()["claim"]["id"]
     denied = client.post(f"/api/claims/{cid}/confirm")
     assert denied.status_code == 409
@@ -204,33 +239,42 @@ def test_api_confirm_replay(tmp_path: Path):
 def test_api_publish_refuses_id_clobber(tmp_path: Path):
     app = create_app(str(tmp_path / "home.sqlite"))
     client = TestClient(app)
-    first = client.post("/api/publish", json={
-        "err": "id clobber one",
-        "fix_k": "constraint",
-        "fix_b": "a",
-        "eval": "true",
-        "own": "did:claimidx:lucas",
-        "id": "cix_aaaaaaaaaaaaaaaa",
-    })
+    first = client.post(
+        "/api/publish",
+        json={
+            "err": "id clobber one",
+            "fix_k": "constraint",
+            "fix_b": "a",
+            "eval": "true",
+            "own": "did:claimidx:lucas",
+            "id": "cix_aaaaaaaaaaaaaaaa",
+        },
+    )
     assert first.status_code == 200, first.text
-    clash = client.post("/api/publish", json={
-        "err": "id clobber two",
-        "fix_k": "constraint",
-        "fix_b": "b",
-        "eval": "true",
-        "own": "did:claimidx:lucas",
-        "id": "cix_aaaaaaaaaaaaaaaa",
-    })
+    clash = client.post(
+        "/api/publish",
+        json={
+            "err": "id clobber two",
+            "fix_k": "constraint",
+            "fix_b": "b",
+            "eval": "true",
+            "own": "did:claimidx:lucas",
+            "id": "cix_aaaaaaaaaaaaaaaa",
+        },
+    )
     assert clash.status_code == 409
-    forced = client.post("/api/publish", json={
-        "err": "id clobber two",
-        "fix_k": "constraint",
-        "fix_b": "b",
-        "eval": "true",
-        "own": "did:claimidx:lucas",
-        "id": "cix_aaaaaaaaaaaaaaaa",
-        "force": True,
-    })
+    forced = client.post(
+        "/api/publish",
+        json={
+            "err": "id clobber two",
+            "fix_k": "constraint",
+            "fix_b": "b",
+            "eval": "true",
+            "own": "did:claimidx:lucas",
+            "id": "cix_aaaaaaaaaaaaaaaa",
+            "force": True,
+        },
+    )
     assert forced.status_code == 200, forced.text
     assert forced.json()["claim"]["fix"]["b"] == "b"
     # no counters to wipe → no force_reset event
@@ -242,13 +286,16 @@ def test_api_publish_refuses_id_clobber(tmp_path: Path):
 def test_api_reject(tmp_path: Path):
     app = create_app(str(tmp_path / "home.sqlite"))
     client = TestClient(app)
-    posted = client.post("/api/publish", json={
-        "err": "x reject me",
-        "fix_k": "constraint",
-        "fix_b": "no",
-        "eval": "true",
-        "own": "did:claimidx:harper",
-    })
+    posted = client.post(
+        "/api/publish",
+        json={
+            "err": "x reject me",
+            "fix_k": "constraint",
+            "fix_b": "no",
+            "eval": "true",
+            "own": "did:claimidx:harper",
+        },
+    )
     cid = posted.json()["claim"]["id"]
     r = client.post(f"/api/claims/{cid}/reject")
     assert r.status_code == 200, r.text

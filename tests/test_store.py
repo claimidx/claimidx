@@ -10,8 +10,13 @@ def _claim() -> Claim:
     err = "TypeError: params is a Promise"
     return Claim(
         fp=fingerprint(err=err, eco="npm", rt="node@20", dep=["next@15.0.0"]),
-        cls="async_api", err=normalize_error(err), eco="npm", rt="node@20", dep=["next@15.0.0"],
-        fix=Fix(k="patch", b="const { slug } = await params"), eval=EvalSpec(cmd="npx tsc --noEmit"),
+        cls="async_api",
+        err=normalize_error(err),
+        eco="npm",
+        rt="node@20",
+        dep=["next@15.0.0"],
+        fix=Fix(k="patch", b="const { slug } = await params"),
+        eval=EvalSpec(cmd="npx tsc --noEmit"),
         own="did:claimidx:test",
     )
 
@@ -86,10 +91,25 @@ def test_migrates_v01_denormalized_table(tmp_path: Path):
     con.execute(
         "INSERT INTO claims VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
-            "spr_aaaaaaaaaaaaaaaa", fp, "async_api", err, "npm", "node@20",
-            json.dumps(["next@15.0.0"]), json.dumps(["sync-access"]),
-            "patch", "const { slug } = await params", "true", 0,
-            "confirmed", 1, 0, "", 1787989331.2, 1787989331.2, 1787989331.2,
+            "spr_aaaaaaaaaaaaaaaa",
+            fp,
+            "async_api",
+            err,
+            "npm",
+            "node@20",
+            json.dumps(["next@15.0.0"]),
+            json.dumps(["sync-access"]),
+            "patch",
+            "const { slug } = await params",
+            "true",
+            0,
+            "confirmed",
+            1,
+            0,
+            "",
+            1787989331.2,
+            1787989331.2,
+            1787989331.2,
         ),
     )
     con.commit()
@@ -189,9 +209,7 @@ def test_events_detail_migrates_from_legacy_table(tmp_path: Path):
 
     path = tmp_path / "legacy-events.sqlite"
     con = sqlite3.connect(path)
-    con.execute(
-        "CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_id TEXT, kind TEXT, actor TEXT, ts TEXT)"
-    )
+    con.execute("CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_id TEXT, kind TEXT, actor TEXT, ts TEXT)")
     con.execute(
         "INSERT INTO events(claim_id, kind, actor, ts) VALUES (?,?,?,?)",
         ("spr_aaaaaaaaaaaaaaaa", "publish", "did:claimidx:test", "2026-08-30T00:00:00+00:00"),

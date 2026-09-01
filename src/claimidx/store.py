@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+from datetime import UTC
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -31,7 +33,7 @@ def force_reset_emits(reset: dict) -> bool:
 
 
 class Store:
-    def __init__(self, path: str | Path | None = None):
+    def __init__(self, path: str | os.PathLike[str] | None = None):
         self.path = Path(path) if path else DEFAULT_DB
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._init()
@@ -85,7 +87,7 @@ class Store:
             return
         old = con.execute("SELECT * FROM claims").fetchall()
         con.execute("ALTER TABLE claims RENAME TO claims_v01")
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from .models import Claim, EvalSpec, Fix
 
@@ -99,29 +101,31 @@ class Store:
                 dep, tried = [], []
             ts_raw = d.get("created_at") or d.get("updated_at")
             try:
-                ts = datetime.fromtimestamp(float(ts_raw), tz=timezone.utc) if ts_raw else utcnow()
+                ts = datetime.fromtimestamp(float(ts_raw), tz=UTC) if ts_raw else utcnow()
             except (TypeError, ValueError, OSError):
                 ts = utcnow()
             try:
-                rebuilt.append(Claim(
-                    id=d["id"],
-                    fp=d["fp"],
-                    cls=d.get("cls") or "other",
-                    err=d.get("err") or "",
-                    eco=d.get("eco") or "other",
-                    rt=d.get("rt") or "",
-                    dep=dep if isinstance(dep, list) else [],
-                    tried=tried if isinstance(tried, list) else [],
-                    fix=Fix(k=d.get("fix_k") or "constraint", b=d.get("fix_b") or "unknown"),
-                    eval=EvalSpec(cmd=d.get("eval_cmd") or "true", expect=int(d.get("eval_expect") or 0)),
-                    st=d.get("st") or "proposed",
-                    nc=int(d.get("nc") or 0),
-                    nf=int(d.get("nf") or 0),
-                    own="did:claimidx:seed",
-                    ts=ts,
-                    note=d.get("note") or "",
-                    src="seed",
-                ))
+                rebuilt.append(
+                    Claim(
+                        id=d["id"],
+                        fp=d["fp"],
+                        cls=d.get("cls") or "other",
+                        err=d.get("err") or "",
+                        eco=d.get("eco") or "other",
+                        rt=d.get("rt") or "",
+                        dep=dep if isinstance(dep, list) else [],
+                        tried=tried if isinstance(tried, list) else [],
+                        fix=Fix(k=d.get("fix_k") or "constraint", b=d.get("fix_b") or "unknown"),
+                        eval=EvalSpec(cmd=d.get("eval_cmd") or "true", expect=int(d.get("eval_expect") or 0)),
+                        st=d.get("st") or "proposed",
+                        nc=int(d.get("nc") or 0),
+                        nf=int(d.get("nf") or 0),
+                        own="did:claimidx:seed",
+                        ts=ts,
+                        note=d.get("note") or "",
+                        src="seed",
+                    )
+                )
             except (ValueError, TypeError):
                 continue
         con.execute(
@@ -144,8 +148,12 @@ class Store:
         from .policy import inspect_claim, quarantine
 
         inspect_claim(
-            err=claim.err, fix_k=claim.fix.k, fix_b=claim.fix.b,
-            eval_cmd=claim.eval.cmd, note=claim.note, own=claim.own,
+            err=claim.err,
+            fix_k=claim.fix.k,
+            fix_b=claim.fix.b,
+            eval_cmd=claim.eval.cmd,
+            note=claim.note,
+            own=claim.own,
             src=getattr(claim, "src", "local") or "local",
         )
         quarantine(claim)
@@ -228,12 +236,7 @@ class Store:
             return chosen, fp, existing
         nerr = normalize_error(err)
         for c in self.all():
-            if (
-                c.err == nerr
-                and c.eco == eco_store
-                and (c.rt or "") == (rt or "")
-                and list(c.dep or []) == dep
-            ):
+            if c.err == nerr and c.eco == eco_store and (c.rt or "") == (rt or "") and list(c.dep or []) == dep:
                 return c.cls, c.fp, [c]
         return chosen, fp, []
 

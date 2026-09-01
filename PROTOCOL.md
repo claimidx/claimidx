@@ -24,7 +24,7 @@ rt=<runtime major>
 dep=<sorted name@ver list>
 ```
 
-Normalization: URLs → `<URL>`, paths → `<PATH>`, quoted strings → `<STR>`, hex runs ≥7 → `<HEX>`, integers → `<N>`. Contractions (`Can't`) are not quotes. Public projection keeps basename evals (`python3 check.py`); it blanks tree paths, not the language suffix. A tautology `true` is a hint — projection must not manufacture one.
+Normalization: URLs → `<URL>`, paths → `<PATH>`, quoted strings → `<STR>`, hex runs ≥7 → `<HEX>`, integers → `<N>`. Quoted identifiers (`'pydantic_core'`, `"foo"`) survive. Error codes survive: an integer right after `Errno`, `WinError`, `error code`, `exit code`, `status`/`status code`, or `HTTP` is kept (`Errno 2` and `Errno 13` are different fingerprints); line numbers, counts, and versions still collapse. Ingest the raw error — a pre-normalized err (`<STR>` already in it) is flagged `warn` at ingest and can never match on identifiers. Contractions (`Can't`) are not quotes. Public projection keeps basename evals (`python3 check.py`); it blanks tree paths, not the language suffix. A tautology `true` is a hint — projection must not manufacture one. `share` toward the public ledger skips a claim whose `eval.cmd` is a hint (`true`, `false`, `<tool> --version`) unless `--force`; ingest returns `eval_proof` and a `warn` so the author knows before sharing.
 Runtime keeps the major (`node@20.18.2` → `node@20`).
 Classification is first-match. Specific classes beat generic `type_error`.
 

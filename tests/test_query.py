@@ -62,8 +62,8 @@ def test_python_ingest_stores_expect(tmp_path, monkeypatch):
     out = ingest(
         "python -c exit 1 is the proof",
         fix_k="cmd",
-        fix_b="python -c \"import sys; sys.exit(1)\"",
-        eval="python -c \"import sys; sys.exit(1)\"",
+        fix_b='python -c "import sys; sys.exit(1)"',
+        eval='python -c "import sys; sys.exit(1)"',
         expect=1,
         eco="py",
         db=db,

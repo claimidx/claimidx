@@ -1,13 +1,13 @@
 """Claimidx — prior art for agents."""
 
-__version__ = "0.5.8"
+__version__ = "0.5.9"
 
-from .models import Claim, Fix, EvalSpec
-from .fingerprint import fingerprint, normalize_error, classify
-from .store import Store
-from .dense import encode, decode
+from .dense import decode, encode
+from .fingerprint import classify, fingerprint, normalize_error
 from .match import rank
+from .models import Claim, EvalSpec, Fix
 from .query import ask, ingest, verify
+from .store import Store
 from .team import resolve_owner, whoami
 
 __all__ = [

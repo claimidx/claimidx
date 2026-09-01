@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
-
 
 FixKind = Literal["pin", "patch", "config", "constraint", "cmd", "wontfix"]
 Status = Literal["proposed", "confirmed", "contested", "stale", "rejected"]
@@ -16,7 +15,7 @@ def new_id() -> str:
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Fix(BaseModel):

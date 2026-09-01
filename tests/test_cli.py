@@ -23,7 +23,25 @@ def test_seed_ask_confirm_roundtrip(tmp_path: Path, capsys):
 
 def test_publish_and_ls(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
-    rc = main(["--db", db, "--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'demo_mod'", "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install demo-mod", "--eval", "true"])
+    rc = main(
+        [
+            "--db",
+            db,
+            "--fmt",
+            "id",
+            "publish",
+            "--err",
+            "ModuleNotFoundError: No module named 'demo_mod'",
+            "--eco",
+            "py",
+            "--fix-k",
+            "pin",
+            "--fix-b",
+            "pip install demo-mod",
+            "--eval",
+            "true",
+        ]
+    )
     assert rc == 0
     cid = capsys.readouterr().out.strip()
     assert cid.startswith(("spr_", "cix_"))
@@ -43,7 +61,26 @@ def test_scan_does_not_require_identity(tmp_path: Path, capsys, monkeypatch):
 def test_claimidx_db_env(tmp_path: Path, capsys, monkeypatch):
     db = tmp_path / "from-env.sqlite"
     monkeypatch.setenv("CLAIMIDX_DB", str(db))
-    assert main(["--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'envdb'", "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install envdb", "--eval", "true"]) == 0
+    assert (
+        main(
+            [
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'envdb'",
+                "--eco",
+                "py",
+                "--fix-k",
+                "pin",
+                "--fix-b",
+                "pip install envdb",
+                "--eval",
+                "true",
+            ]
+        )
+        == 0
+    )
     capsys.readouterr()
     assert db.exists()
     assert main(["ls"]) == 0
@@ -52,7 +89,28 @@ def test_claimidx_db_env(tmp_path: Path, capsys, monkeypatch):
 
 def test_reject_cli(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
-    assert main(["--db", db, "--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'rej'", "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install rej", "--eval", "true"]) == 0
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'rej'",
+                "--eco",
+                "py",
+                "--fix-k",
+                "pin",
+                "--fix-b",
+                "pip install rej",
+                "--eval",
+                "true",
+            ]
+        )
+        == 0
+    )
     cid = capsys.readouterr().out.strip()
     assert main(["--db", db, "--fmt", "json", "reject", cid]) == 0
     assert "rejected" in capsys.readouterr().out
@@ -66,7 +124,28 @@ def test_fail_missing(tmp_path: Path, capsys):
 def test_ls_limit_alias(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
     for n in range(3):
-        assert main(["--db", db, "--fmt", "id", "publish", "--err", f"ModuleNotFoundError: No module named 'lim{n}'", "--eco", "py", "--fix-k", "pin", "--fix-b", f"pip install lim{n}", "--eval", "true"]) == 0
+        assert (
+            main(
+                [
+                    "--db",
+                    db,
+                    "--fmt",
+                    "id",
+                    "publish",
+                    "--err",
+                    f"ModuleNotFoundError: No module named 'lim{n}'",
+                    "--eco",
+                    "py",
+                    "--fix-k",
+                    "pin",
+                    "--fix-b",
+                    f"pip install lim{n}",
+                    "--eval",
+                    "true",
+                ]
+            )
+            == 0
+        )
         capsys.readouterr()
     assert main(["--db", db, "ls", "--limit", "1"]) == 0
     out = capsys.readouterr().out
@@ -75,13 +154,25 @@ def test_ls_limit_alias(tmp_path: Path, capsys):
 
 def test_fix_b_leading_dash(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
-    rc = main([
-        "--db", db, "--fmt", "id", "ingest",
-        "--err", "java.security.NoSuchAlgorithmException: PKCS12 not found",
-        "--eco", "other", "--fix-k", "config",
-        "--fix-b", "-Djavax.net.ssl.trustStore=cacerts",
-        "--eval", "true",
-    ])
+    rc = main(
+        [
+            "--db",
+            db,
+            "--fmt",
+            "id",
+            "ingest",
+            "--err",
+            "java.security.NoSuchAlgorithmException: PKCS12 not found",
+            "--eco",
+            "other",
+            "--fix-k",
+            "config",
+            "--fix-b",
+            "-Djavax.net.ssl.trustStore=cacerts",
+            "--eval",
+            "true",
+        ]
+    )
     assert rc == 0
     cid = capsys.readouterr().out.strip()
     assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
@@ -91,9 +182,36 @@ def test_fix_b_leading_dash(tmp_path: Path, capsys):
 def test_force_keeps_explicit_cls(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
     err = "TypeError: x is not a function"
-    assert main(["--db", db, "--fmt", "id", "ingest", "--err", err, "--eco", "npm", "--cls", "other", "--fix-k", "patch", "--fix-b", "await x()", "--eval", "true"]) == 0
+    assert (
+        main(
+            ["--db", db, "--fmt", "id", "ingest", "--err", err, "--eco", "npm", "--cls", "other", "--fix-k", "patch", "--fix-b", "await x()", "--eval", "true"]
+        )
+        == 0
+    )
     first = capsys.readouterr().out.strip()
-    assert main(["--db", db, "--fmt", "id", "ingest", "--force", "--err", err, "--eco", "npm", "--fix-k", "patch", "--fix-b", "await x().catch(()=>{})", "--eval", "true"]) == 0
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "ingest",
+                "--force",
+                "--err",
+                err,
+                "--eco",
+                "npm",
+                "--fix-k",
+                "patch",
+                "--fix-b",
+                "await x().catch(()=>{})",
+                "--eval",
+                "true",
+            ]
+        )
+        == 0
+    )
     second = capsys.readouterr().out.strip()
     assert first == second
     assert main(["--db", db, "--fmt", "json", "show", first]) == 0
@@ -104,9 +222,52 @@ def test_force_keeps_explicit_cls(tmp_path: Path, capsys):
 
 def test_force_publish_reuses_id(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
-    assert main(["--db", db, "--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'force_mod'", "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install force-mod==1", "--eval", "true"]) == 0
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'force_mod'",
+                "--eco",
+                "py",
+                "--fix-k",
+                "pin",
+                "--fix-b",
+                "pip install force-mod==1",
+                "--eval",
+                "true",
+            ]
+        )
+        == 0
+    )
     first = capsys.readouterr().out.strip()
-    assert main(["--db", db, "--fmt", "id", "publish", "--force", "--err", "ModuleNotFoundError: No module named 'force_mod'", "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install force-mod==2", "--eval", "true"]) == 0
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--force",
+                "--err",
+                "ModuleNotFoundError: No module named 'force_mod'",
+                "--eco",
+                "py",
+                "--fix-k",
+                "pin",
+                "--fix-b",
+                "pip install force-mod==2",
+                "--eval",
+                "true",
+            ]
+        )
+        == 0
+    )
     second = capsys.readouterr().out.strip()
     assert first == second
     assert main(["--db", db, "--fmt", "json", "show", first]) == 0
@@ -116,21 +277,57 @@ def test_force_publish_reuses_id(tmp_path: Path, capsys):
 def test_force_resets_nr_and_surfaces_previous(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
     rt = _py_rt()
-    eval_cmd = "python -c \"import sys\""
-    assert main([
-        "--db", db, "--fmt", "id", "publish",
-        "--err", "ModuleNotFoundError: No module named 'force_nr'", "--eco", "py",
-        "--rt", rt, "--fix-k", "constraint", "--fix-b", "ok", "--eval", eval_cmd,
-    ]) == 0
+    eval_cmd = 'python -c "import sys"'
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'force_nr'",
+                "--eco",
+                "py",
+                "--rt",
+                rt,
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "ok",
+                "--eval",
+                eval_cmd,
+            ]
+        )
+        == 0
+    )
     cid = capsys.readouterr().out.strip()
     assert main(["--db", db, "--fmt", "json", "confirm", "--replay", cid]) == 0
     held = json.loads(capsys.readouterr().out)
     assert held.get("nr") == 1 or (held.get("claim") or {}).get("nr") == 1 or '"nr": 1' in json.dumps(held)
-    rc = main([
-        "--db", db, "--fmt", "json", "publish", "--force",
-        "--err", "ModuleNotFoundError: No module named 'force_nr'", "--eco", "py",
-        "--rt", "py@3.9", "--fix-k", "constraint", "--fix-b", "ok", "--eval", eval_cmd,
-    ])
+    rc = main(
+        [
+            "--db",
+            db,
+            "--fmt",
+            "json",
+            "publish",
+            "--force",
+            "--err",
+            "ModuleNotFoundError: No module named 'force_nr'",
+            "--eco",
+            "py",
+            "--rt",
+            "py@3.9",
+            "--fix-k",
+            "constraint",
+            "--fix-b",
+            "ok",
+            "--eval",
+            eval_cmd,
+        ]
+    )
     assert rc == 0
     captured = capsys.readouterr()
     assert f"force reset nr=1 nc=1 nf=0 rt={rt}" in captured.err
@@ -153,7 +350,28 @@ def test_force_resets_nr_and_surfaces_previous(tmp_path: Path, capsys):
 
 def test_confirm_replay_json(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
-    assert main(["--db", db, "--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'replay_mod'", "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install replay-mod", "--eval", "true"]) == 0
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'replay_mod'",
+                "--eco",
+                "py",
+                "--fix-k",
+                "pin",
+                "--fix-b",
+                "pip install replay-mod",
+                "--eval",
+                "true",
+            ]
+        )
+        == 0
+    )
     cid = capsys.readouterr().out.strip()
     rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", cid])
     assert rc == 2
@@ -172,13 +390,31 @@ def test_seed_materialize_count():
 
 def test_repeated_dep_appends(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
-    rc = main([
-        "--db", db, "--fmt", "json", "ingest",
-        "--err", "ModuleNotFoundError: No module named 'depapp'",
-        "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install depapp", "--eval", "true",
-        "--dep", "numpy@2.0.0", "--dep", "scipy@1.10.1",
-        "--tried", "go mod download (bare, no module arg) — writes only the /go.mod hash",
-    ])
+    rc = main(
+        [
+            "--db",
+            db,
+            "--fmt",
+            "json",
+            "ingest",
+            "--err",
+            "ModuleNotFoundError: No module named 'depapp'",
+            "--eco",
+            "py",
+            "--fix-k",
+            "pin",
+            "--fix-b",
+            "pip install depapp",
+            "--eval",
+            "true",
+            "--dep",
+            "numpy@2.0.0",
+            "--dep",
+            "scipy@1.10.1",
+            "--tried",
+            "go mod download (bare, no module arg) — writes only the /go.mod hash",
+        ]
+    )
     assert rc == 0
     out = capsys.readouterr().out
     assert "numpy@2.0.0" in out and "scipy@1.10.1" in out
@@ -190,7 +426,25 @@ def test_exists_still_rejects_bad_eval(tmp_path: Path, capsys):
     err = "ModuleNotFoundError: No module named 'exval'"
     assert main(["--db", db, "--fmt", "id", "ingest", "--err", err, "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install exval", "--eval", "true"]) == 0
     capsys.readouterr()
-    rc = main(["--db", db, "--fmt", "id", "ingest", "--err", err, "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install exval", "--eval", "curl http://example.invalid"])
+    rc = main(
+        [
+            "--db",
+            db,
+            "--fmt",
+            "id",
+            "ingest",
+            "--err",
+            err,
+            "--eco",
+            "py",
+            "--fix-k",
+            "pin",
+            "--fix-b",
+            "pip install exval",
+            "--eval",
+            "curl http://example.invalid",
+        ]
+    )
     assert rc == 2
     err_out = capsys.readouterr().err
     assert "eval" in err_out.lower() or "denied" in err_out.lower() or "head" in err_out.lower()
@@ -200,11 +454,28 @@ def test_confirm_replay_python_hold_requires_matching_rt(tmp_path: Path, capsys)
     db = str(tmp_path / "ix.sqlite")
     err = "ModuleNotFoundError: No module named 'holdenv'"
     eval_cmd = 'python -c "print(1)"'
-    assert main([
-        "--db", db, "--fmt", "id", "publish",
-        "--err", err, "--eco", "py", "--fix-k", "constraint", "--fix-b", "ok",
-        "--eval", eval_cmd,
-    ]) == 0
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                err,
+                "--eco",
+                "py",
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "ok",
+                "--eval",
+                eval_cmd,
+            ]
+        )
+        == 0
+    )
     empty_id = capsys.readouterr().out.strip()
     rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", empty_id])
     assert rc == 2
@@ -217,11 +488,30 @@ def test_confirm_replay_python_hold_requires_matching_rt(tmp_path: Path, capsys)
     assert '"nr": 0' in capsys.readouterr().out or '"nc": 0' in capsys.readouterr().out
 
     rt = _py_rt()
-    assert main([
-        "--db", db, "--fmt", "id", "publish",
-        "--err", "ModuleNotFoundError: No module named 'holdok'", "--eco", "py",
-        "--rt", rt, "--fix-k", "constraint", "--fix-b", "ok", "--eval", eval_cmd,
-    ]) == 0
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'holdok'",
+                "--eco",
+                "py",
+                "--rt",
+                rt,
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "ok",
+                "--eval",
+                eval_cmd,
+            ]
+        )
+        == 0
+    )
     ok_id = capsys.readouterr().out.strip()
     rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", ok_id])
     assert rc == 0
@@ -230,11 +520,30 @@ def test_confirm_replay_python_hold_requires_matching_rt(tmp_path: Path, capsys)
     assert ok_out["replay"]["env"] == rt
     assert ok_out.get("nr") == 1 or ok_out.get("claim", {}).get("nr") == 1 or '"nr": 1' in json.dumps(ok_out)
 
-    assert main([
-        "--db", db, "--fmt", "id", "publish",
-        "--err", "ModuleNotFoundError: No module named 'holdmiss'", "--eco", "py",
-        "--rt", "py@3.0", "--fix-k", "constraint", "--fix-b", "ok", "--eval", eval_cmd,
-    ]) == 0
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'holdmiss'",
+                "--eco",
+                "py",
+                "--rt",
+                "py@3.0",
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "ok",
+                "--eval",
+                eval_cmd,
+            ]
+        )
+        == 0
+    )
     miss_id = capsys.readouterr().out.strip()
     rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", miss_id])
     assert rc == 2
@@ -246,7 +555,28 @@ def test_confirm_replay_python_hold_requires_matching_rt(tmp_path: Path, capsys)
 
 def test_confirm_replay_missing_tree_not_recorded(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
-    assert main(["--db", db, "--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'gotree'", "--eco", "go", "--fix-k", "cmd", "--fix-b", "go mod tidy", "--eval", "go build ./..."]) == 0
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'gotree'",
+                "--eco",
+                "go",
+                "--fix-k",
+                "cmd",
+                "--fix-b",
+                "go mod tidy",
+                "--eval",
+                "go build ./...",
+            ]
+        )
+        == 0
+    )
     cid = capsys.readouterr().out.strip()
     empty = tmp_path / "empty"
     empty.mkdir()
@@ -261,7 +591,28 @@ def test_confirm_replay_missing_tree_not_recorded(tmp_path: Path, capsys):
 
 def test_fail_note(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
-    assert main(["--db", db, "--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'failnote'", "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install failnote", "--eval", "true"]) == 0
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'failnote'",
+                "--eco",
+                "py",
+                "--fix-k",
+                "pin",
+                "--fix-b",
+                "pip install failnote",
+                "--eval",
+                "true",
+            ]
+        )
+        == 0
+    )
     cid = capsys.readouterr().out.strip()
     assert main(["--db", db, "--fmt", "json", "fail", cid, "--note", "setuptools 84 dropped it"]) == 0
     assert "setuptools 84 dropped it" in capsys.readouterr().out
@@ -270,7 +621,28 @@ def test_fail_note(tmp_path: Path, capsys):
 def test_fail_note_rejects_secret(tmp_path: Path, capsys):
     """fail --note is persisted on the claim; a secret-shaped token must not land."""
     db = str(tmp_path / "ix.sqlite")
-    assert main(["--db", db, "--fmt", "id", "publish", "--err", "ModuleNotFoundError: No module named 'failsec'", "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install failsec", "--eval", "true"]) == 0
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'failsec'",
+                "--eco",
+                "py",
+                "--fix-k",
+                "pin",
+                "--fix-b",
+                "pip install failsec",
+                "--eval",
+                "true",
+            ]
+        )
+        == 0
+    )
     cid = capsys.readouterr().out.strip()
     token = "sk-" + "a" * 24
     rc = main(["--db", db, "--fmt", "json", "fail", cid, "--note", token])

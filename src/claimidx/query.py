@@ -3,6 +3,7 @@
 Never applies fix.b. Never auto-confirms. ingest() is local unless share=True.
 verify() dry_run defaults True: list claims, do not run evals/venv/pip.
 """
+
 from __future__ import annotations
 
 import os
@@ -29,8 +30,8 @@ def ask(
     store = Store(path)
     dep = dep or []
     cls = classify(err)
-    q = {"err": err, "cls": cls, "eco": eco or "", "rt": rt or "", "dep": dep}
-    q["fp"] = fingerprint(err=err, cls=cls, eco=q["eco"], rt=q["rt"], dep=dep)
+    q: dict[str, Any] = {"err": err, "cls": cls, "eco": eco or "", "rt": rt or "", "dep": dep}
+    q["fp"] = fingerprint(err=err, cls=cls, eco=eco or "", rt=rt or "", dep=dep)
     hits = rank(q, store.all(), k=k)
     store.log("ask", resolve_owner(None), hits[0][0].id if hits else "")
     if not hits:
@@ -78,7 +79,11 @@ def ingest(
     eval = refine_eval(eval, fix_k=fix_k, fix_b=fix_b, dep=dep, eco=eco)
     if force:
         cls, fp, existing = store.match_amend(
-            err=err, cls=None, eco=eco or "", rt=rt or "", dep=dep,
+            err=err,
+            cls=None,
+            eco=eco or "",
+            rt=rt or "",
+            dep=dep,
         )
     else:
         cls = classify(err)
@@ -108,7 +113,20 @@ def ingest(
         **extra,
     )
     store.publish(claim, claim.own, reset)
-    out: dict[str, Any] = {"exists": False, "id": claim.id, "st": claim.st, "fp": claim.fp, "own": claim.own, "nr": claim.nr}
+    from .public import eval_is_proof, ingest_warnings
+
+    out: dict[str, Any] = {
+        "exists": False,
+        "id": claim.id,
+        "st": claim.st,
+        "fp": claim.fp,
+        "own": claim.own,
+        "nr": claim.nr,
+        "eval_proof": eval_is_proof(claim.eval.cmd),
+    }
+    warns = ingest_warnings(err, claim.eval.cmd)
+    if warns:
+        out["warn"] = "; ".join(warns)
     if force_reset_emits(reset):
         out["force_reset"] = reset
     if share:

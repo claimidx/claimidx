@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from .fingerprint import classify, fingerprint, normalize_error, normalization_risk, runtime_proof_key
+from .fingerprint import (
+    classify,
+    fingerprint,
+    normalization_risk,
+    normalize_error,
+    runtime_proof_key,
+)
 from .models import Claim
 from .public import eval_is_proof
 
@@ -76,8 +82,8 @@ def dep_drift(query_dep: list[str] | None, claim_dep: list[str] | None) -> list[
 def age_days(claim: Claim, *, now: datetime | None = None) -> float:
     ts = claim.ts
     if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=timezone.utc)
-    when = now or datetime.now(timezone.utc)
+        ts = ts.replace(tzinfo=UTC)
+    when = now or datetime.now(UTC)
     return max(0.0, (when - ts).total_seconds() / 86400)
 
 
@@ -144,14 +150,53 @@ def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
 
 
 _ERR_BOILER = {
-    "modulenotfounderror", "importerror", "error", "no", "module", "named",
-    "cannot", "find", "or", "its", "corresponding", "type", "declarations",
-    "the", "a", "an", "from", "is", "not", "defined", "import", "name",
+    "modulenotfounderror",
+    "importerror",
+    "error",
+    "no",
+    "module",
+    "named",
+    "cannot",
+    "find",
+    "or",
+    "its",
+    "corresponding",
+    "type",
+    "declarations",
+    "the",
+    "a",
+    "an",
+    "from",
+    "is",
+    "not",
+    "defined",
+    "import",
+    "name",
     # schema-break skeleton (pydantic/zod). Payload is field/literal/type-tag.
-    "be", "for", "input", "should", "valid", "validation", "validationerror",
-    "pydantic", "pydantic.validationerror", "input_value", "input_type",
-    "value", "given", "got", "expected", "received", "required", "field",
-    "string", "n", "str", "url", "path", "hex",
+    "be",
+    "for",
+    "input",
+    "should",
+    "valid",
+    "validation",
+    "validationerror",
+    "pydantic",
+    "pydantic.validationerror",
+    "input_value",
+    "input_type",
+    "value",
+    "given",
+    "got",
+    "expected",
+    "received",
+    "required",
+    "field",
+    "string",
+    "n",
+    "str",
+    "url",
+    "path",
+    "hex",
 }
 _ERR_SPLIT = re.compile(r"[^a-z0-9_@./+-]+")
 
@@ -244,15 +289,17 @@ def hit_row(query: Claim | dict, claim: Claim, sim: float) -> dict:
 def hit_compact(query: Claim | dict, claim: Claim, sim: float) -> dict:
     """MCP / home-ask: enough to apply or skip, plus freshness."""
     row = annotate(query, claim, sim)
-    row.update({
-        "id": claim.id,
-        "st": claim.st,
-        "src": getattr(claim, "src", "local"),
-        "nc": claim.nc,
-        "nf": claim.nf,
-        "err": claim.err,
-        "dep": claim.dep,
-        "fix": claim.fix.model_dump(),
-        "eval": claim.eval.model_dump(),
-    })
+    row.update(
+        {
+            "id": claim.id,
+            "st": claim.st,
+            "src": getattr(claim, "src", "local"),
+            "nc": claim.nc,
+            "nf": claim.nf,
+            "err": claim.err,
+            "dep": claim.dep,
+            "fix": claim.fix.model_dump(),
+            "eval": claim.eval.model_dump(),
+        }
+    )
     return row

@@ -40,11 +40,25 @@ def test_whoami_team_ingest(tmp_path: Path, capsys, monkeypatch):
     monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:benjamin")
     assert main(["--db", db, "whoami"]) == 0
     assert "did:claimidx:benjamin" in capsys.readouterr().out
-    rc = main([
-        "--db", db, "--fmt", "id", "ingest",
-        "--err", "ModuleNotFoundError: No module named 'wired_mod'",
-        "--eco", "py", "--fix-k", "pin", "--fix-b", "pip install wired-mod", "--eval", "true",
-    ])
+    rc = main(
+        [
+            "--db",
+            db,
+            "--fmt",
+            "id",
+            "ingest",
+            "--err",
+            "ModuleNotFoundError: No module named 'wired_mod'",
+            "--eco",
+            "py",
+            "--fix-k",
+            "pin",
+            "--fix-b",
+            "pip install wired-mod",
+            "--eval",
+            "true",
+        ]
+    )
     assert rc == 0
     cid = capsys.readouterr().out.strip()
     assert cid.startswith(("spr_", "cix_"))
