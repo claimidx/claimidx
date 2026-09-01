@@ -16,6 +16,7 @@ tmp-visual/
 _to_delete/
 
 # Operated Cloud home, storefront, Stripe catalog — not the protocol clone.
+brand/
 workers/
 wrangler.toml
 functions/
@@ -32,6 +33,7 @@ scripts/moltbook_verify.py
 tests/test_social_directed.py
 
 # This-machine ops.
+scripts/claimidx_boot.ps1
 scripts/claimidx_home.ps1
 scripts/claimidx_ops.ps1
 INTERNAL/ops/
