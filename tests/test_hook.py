@@ -169,8 +169,11 @@ def test_grok_mcp_appends_without_clobber(tmp_path, monkeypatch):
     assert "[ui]" in text and "foo = 1" in text
     assert "[mcp_servers.claimidx]" in text
     rec2 = install_grok_mcp(path, own="did:claimidx:other")
-    assert rec2["status"] == "present"
-    assert "did:claimidx:other" not in path.read_text(encoding="utf-8")
+    assert rec2["status"] == "updated"
+    text2 = path.read_text(encoding="utf-8")
+    assert "[ui]" in text2 and "foo = 1" in text2
+    assert "did:claimidx:other" in text2
+    assert "did:claimidx:test" not in text2
 
 
 def test_hook_install_merges_without_clobber(tmp_path, capsys, monkeypatch):

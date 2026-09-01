@@ -295,6 +295,51 @@ def _json_mcp_block(own: str, agent: str) -> dict:
     return {"command": "claimidx-mcp", "args": [], "env": mcp_owner_env(own, agent)}
 
 
+def _sync_json_owner(existing: dict, *, own: str, agent: str, env_key: str) -> bool:
+    """Write CLAIMIDX_OWNER/AGENT into an existing MCP block. True if the file must be saved."""
+    env = existing.get(env_key)
+    if not isinstance(env, dict):
+        env = {}
+        existing[env_key] = env
+    wanted = mcp_owner_env(own, agent)
+    if all(env.get(k) == v for k, v in wanted.items()):
+        return False
+    env.update(wanted)
+    return True
+
+
+def _toml_sync_claimidx_owner(text: str, *, own: str, agent: str) -> tuple[str, bool]:
+    """Replace CLAIMIDX_OWNER/AGENT under [mcp_servers.claimidx.env]. Leaves the rest of the file."""
+    marker = "[mcp_servers.claimidx.env]"
+    idx = text.find(marker)
+    if idx < 0:
+        return text, False
+    rest_start = idx + len(marker)
+    nxt = text.find("\n[", rest_start)
+    if nxt < 0:
+        section, tail = text[rest_start:], ""
+    else:
+        section, tail = text[rest_start:nxt], text[nxt:]
+    head = text[:rest_start]
+    wanted = {"CLAIMIDX_OWNER": own}
+    if agent:
+        wanted["CLAIMIDX_AGENT"] = agent
+    changed = False
+    for key, val in wanted.items():
+        line = f"{key} = {_toml_str(val)}"
+        m = re.search(rf"(?m)^{re.escape(key)}\s*=\s*.*$", section)
+        if m:
+            if m.group(0) != line:
+                section = section[: m.start()] + line + section[m.end() :]
+                changed = True
+        else:
+            if not section.endswith("\n"):
+                section += "\n"
+            section += line + "\n"
+            changed = True
+    return head + section + tail, changed
+
+
 def install_cursor_mcp(path: Path | None = None, *, own: str, agent: str = "") -> dict:
     """Merge claimidx into Cursor mcp.json. Skip if Cursor is not installed."""
     target = path or cursor_mcp_path()
@@ -319,14 +364,17 @@ def install_cursor_mcp(path: Path | None = None, *, own: str, agent: str = "") -
         return {"path": str(target), "status": "error", "error": "mcpServers is not an object"}
     existing = servers.get("claimidx")
     if isinstance(existing, dict) and existing.get("command") == "claimidx-mcp":
-        return {"path": str(target), "status": "present", "command": "claimidx-mcp"}
+        if not _sync_json_owner(existing, own=own, agent=agent, env_key="env"):
+            return {"path": str(target), "status": "present", "command": "claimidx-mcp"}
+        target.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        return {"path": str(target), "status": "updated", "command": "claimidx-mcp"}
     servers["claimidx"] = _json_mcp_block(own, agent)
     target.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return {"path": str(target), "status": "installed", "command": "claimidx-mcp"}
 
 
 def install_grok_mcp(path: Path | None = None, *, own: str, agent: str = "") -> dict:
-    """Append [mcp_servers.claimidx] to Grok config.toml if missing. Do not rewrite the file."""
+    """Append [mcp_servers.claimidx] to Grok config.toml if missing. Owner updates stay in that env table."""
     target = path or grok_config_path()
     forced = bool(os.environ.get("CLAIMIDX_GROK_CONFIG"))
     if not forced and not target.exists():
@@ -334,7 +382,21 @@ def install_grok_mcp(path: Path | None = None, *, own: str, agent: str = "") -> 
     target.parent.mkdir(parents=True, exist_ok=True)
     text = target.read_text(encoding="utf-8") if target.exists() else ""
     if "[mcp_servers.claimidx]" in text:
-        return {"path": str(target), "status": "present", "command": "claimidx-mcp"}
+        if "[mcp_servers.claimidx.env]" not in text:
+            env_block = (
+                "\n[mcp_servers.claimidx.env]\n"
+                f"CLAIMIDX_OWNER = {_toml_str(own)}\n"
+            )
+            if agent:
+                env_block += f"CLAIMIDX_AGENT = {_toml_str(agent)}\n"
+            text = text.rstrip() + "\n" + env_block
+            target.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
+            return {"path": str(target), "status": "updated", "command": "claimidx-mcp"}
+        text, changed = _toml_sync_claimidx_owner(text, own=own, agent=agent)
+        if not changed:
+            return {"path": str(target), "status": "present", "command": "claimidx-mcp"}
+        target.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
+        return {"path": str(target), "status": "updated", "command": "claimidx-mcp"}
     block = (
         "\n[mcp_servers.claimidx]\n"
         'command = "claimidx-mcp"\n'
@@ -378,7 +440,10 @@ def install_opencode_mcp(path: Path | None = None, *, own: str, agent: str = "")
         return {"path": str(target), "status": "error", "error": "mcp is not an object"}
     existing = mcp.get("claimidx")
     if isinstance(existing, dict) and "claimidx-mcp" in str(existing.get("command") or ""):
-        return {"path": str(target), "status": "present", "command": "claimidx-mcp"}
+        if not _sync_json_owner(existing, own=own, agent=agent, env_key="environment"):
+            return {"path": str(target), "status": "present", "command": "claimidx-mcp"}
+        target.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        return {"path": str(target), "status": "updated", "command": "claimidx-mcp"}
     mcp["claimidx"] = {
         "type": "local",
         "command": ["claimidx-mcp"],
@@ -407,7 +472,10 @@ def install_vscode_mcp(path: Path | None = None, *, own: str, agent: str = "") -
         return {"path": str(target), "status": "error", "error": "servers is not an object"}
     existing = servers.get("claimidx")
     if isinstance(existing, dict) and existing.get("command") == "claimidx-mcp":
-        return {"path": str(target), "status": "present", "command": "claimidx-mcp"}
+        if not _sync_json_owner(existing, own=own, agent=agent, env_key="env"):
+            return {"path": str(target), "status": "present", "command": "claimidx-mcp"}
+        target.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        return {"path": str(target), "status": "updated", "command": "claimidx-mcp"}
     servers["claimidx"] = _json_mcp_block(own, agent)
     target.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return {"path": str(target), "status": "installed", "command": "claimidx-mcp"}
