@@ -732,7 +732,6 @@ def test_discovery_cards_match_package_version():
     assert "https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl" in site
     assert 'claim.st === "confirmed"' in site
     assert 'claim.src !== "seed"' in site
-    assert "data-ledger-feed" in site
 
 
 def test_mcp_force_keeps_stored_cls(tmp_path, monkeypatch):

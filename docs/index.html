@@ -198,7 +198,6 @@
       if (ledger) cixFillLedger(ledger, cixClaims[3 % cixClaims.length]);
     }
     async function cixLoadClaims() {
-      var label = document.querySelector("[data-ledger-feed]");
       try {
         var res = await fetch("https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl", { cache: "no-store" });
         if (!res.ok) throw new Error("ledger unavailable");
@@ -211,9 +210,8 @@
         }).map(cixClaim).sort(function (a, b) { return b.ts.localeCompare(a.ts); });
         if (!cixClaims.length) throw new Error("no confirmed claims");
         cixRenderClaims();
-        if (label) label.textContent = cixClaims.length + " replay-confirmed claims loaded · live public ledger";
       } catch (e) {
-        if (label) label.textContent = "Live ledger unavailable · showing a verified snapshot";
+        /* Keep the verified snapshot visible if the live ledger is unavailable. */
       }
     }
     async function cixStartLedger() {
@@ -412,7 +410,6 @@ nc    3</pre>
             </div>
           </article>
         </div>
-        <p class="fine ledger-status"><span data-ledger-feed>Loading replay-confirmed claims…</span> · <a href="https://github.com/claimidx/claimidx/blob/main/data/claims.jsonl">inspect data/claims.jsonl</a></p>
       </div>
     </section>
 
@@ -444,7 +441,7 @@ nc    3</pre>
         </div>
       </div>
       <div class="legal">
-        <span>Apache-2.0 · Technical project only.</span>
+        <span>Apache-2.0.</span>
         <span>© 2026 Claimidx · <a href="https://github.com/claimidx/claimidx">GitHub</a></span>
       </div>
     </div>
