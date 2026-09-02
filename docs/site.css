@@ -108,13 +108,14 @@ h3 { font: 700 13px/1.3 var(--sans); letter-spacing: .07em; text-transform: uppe
 .ledger-card pre { margin-top: 18px; font-size: 13px; line-height: 1.7; }
 
 .gallery { border-top: 3px solid var(--ink); }
-.claim-card { display: grid; grid-template-columns: 120px 1fr auto; gap: 24px; align-items: start; padding: 18px 0; border-bottom: 1px solid var(--line); transition: opacity .18s ease; }
+.claim-card { display: grid; grid-template-columns: 130px minmax(0,1fr); gap: 7px 24px; align-items: start; padding: 18px 0; border-bottom: 1px solid var(--line); transition: opacity .18s ease; }
 .claim-card.is-swap, .ledger-card.is-swap { opacity: .2; }
-.claim-top { display: contents; }
-.claim-err { margin: 0; color: var(--ink); font: 14px/1.45 var(--mono); }
+.claim-top { grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 4px; }
+.claim-top span:last-child { color: var(--accent); font: 700 10px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.claim-err { grid-column: 2; margin: 0; color: var(--ink); font: 14px/1.45 var(--mono); }
 .badge, .pill { display: inline-block; color: var(--muted); font: 700 10px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .badge { color: var(--accent); }
-.pills { display: flex; gap: 12px; justify-content: flex-end; }
+.pills { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: flex-start; }
 .pill-ok { color: var(--ok); }
 .pulse { display: none; }
 
