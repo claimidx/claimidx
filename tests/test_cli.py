@@ -348,6 +348,156 @@ def test_force_resets_nr_and_surfaces_previous(tmp_path: Path, capsys):
     assert wiped[0].get("detail") == {"nr": 1, "nc": 1, "nf": 0, "rt": rt}
 
 
+def test_exists_same_fp_is_noop(tmp_path: Path, capsys):
+    """C1: re-Ingest identical fp without --force returns exists {id} and does not mutate."""
+    from claimidx.store import Store
+
+    db = str(tmp_path / "ix.sqlite")
+    rt = _py_rt()
+    eval_cmd = 'python -c "import sys"'
+    err = "ModuleNotFoundError: No module named 'exists_noop'"
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "ingest",
+                "--err",
+                err,
+                "--eco",
+                "py",
+                "--rt",
+                rt,
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "ok",
+                "--eval",
+                eval_cmd,
+            ]
+        )
+        == 0
+    )
+    cid = capsys.readouterr().out.strip()
+    assert main(["--db", db, "--fmt", "json", "confirm", "--replay", cid]) == 0
+    capsys.readouterr()
+    assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
+    before = json.loads(capsys.readouterr().out)
+    snapshot = {
+        "nc": before.get("nc"),
+        "nf": before.get("nf"),
+        "nr": before.get("nr"),
+        "fix.b": (before.get("fix") or {}).get("b"),
+        "eval": before.get("eval"),
+        "ts": before.get("ts"),
+    }
+    assert snapshot["nr"] == 1
+    assert snapshot["nc"] == 1
+    rc = main(
+        [
+            "--db",
+            db,
+            "--fmt",
+            "id",
+            "ingest",
+            "--err",
+            err,
+            "--eco",
+            "py",
+            "--rt",
+            rt,
+            "--fix-k",
+            "constraint",
+            "--fix-b",
+            "must-not-land",
+            "--eval",
+            eval_cmd,
+        ]
+    )
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert f"exists {cid}" in captured.err
+    assert captured.out.strip() == cid
+    store = Store(db)
+    rows = store.all()
+    assert len(rows) == 1
+    assert rows[0].id == cid
+    assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
+    after = json.loads(capsys.readouterr().out)
+    assert after.get("nc") == snapshot["nc"]
+    assert after.get("nf") == snapshot["nf"]
+    assert after.get("nr") == snapshot["nr"]
+    assert (after.get("fix") or {}).get("b") == snapshot["fix.b"] == "ok"
+    assert after.get("eval") == snapshot["eval"]
+    assert after.get("ts") == snapshot["ts"]
+
+
+def test_second_force_appends_force_reset_keeps_history(tmp_path: Path, capsys):
+    """C3: second --force appends another force_reset; pre-force Ledger events remain."""
+    db = str(tmp_path / "ix.sqlite")
+    rt = _py_rt()
+    eval_cmd = 'python -c "import sys"'
+    err = "ModuleNotFoundError: No module named 'force_twice'"
+
+    def _ingest(*, force: bool, fix_b: str) -> int:
+        argv = [
+            "--db",
+            db,
+            "--fmt",
+            "json",
+            "ingest",
+            "--err",
+            err,
+            "--eco",
+            "py",
+            "--rt",
+            rt,
+            "--fix-k",
+            "constraint",
+            "--fix-b",
+            fix_b,
+            "--eval",
+            eval_cmd,
+        ]
+        if force:
+            argv.append("--force")
+        return main(argv)
+
+    assert _ingest(force=False, fix_b="first") == 0
+    first = json.loads(capsys.readouterr().out)
+    cid = first["id"]
+    assert main(["--db", db, "--fmt", "json", "confirm", "--replay", cid]) == 0
+    capsys.readouterr()
+    assert main(["--db", db, "--fmt", "json", "events", "-k", "50"]) == 0
+    pre = [e for e in json.loads(capsys.readouterr().out) if e.get("claim_id") == cid]
+    pre_kinds = [e.get("kind") for e in pre]
+    assert "publish" in pre_kinds
+    assert "confirm-replay" in pre_kinds
+
+    assert _ingest(force=True, fix_b="second") == 0
+    forced = json.loads(capsys.readouterr().out)
+    assert forced["id"] == cid
+    assert forced.get("force_reset") == {"nr": 1, "nc": 1, "nf": 0, "rt": rt}
+
+    assert main(["--db", db, "--fmt", "json", "confirm", "--replay", cid]) == 0
+    capsys.readouterr()
+
+    assert _ingest(force=True, fix_b="third") == 0
+    again = json.loads(capsys.readouterr().out)
+    assert again["id"] == cid
+    assert again.get("force_reset") == {"nr": 1, "nc": 1, "nf": 0, "rt": rt}
+
+    assert main(["--db", db, "--fmt", "json", "events", "-k", "50"]) == 0
+    evs = [e for e in json.loads(capsys.readouterr().out) if e.get("claim_id") == cid]
+    kinds = [e.get("kind") for e in evs]
+    assert kinds.count("force_reset") == 2, evs
+    assert kinds.count("publish") >= 1
+    assert "confirm-replay" in kinds
+    assert len(evs) > 2
+
+
 def test_confirm_replay_json(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
     assert (
