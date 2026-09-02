@@ -112,6 +112,13 @@ class Store:
             )"""
         )
         con.execute("CREATE INDEX IF NOT EXISTS idx_relation_source ON relations_v2(source_id)")
+        con.execute(
+            """CREATE TABLE IF NOT EXISTS protocol_events_v2 (
+                seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
+                kind TEXT NOT NULL, object_id TEXT, actor TEXT NOT NULL,
+                json TEXT NOT NULL, created TEXT NOT NULL
+            )"""
+        )
         try:
             con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS claims_fts USING fts5(id UNINDEXED, err, cls, eco, dep)")
             self._fts = True
@@ -281,6 +288,13 @@ class Store:
         con.execute(
             "INSERT INTO events(claim_id, kind, actor, ts, detail) VALUES(?,?,?,?,?)",
             (claim_id, kind, actor, utcnow().isoformat(), blob),
+        )
+        from .graph import ProtocolEvent
+
+        event = ProtocolEvent(kind=kind, object_id=claim_id, actor=actor or "did:claimidx:anon", payload=detail or {})
+        con.execute(
+            "INSERT OR IGNORE INTO protocol_events_v2(id,kind,object_id,actor,json,created) VALUES(?,?,?,?,?,?)",
+            (event.id, event.kind, event.object_id, event.actor, event.model_dump_json(), event.created.isoformat()),
         )
 
     def put(self, claim: Claim) -> Claim:
@@ -497,6 +511,43 @@ class Store:
                 ).fetchall()
             ]
         return {"failure": json.loads(failure_row["json"]), "remedies": remedies}
+
+    def protocol_events(self, *, after: int = 0, limit: int = 500) -> dict:
+        import hashlib
+
+        with self._conn() as con:
+            rows = con.execute(
+                "SELECT seq,json FROM protocol_events_v2 WHERE seq>? ORDER BY seq LIMIT ?",
+                (max(0, int(after)), max(1, min(int(limit), 2000))),
+            ).fetchall()
+        events = [json.loads(row["json"]) for row in rows]
+        cursor = int(rows[-1]["seq"]) if rows else max(0, int(after))
+        material = "\n".join(json.dumps(event, sort_keys=True, separators=(",", ":")) for event in events)
+        return {
+            "v": 2,
+            "after": max(0, int(after)),
+            "next_cursor": cursor,
+            "n": len(events),
+            "batch_hash": hashlib.sha256(material.encode("utf-8")).hexdigest(),
+            "events": events,
+        }
+
+    def import_protocol_events(self, events: list) -> dict[str, int]:
+        from .graph import ProtocolEvent
+
+        accepted = duplicate = 0
+        with self._conn() as con:
+            for raw in events[:2000]:
+                event = raw if isinstance(raw, ProtocolEvent) else ProtocolEvent.model_validate(raw)
+                cur = con.execute(
+                    "INSERT OR IGNORE INTO protocol_events_v2(id,kind,object_id,actor,json,created) VALUES(?,?,?,?,?,?)",
+                    (event.id, event.kind, event.object_id, event.actor, event.model_dump_json(), event.created.isoformat()),
+                )
+                if cur.rowcount:
+                    accepted += 1
+                else:
+                    duplicate += 1
+        return {"accepted": accepted, "duplicate": duplicate}
 
     def _record_claim_observation(
         self,

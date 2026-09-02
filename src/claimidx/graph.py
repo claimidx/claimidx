@@ -154,6 +154,25 @@ class Bundle(BaseModel):
         return self
 
 
+class ProtocolEvent(BaseModel):
+    v: Literal[2] = 2
+    id: str = Field(default_factory=lambda: _id("evt_"))
+    kind: str
+    object_id: str = ""
+    actor: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    key_id: str = ""
+    signature: str = ""
+    created: datetime = Field(default_factory=utcnow)
+
+    @field_validator("actor")
+    @classmethod
+    def actor_is_did(cls, value: str) -> str:
+        if not value.startswith("did:"):
+            raise ValueError("protocol event actor must be a DID")
+        return value
+
+
 def proof_from_claim(claim: Claim) -> Proof:
     steps = [
         ProofStep(op="run", program="legacy", args=[claim.eval.cmd]),

@@ -452,6 +452,23 @@ def cmd_identity(ns: argparse.Namespace) -> int:
     return 0 if held else 2
 
 
+def cmd_projection(ns: argparse.Namespace) -> int:
+    from .public import projection_preview
+
+    claim = _store(ns).get(ns.id)
+    if not claim:
+        raise KeyError(ns.id)
+    print(json.dumps(projection_preview(claim), indent=2, ensure_ascii=False, default=str))
+    return 0
+
+
+def cmd_plugins(ns: argparse.Namespace) -> int:
+    from .extractors import plugin_inventory
+
+    print(json.dumps({"plugins": plugin_inventory(), "authority": "additive-features-only"}, indent=2))
+    return 0
+
+
 def cmd_verify(ns: argparse.Namespace) -> int:
     from .replay import run
 
@@ -999,6 +1016,11 @@ def build_parser() -> argparse.ArgumentParser:
     identity_verify.add_argument("record")
     identity_verify.add_argument("--key")
     identity_verify.set_defaults(func=cmd_identity)
+    projection = sub.add_parser("share-preview", help="show the privacy-safe public projection without sharing")
+    projection.add_argument("id")
+    projection.set_defaults(func=cmd_projection)
+    plugins = sub.add_parser("plugins", help="list additive diagnostic feature plugins")
+    plugins.set_defaults(func=cmd_plugins)
     ls = sub.add_parser("ls")
     ls.add_argument("--st")
     ls.add_argument("--eco")

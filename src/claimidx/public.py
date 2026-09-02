@@ -12,6 +12,7 @@ customer's tree.
 
 from __future__ import annotations
 
+import json
 import re
 
 from .fingerprint import normalize_error
@@ -359,3 +360,33 @@ def project_public(claim: Claim) -> Claim:
     data["eval"] = EvalSpec(cmd=public_eval(claim.eval.cmd), expect=claim.eval.expect)
     data["src"] = "home"
     return Claim.model_validate(data)
+
+
+def projection_preview(claim: Claim) -> dict:
+    """Explain exactly what a public share would retain, redact, or remove."""
+    projected = project_public(claim)
+    original = claim.model_dump(mode="json")
+    public = projected.model_dump(mode="json")
+    removed: list[str] = []
+    transformed: list[str] = []
+    for key in ("note", "model", "tried", "tool"):
+        if original.get(key) and not public.get(key):
+            removed.append(key)
+        elif original.get(key) != public.get(key):
+            transformed.append(key)
+    if original["fix"]["b"] != public["fix"]["b"]:
+        transformed.append("fix.b")
+    if original["eval"]["cmd"] != public["eval"]["cmd"]:
+        transformed.append("eval.cmd")
+    if original["err"] != public["err"]:
+        transformed.append("err")
+    encoded = json.dumps(public, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return {
+        "safe": True,
+        "claim_id": claim.id,
+        "fingerprint_preserved": claim.fp == projected.fp,
+        "removed": sorted(set(removed)),
+        "transformed": sorted(set(transformed)),
+        "public_bytes": len(encoded.encode("utf-8")),
+        "projection": public,
+    }

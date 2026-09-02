@@ -22,7 +22,7 @@ from .dense import encode
 from .discovery import LINK_HEADER, ROOT, ROUTES
 from .discovery import resolve as resolve_discovery
 from .fingerprint import classify, fingerprint, normalize_error
-from .graph import Bundle
+from .graph import Bundle, ProtocolEvent
 from .match import hit_row
 from .models import Claim, EvalSpec, Fix
 from .policy import PolicyError, require_identity
@@ -219,6 +219,15 @@ def create_app(db: str | None = None) -> FastAPI:
             raise HTTPException(404, "missing")
         return graph
 
+    @app.get("/api/v2/claims/{claim_id}/projection")
+    def get_projection_preview(claim_id: str):
+        from .public import projection_preview
+
+        claim = store.get(claim_id)
+        if not claim:
+            raise HTTPException(404, "missing")
+        return projection_preview(claim)
+
     @app.get("/api/v2/failures/{fp_v1}")
     def get_failure_graph(fp_v1: str):
         graph = store.failure_graph(fp_v1)
@@ -234,6 +243,19 @@ def create_app(db: str | None = None) -> FastAPI:
         except (PolicyError, SecretError, ValueError) as e:
             raise HTTPException(400, str(e)) from e
         return {"accepted": True, "identity": "verified" if bundle.remedy.signature else "asserted", "remedy_id": bundle.remedy.id}
+
+    @app.get("/api/v2/events")
+    def export_v2_events(after: int = 0, limit: int = 500):
+        return store.protocol_events(after=after, limit=limit)
+
+    @app.post("/api/v2/events")
+    def import_v2_events(events: list[ProtocolEvent], _auth: str = Depends(require_write)):
+        for event in events:
+            try:
+                require_identity(event.actor)
+            except PolicyError as e:
+                raise HTTPException(403, str(e)) from e
+        return store.import_protocol_events(events)
 
     @app.post("/api/ask")
     def ask(payload: AskBody):
