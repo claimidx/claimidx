@@ -850,3 +850,54 @@ def test_serve_warns_on_public_bind_without_token(tmp_path, capsys, monkeypatch)
     rc = main(["--db", str(tmp_path / "ix.sqlite"), "serve", "--host", "0.0.0.0", "--port", "9"])
     assert rc == 0
     assert "non-loopback" in capsys.readouterr().err
+
+
+def test_query_alias_and_expect_exit_alias(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "ingest",
+                "--err",
+                "TypeError: alias proof",
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "Use the compatible API.",
+                "--eval",
+                "false",
+                "--expect-exit",
+                "1",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    assert main(["--db", db, "query", "--err", "TypeError: alias proof"]) == 0
+    assert "cix_" in capsys.readouterr().out
+
+
+def test_json_policy_errors_are_machine_readable(tmp_path: Path, capsys):
+    rc = main(
+        [
+            "--db",
+            str(tmp_path / "ix.sqlite"),
+            "--json-errors",
+            "ingest",
+            "--err",
+            "TypeError: unsafe evaluation",
+            "--fix-k",
+            "constraint",
+            "--fix-b",
+            "Do not run a shell.",
+            "--eval",
+            "powershell -Command whoami",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().err)
+    assert rc == 2
+    assert payload["ok"] is False
+    assert payload["kind"] == "PolicyError"
+    assert payload["exit"] == 2

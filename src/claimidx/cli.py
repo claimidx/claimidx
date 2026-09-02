@@ -17,6 +17,23 @@ from .store import DEFAULT_DB, Store, force_reset_emits, force_reset_from
 from .team import activity, load_roster, resolve_owner, whoami
 
 
+def _print_cli_error(ns: argparse.Namespace, error: Exception, *, exit_code: int = 2) -> None:
+    if getattr(ns, "json_errors", False):
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": str(error),
+                    "kind": type(error).__name__,
+                    "exit": exit_code,
+                }
+            ),
+            file=sys.stderr,
+        )
+    else:
+        print(f"error: {error}", file=sys.stderr)
+
+
 def _db_path(ns: argparse.Namespace) -> str:
     return ns.db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)
 
@@ -140,7 +157,7 @@ def cmd_publish(ns: argparse.Namespace) -> int:
             own=resolve_owner(ns.own),
         )
     except (PolicyError, SecretError) as e:
-        print(str(e), file=sys.stderr)
+        _print_cli_error(ns, e)
         return 2
     if ns.force:
         cls, fp, existing = store.match_amend(
@@ -771,15 +788,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--db", default=None, help="sqlite path (default: $CLAIMIDX_DB or ~/.claimidx/index.sqlite)")
     p.add_argument("--fmt", choices=["dense", "json", "id"], default="dense")
     p.add_argument("--version", action="version", version=f"claimidx {__version__}")
+    p.add_argument(
+        "--json-errors",
+        action="store_true",
+        help="emit machine-readable JSON errors on stderr",
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    a = sub.add_parser("ask")
-    a.add_argument("--err", required=True)
-    a.add_argument("--cls")
-    a.add_argument("--eco")
-    a.add_argument("--rt")
-    a.add_argument("--dep", action=_AppendCsv, default=None)
-    a.add_argument("-k", type=int, default=5)
+    a = sub.add_parser("ask", aliases=["query"], help="retrieve prior art for a failure")
+    a.add_argument("--err", required=True, help="raw failure or traceback")
+    a.add_argument("--cls", help="optional failure class override")
+    a.add_argument("--eco", help="ecosystem such as py, npm, go, mcp, or ci")
+    a.add_argument("--rt", help="runtime and version, for example py@3.13")
+    a.add_argument("--dep", action=_AppendCsv, default=None, help="dependency name@version; repeatable or comma-separated")
+    a.add_argument("-k", type=int, default=5, help="maximum hits")
     a.set_defaults(func=cmd_ask)
     hk = sub.add_parser("hook", help="Harness sensor: stdin failed-tool JSON or stderr → ask. Never applies fix.b.")
     hk.add_argument("--err")
@@ -795,7 +817,7 @@ def build_parser() -> argparse.ArgumentParser:
     pub.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"])
     pub.add_argument("--fix-b", required=True)
     pub.add_argument("--eval", required=True)
-    pub.add_argument("--expect", type=int, default=0)
+    pub.add_argument("--expect", "--expect-exit", dest="expect", type=int, default=0, help="expected evaluation process exit code")
     pub.add_argument("--cls")
     pub.add_argument("--eco")
     pub.add_argument("--rt")
@@ -883,7 +905,7 @@ def build_parser() -> argparse.ArgumentParser:
     ing.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"])
     ing.add_argument("--fix-b", required=True)
     ing.add_argument("--eval", required=True)
-    ing.add_argument("--expect", type=int, default=0)
+    ing.add_argument("--expect", "--expect-exit", dest="expect", type=int, default=0, help="expected evaluation process exit code")
     ing.add_argument("--cls")
     ing.add_argument("--eco")
     ing.add_argument("--rt")
@@ -954,6 +976,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Windows redirected streams often inherit a legacy code page.  Claimidx's
+    # CLI and help contain Unicode, so make output deterministic for agents.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (AttributeError, OSError, ValueError):
+                pass
     raw = list(argv) if argv is not None else sys.argv[1:]
     raw = _glue_dashed_opt(raw, "--fix-b")
     ns = build_parser().parse_args(raw)
@@ -967,7 +998,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
     except (PolicyError, SecretError) as e:
-        print(f"error: {e}", file=sys.stderr)
+        _print_cli_error(ns, e)
         return 2
     except KeyError as e:
         print(f"missing {e}", file=sys.stderr)
