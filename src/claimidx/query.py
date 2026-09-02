@@ -20,7 +20,12 @@ from .team import resolve_owner
 def retrieve(store: Store, q: dict[str, Any], *, k: int = 5, actor: str | None = None, kind: str = "ask"):
     """Rank and log hit/n/ms. Does not store the raw err."""
     t0 = time.monotonic()
-    hits = rank(q, store.all(), k=k)
+    candidates = store.candidates(
+        fp=str(q.get("fp") or ""),
+        err=str(q.get("err") or ""),
+        cls=str(q.get("cls") or ""),
+    )
+    hits = rank(q, candidates, k=k)
     ms = int((time.monotonic() - t0) * 1000)
     store.log_ask(actor or resolve_owner(None), hits, ms=ms, q=q, kind=kind)
     return hits
@@ -68,6 +73,7 @@ def ingest(
     own: str | None = None,
     note: str = "",
     force: bool = False,
+    alternative: bool = False,
     share: bool = False,
     expect: int = 0,
     db: str | os.PathLike[str] | None = None,
@@ -98,15 +104,14 @@ def ingest(
         cls = classify(err)
         fp = fingerprint(err=err, cls=cls, eco=eco or "", rt=rt or "", dep=dep)
         existing = store.by_fp(fp)
-    if existing and not force:
+    if existing and not force and not alternative:
         c = existing[0]
         return {"exists": True, "id": c.id, "st": c.st, "fp": c.fp}
     extra: dict[str, Any] = {}
     reset: dict[str, int | str] = {}
-    if existing:
+    if existing and force:
         extra["id"] = existing[0].id
-        if force:
-            reset = force_reset_from(existing[0])
+        reset = force_reset_from(existing[0])
     claim = Claim(
         fp=fp,
         cls=cls,
@@ -122,6 +127,20 @@ def ingest(
         **extra,
     )
     store.publish(claim, claim.own, reset)
+    if existing and alternative:
+        from .graph import Relation
+
+        new_graph = store.graph(claim.id)
+        old_graph = store.graph(existing[0].id)
+        if new_graph and old_graph:
+            store.add_relation(
+                Relation(
+                    source_id=new_graph["remedy"]["id"],
+                    target_id=old_graph["remedy"]["id"],
+                    kind="alternative",
+                    actor=claim.own,
+                )
+            )
     from .public import eval_is_proof, ingest_warnings
 
     out: dict[str, Any] = {

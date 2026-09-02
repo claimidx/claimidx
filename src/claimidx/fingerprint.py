@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from typing import Any
 
 _PATH = re.compile(r"(?:[A-Za-z]:\\|\\\\|~[/\\]|/(?:home|Users|usr|var|tmp|opt|root|etc|app|src|private|opt)|(?:\./|\.\./))[^\s:'\"]+")
 _URL = re.compile(r"https?://[^\s]+")
@@ -144,4 +145,44 @@ def fingerprint_material(*, err: str, cls: str = "", eco: str = "", rt: str = ""
 
 def fingerprint(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> str:
     material = fingerprint_material(err=err, cls=cls, eco=eco, rt=rt, dep=dep)
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+_SYMBOL = re.compile(r"\b[A-Za-z_][A-Za-z0-9_.]{2,79}\b")
+_PACKAGE = re.compile(r"(?:no module named|cannot find module|package)\s+['\"]?([@A-Za-z0-9_./-]+)", re.I)
+
+
+def error_features(raw: str) -> dict[str, Any]:
+    """Extract additive v2 matching features without changing fingerprint v1."""
+    normalized = normalize_error(raw)
+    codes = [m.group(2) for m in _CODE_NUM.finditer(raw)]
+    packages = [m.group(1).lower() for m in _PACKAGE.finditer(raw)]
+    symbols = sorted(
+        {
+            token.lower()
+            for token in _SYMBOL.findall(normalized)
+            if token.lower() not in {"error", "exception", "traceback", "typeerror", "runtimeerror"}
+        }
+    )[:24]
+    return {
+        "codes": list(dict.fromkeys(codes))[:8],
+        "packages": list(dict.fromkeys(packages))[:8],
+        "symbols": symbols,
+        "normalization_risk": normalization_risk(raw),
+    }
+
+
+def family_fingerprint(*, err: str, cls: str = "", eco: str = "") -> str:
+    """A broad, versioned family key.  It complements and never replaces fp v1."""
+    features = error_features(err)
+    material = "\n".join(
+        [
+            "family=1",
+            f"cls={cls or classify(err)}",
+            f"eco={(eco or '').lower()}",
+            "codes=" + ",".join(features["codes"]),
+            "packages=" + ",".join(features["packages"]),
+            "symbols=" + ",".join(features["symbols"][:12]),
+        ]
+    )
     return hashlib.sha256(material.encode("utf-8")).hexdigest()

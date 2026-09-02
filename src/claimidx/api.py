@@ -81,6 +81,7 @@ class PublishBody(BaseModel):
     model: str = ""
     note: str = ""
     force: bool = False
+    alternative: bool = False
     id: str = ""
 
 
@@ -209,6 +210,20 @@ def create_app(db: str | None = None) -> FastAPI:
             raise HTTPException(404, "missing")
         return PlainTextResponse(encode(c)) if fmt == "dense" else c.model_dump(mode="json")
 
+    @app.get("/api/v2/claims/{claim_id}")
+    def get_claim_graph(claim_id: str):
+        graph = store.graph(claim_id)
+        if not graph:
+            raise HTTPException(404, "missing")
+        return graph
+
+    @app.get("/api/v2/failures/{fp_v1}")
+    def get_failure_graph(fp_v1: str):
+        graph = store.failure_graph(fp_v1)
+        if not graph:
+            raise HTTPException(404, "missing")
+        return graph
+
     @app.post("/api/ask")
     def ask(payload: AskBody):
         cls = payload.cls or classify(payload.err)
@@ -248,7 +263,7 @@ def create_app(db: str | None = None) -> FastAPI:
             cls = payload.cls or classify(payload.err)
             fp = fingerprint(err=payload.err, cls=cls, eco=payload.eco, rt=payload.rt, dep=payload.dep)
             existing = store.by_fp(fp)
-        if existing and not payload.force:
+        if existing and not payload.force and not payload.alternative:
             return {"exists": True, "claim": existing[0].model_dump(mode="json")}
         extra: dict[str, Any] = {}
         reset = {}
@@ -260,10 +275,9 @@ def create_app(db: str | None = None) -> FastAPI:
             extra["id"] = cid
             if by_id and payload.force:
                 reset = force_reset_from(by_id)
-        elif existing:
+        elif existing and payload.force:
             extra["id"] = existing[0].id
-            if payload.force:
-                reset = force_reset_from(existing[0])
+            reset = force_reset_from(existing[0])
         try:
             c = Claim(
                 fp=fp,
@@ -283,6 +297,20 @@ def create_app(db: str | None = None) -> FastAPI:
                 **extra,
             )
             store.publish(c, own, reset)
+            if existing and payload.alternative:
+                from .graph import Relation
+
+                new_graph = store.graph(c.id)
+                old_graph = store.graph(existing[0].id)
+                if new_graph and old_graph:
+                    store.add_relation(
+                        Relation(
+                            source_id=new_graph["remedy"]["id"],
+                            target_id=old_graph["remedy"]["id"],
+                            kind="alternative",
+                            actor=own,
+                        )
+                    )
         except (PolicyError, SecretError, ValueError) as e:
             raise HTTPException(400, str(e)) from e
         body = {"exists": False, "claim": c.model_dump(mode="json")}

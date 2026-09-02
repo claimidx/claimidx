@@ -36,6 +36,7 @@ class Store:
     def __init__(self, path: str | os.PathLike[str] | None = None):
         self.path = Path(path) if path else DEFAULT_DB
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._fts = False
         self._init()
 
     def _conn(self) -> sqlite3.Connection:
@@ -68,6 +69,99 @@ class Store:
                 """
             )
             self._migrate_events_detail(con)
+            self._init_v2(con)
+
+    def _init_v2(self, con: sqlite3.Connection) -> None:
+        """Create the additive v2 graph beside the untouched v1 claim table."""
+        con.execute("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        con.execute(
+            """CREATE TABLE IF NOT EXISTS failures_v2 (
+                id TEXT PRIMARY KEY, fp_v1 TEXT NOT NULL UNIQUE, family_id TEXT NOT NULL,
+                cls TEXT NOT NULL, eco TEXT, json TEXT NOT NULL, created TEXT NOT NULL
+            )"""
+        )
+        con.execute("CREATE INDEX IF NOT EXISTS idx_failure_family ON failures_v2(family_id)")
+        con.execute(
+            """CREATE TABLE IF NOT EXISTS proofs_v2 (
+                id TEXT PRIMARY KEY, json TEXT NOT NULL, created TEXT NOT NULL
+            )"""
+        )
+        con.execute(
+            """CREATE TABLE IF NOT EXISTS remedies_v2 (
+                id TEXT PRIMARY KEY, failure_id TEXT NOT NULL, proof_id TEXT NOT NULL,
+                legacy_claim_id TEXT, status TEXT NOT NULL, own TEXT NOT NULL,
+                content_hash TEXT NOT NULL, json TEXT NOT NULL, created TEXT NOT NULL
+            )"""
+        )
+        con.execute("CREATE INDEX IF NOT EXISTS idx_remedy_failure ON remedies_v2(failure_id)")
+        # A v1 --force revision keeps its historical v2 remedy instead of
+        # destroying it, so several remedy revisions may project to one v1 id.
+        con.execute("DROP INDEX IF EXISTS idx_remedy_legacy")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_remedy_legacy_lookup ON remedies_v2(legacy_claim_id)")
+        con.execute(
+            """CREATE TABLE IF NOT EXISTS observations_v2 (
+                id TEXT PRIMARY KEY, remedy_id TEXT NOT NULL, proof_id TEXT NOT NULL,
+                actor TEXT NOT NULL, held INTEGER NOT NULL, json TEXT NOT NULL, created TEXT NOT NULL
+            )"""
+        )
+        con.execute("CREATE INDEX IF NOT EXISTS idx_observation_remedy ON observations_v2(remedy_id)")
+        con.execute(
+            """CREATE TABLE IF NOT EXISTS relations_v2 (
+                id TEXT PRIMARY KEY, source_id TEXT NOT NULL, target_id TEXT NOT NULL,
+                kind TEXT NOT NULL, json TEXT NOT NULL, created TEXT NOT NULL
+            )"""
+        )
+        con.execute("CREATE INDEX IF NOT EXISTS idx_relation_source ON relations_v2(source_id)")
+        try:
+            con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS claims_fts USING fts5(id UNINDEXED, err, cls, eco, dep)")
+            self._fts = True
+        except sqlite3.OperationalError:
+            self._fts = False
+        done = con.execute("SELECT value FROM metadata WHERE key='v2_backfill'").fetchone()
+        if not done:
+            rows = con.execute("SELECT json FROM claims").fetchall()
+            for row in rows:
+                claim = self._claim_from_json(row["json"])
+                if claim:
+                    self._sync_v2_claim(con, claim)
+            con.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES('v2_backfill','1')")
+
+    def _sync_v2_claim(self, con: sqlite3.Connection, claim: Claim) -> None:
+        from .graph import failure_from_claim, proof_from_claim, remedy_from_claim
+
+        failure = failure_from_claim(claim)
+        proof = proof_from_claim(claim)
+        remedy = remedy_from_claim(claim, failure, proof)
+        con.execute(
+            "INSERT OR IGNORE INTO failures_v2(id,fp_v1,family_id,cls,eco,json,created) VALUES(?,?,?,?,?,?,?)",
+            (failure.id, failure.fp_v1, failure.family_id, failure.cls, failure.eco, failure.model_dump_json(), failure.created.isoformat()),
+        )
+        con.execute(
+            "INSERT OR IGNORE INTO proofs_v2(id,json,created) VALUES(?,?,?)",
+            (proof.id, proof.model_dump_json(), proof.created.isoformat()),
+        )
+        con.execute(
+            """INSERT INTO remedies_v2(id,failure_id,proof_id,legacy_claim_id,status,own,content_hash,json,created)
+               VALUES(?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(id) DO UPDATE SET status=excluded.status, json=excluded.json""",
+            (
+                remedy.id,
+                remedy.failure_id,
+                remedy.proof_id,
+                remedy.legacy_claim_id,
+                remedy.status,
+                remedy.own,
+                remedy.content_hash,
+                remedy.model_dump_json(),
+                remedy.created.isoformat(),
+            ),
+        )
+        if self._fts:
+            con.execute("DELETE FROM claims_fts WHERE id=?", (claim.id,))
+            con.execute(
+                "INSERT INTO claims_fts(id,err,cls,eco,dep) VALUES(?,?,?,?,?)",
+                (claim.id, claim.err, claim.cls, claim.eco, " ".join(claim.dep)),
+            )
 
     def _migrate_events_detail(self, con: sqlite3.Connection) -> None:
         row = con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='events'").fetchone()
@@ -173,6 +267,7 @@ class Store:
             """,
             (claim.id, claim.fp, claim.cls, claim.eco, payload, claim.nc, claim.nf, claim.st, claim.ts.isoformat()),
         )
+        self._sync_v2_claim(con, claim)
 
     def _insert_event(
         self,
@@ -250,6 +345,129 @@ class Store:
             rows = con.execute("SELECT json FROM claims").fetchall()
         return [c for r in rows if (c := self._claim_from_json(r["json"]))]
 
+    def candidates(self, *, fp: str, err: str, cls: str = "", limit: int = 256) -> list[Claim]:
+        """Bounded candidate retrieval for v2-scale ledgers; exact fp always wins."""
+        exact = self.by_fp(fp)
+        if not self._fts:
+            return exact or self.all()
+        tokens = [t for t in __import__("re").findall(r"[A-Za-z0-9_@.-]{3,}", err) if t.lower() not in {"error", "exception", "traceback"}]
+        ids: list[str] = [c.id for c in exact]
+        if tokens:
+            expression = " OR ".join('"' + t.replace('"', '') + '"' for t in list(dict.fromkeys(tokens))[:12])
+            try:
+                with self._conn() as con:
+                    rows = con.execute("SELECT id FROM claims_fts WHERE claims_fts MATCH ? LIMIT ?", (expression, max(1, limit))).fetchall()
+                ids.extend(str(row["id"]) for row in rows)
+            except sqlite3.OperationalError:
+                return exact or self.all()
+        if len(ids) < min(16, limit) and cls:
+            with self._conn() as con:
+                rows = con.execute("SELECT id FROM claims WHERE cls=? LIMIT ?", (cls, max(1, limit))).fetchall()
+            ids.extend(str(row["id"]) for row in rows)
+        out: list[Claim] = []
+        for claim_id in dict.fromkeys(ids):
+            claim = self.get(claim_id)
+            if claim:
+                out.append(claim)
+        return out
+
+    def graph(self, claim_id: str) -> dict | None:
+        claim = self.get(claim_id)
+        if not claim:
+            return None
+        with self._conn() as con:
+            remedy_row = con.execute(
+                "SELECT json FROM remedies_v2 WHERE legacy_claim_id=? ORDER BY created DESC LIMIT 1",
+                (claim_id,),
+            ).fetchone()
+            if not remedy_row:
+                return None
+            remedy = json.loads(remedy_row["json"])
+            failure_row = con.execute("SELECT json FROM failures_v2 WHERE id=?", (remedy["failure_id"],)).fetchone()
+            proof_row = con.execute("SELECT json FROM proofs_v2 WHERE id=?", (remedy["proof_id"],)).fetchone()
+            observations = [json.loads(row["json"]) for row in con.execute("SELECT json FROM observations_v2 WHERE remedy_id=? ORDER BY created", (remedy["id"],)).fetchall()]
+            relations = [json.loads(row["json"]) for row in con.execute("SELECT json FROM relations_v2 WHERE source_id=? OR target_id=? ORDER BY created", (remedy["id"], remedy["id"])).fetchall()]
+        return {
+            "failure": json.loads(failure_row["json"]) if failure_row else None,
+            "remedy": remedy,
+            "proof": json.loads(proof_row["json"]) if proof_row else None,
+            "observations": observations,
+            "relations": relations,
+        }
+
+    def add_observation(self, observation) -> None:
+        with self._conn() as con:
+            con.execute(
+                "INSERT OR IGNORE INTO observations_v2(id,remedy_id,proof_id,actor,held,json,created) VALUES(?,?,?,?,?,?,?)",
+                (
+                    observation.id,
+                    observation.remedy_id,
+                    observation.proof_id,
+                    observation.actor,
+                    1 if observation.held else 0,
+                    observation.model_dump_json(),
+                    observation.created.isoformat(),
+                ),
+            )
+
+    def add_relation(self, relation) -> None:
+        with self._conn() as con:
+            con.execute(
+                "INSERT OR IGNORE INTO relations_v2(id,source_id,target_id,kind,json,created) VALUES(?,?,?,?,?,?)",
+                (relation.id, relation.source_id, relation.target_id, relation.kind, relation.model_dump_json(), relation.created.isoformat()),
+            )
+
+    def failure_graph(self, fp_v1: str) -> dict | None:
+        with self._conn() as con:
+            failure_row = con.execute("SELECT json,id FROM failures_v2 WHERE fp_v1=?", (fp_v1,)).fetchone()
+            if not failure_row:
+                return None
+            remedies = [
+                json.loads(row["json"])
+                for row in con.execute(
+                    "SELECT json FROM remedies_v2 WHERE failure_id=? ORDER BY created",
+                    (failure_row["id"],),
+                ).fetchall()
+            ]
+        return {"failure": json.loads(failure_row["json"]), "remedies": remedies}
+
+    def _record_claim_observation(
+        self,
+        claim: Claim,
+        *,
+        actor: str,
+        held: bool,
+        replayed: bool,
+        detail: dict | None,
+    ) -> None:
+        import hashlib
+
+        from .graph import Observation
+
+        graph = self.graph(claim.id)
+        if not graph:
+            return
+        remedy = graph["remedy"]
+        proof = graph["proof"]
+        blob = json.dumps(detail or {}, sort_keys=True, separators=(",", ":"), default=str)
+        actual = (detail or {}).get("returncode")
+        if not isinstance(actual, int):
+            actual = (detail or {}).get("exit")
+        env = (detail or {}).get("env") or {}
+        observation = Observation(
+            remedy_id=remedy["id"],
+            proof_id=proof["id"],
+            actor=actor,
+            held=held,
+            replayed=replayed,
+            actual_exit=actual if isinstance(actual, int) else None,
+            expected_exit=claim.eval.expect,
+            environment={str(k): str(v) for k, v in env.items()} if isinstance(env, dict) else {},
+            evidence_hash=hashlib.sha256(blob.encode("utf-8")).hexdigest() if detail else "",
+            sandbox="legacy-allowlist" if replayed else "asserted",
+        )
+        self.add_observation(observation)
+
     def confirm(
         self,
         claim_id: str,
@@ -268,6 +486,7 @@ class Store:
             c.src = "local"
         c.refresh_status()
         self.put(c)
+        self._record_claim_observation(c, actor=actor, held=True, replayed=replayed, detail=detail)
         self._event(claim_id, "confirm-replay" if replayed else "confirm", actor, detail)
         return c
 
@@ -292,6 +511,7 @@ class Store:
             c.src = "local"
         c.refresh_status()
         self.put(c)
+        self._record_claim_observation(c, actor=actor, held=False, replayed=bool(detail), detail=detail)
         self._event(claim_id, "fail", actor, detail)
         return c
 

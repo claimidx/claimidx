@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/claimidx/claimidx/schema/protocol.v2.json",
+  "title": "Claimidx protocol v2 graph envelope",
+  "oneOf": [
+    { "$ref": "#/$defs/failure" },
+    { "$ref": "#/$defs/remedy" },
+    { "$ref": "#/$defs/proof" },
+    { "$ref": "#/$defs/observation" },
+    { "$ref": "#/$defs/relation" }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^(flr_|rmd_|prf_|obs_|rel_)[0-9a-f]{16}$" },
+    "failure": {
+      "type": "object",
+      "required": ["v", "id", "fp_v1", "family_id", "cls", "err"],
+      "properties": {
+        "v": { "const": 2 }, "id": { "$ref": "#/$defs/id" },
+        "fp_v1": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "family_id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "cls": { "type": "string" }, "err": { "type": "string" },
+        "eco": { "type": "string" }, "rt": { "type": "string" },
+        "dep": { "type": "array", "items": { "type": "string" } },
+        "features": { "type": "object" }, "created": { "type": "string", "format": "date-time" }
+      }
+    },
+    "remedy": {
+      "type": "object",
+      "required": ["v", "id", "failure_id", "fix", "proof_id", "own", "content_hash"],
+      "properties": {
+        "v": { "const": 2 }, "id": { "$ref": "#/$defs/id" },
+        "failure_id": { "$ref": "#/$defs/id" }, "proof_id": { "$ref": "#/$defs/id" },
+        "fix": { "type": "object" }, "applicability": { "type": "object" },
+        "own": { "type": "string", "pattern": "^did:" }, "status": { "type": "string" },
+        "legacy_claim_id": { "type": "string" }, "content_hash": { "type": "string" },
+        "key_id": { "type": "string" }, "signature": { "type": "string" },
+        "created": { "type": "string", "format": "date-time" }
+      }
+    },
+    "proof": { "type": "object", "required": ["v", "id", "steps"], "properties": { "v": { "const": 2 }, "id": { "$ref": "#/$defs/id" }, "steps": { "type": "array" }, "legacy_cmd": { "type": "string" }, "created": { "type": "string", "format": "date-time" } } },
+    "observation": { "type": "object", "required": ["v", "id", "remedy_id", "proof_id", "actor", "held"], "properties": { "v": { "const": 2 }, "id": { "$ref": "#/$defs/id" }, "remedy_id": { "$ref": "#/$defs/id" }, "proof_id": { "$ref": "#/$defs/id" }, "actor": { "type": "string", "pattern": "^did:" }, "held": { "type": "boolean" } } },
+    "relation": { "type": "object", "required": ["v", "id", "source_id", "target_id", "kind", "actor"], "properties": { "v": { "const": 2 }, "id": { "$ref": "#/$defs/id" }, "source_id": { "$ref": "#/$defs/id" }, "target_id": { "$ref": "#/$defs/id" }, "kind": { "enum": ["alternative", "supersedes", "contradicts", "derived_from", "duplicate_of"] }, "actor": { "type": "string", "pattern": "^did:" } } }
+  }
+}

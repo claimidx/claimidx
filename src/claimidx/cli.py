@@ -171,16 +171,15 @@ def cmd_publish(ns: argparse.Namespace) -> int:
         cls = ns.cls or classify(err)
         fp = fingerprint(err=err, cls=cls, eco=ns.eco or "", rt=ns.rt or "", dep=ns.dep or [])
         existing = store.by_fp(fp)
-    if existing and not ns.force:
+    if existing and not ns.force and not ns.alternative:
         print(f"exists {existing[0].id} fp={fp}", file=sys.stderr)
         print(_dumps(existing[0], ns.fmt))
         return 0
     extra: dict[str, Any] = {}
     reset = {}
-    if existing:
+    if existing and ns.force:
         extra["id"] = existing[0].id
-        if ns.force:
-            reset = force_reset_from(existing[0])
+        reset = force_reset_from(existing[0])
     claim = Claim(
         fp=fp,
         cls=cls,
@@ -198,6 +197,20 @@ def cmd_publish(ns: argparse.Namespace) -> int:
         **extra,
     )
     store.publish(claim, claim.own, reset)
+    if existing and ns.alternative:
+        from .graph import Relation
+
+        new_graph = store.graph(claim.id)
+        old_graph = store.graph(existing[0].id)
+        if new_graph and old_graph:
+            store.add_relation(
+                Relation(
+                    source_id=new_graph["remedy"]["id"],
+                    target_id=old_graph["remedy"]["id"],
+                    kind="alternative",
+                    actor=claim.own,
+                )
+            )
     from .home import maybe_share
 
     shared = maybe_share(store, claim)
@@ -359,6 +372,33 @@ def cmd_show(ns: argparse.Namespace) -> int:
         print("missing", file=sys.stderr)
         return 1
     print(_dumps(c, ns.fmt))
+    return 0
+
+
+def cmd_explain(ns: argparse.Namespace) -> int:
+    graph = _store(ns).graph(ns.id)
+    if not graph:
+        raise KeyError(ns.id)
+    print(json.dumps(graph, indent=2, ensure_ascii=False, default=str))
+    return 0
+
+
+def cmd_explain_policy(ns: argparse.Namespace) -> int:
+    from .policy import ALLOWED_CMD_HEADS, ALLOWED_EVAL_ENV, ALLOWED_EVAL_HEADS
+
+    print(
+        json.dumps(
+            {
+                "eval_heads": sorted(ALLOWED_EVAL_HEADS),
+                "command_fix_heads": sorted(ALLOWED_CMD_HEADS),
+                "eval_environment": sorted(ALLOWED_EVAL_ENV),
+                "shell": False,
+                "max_seconds": 45,
+                "guidance": "Use a structured proof or an allowlisted executable; Claimidx never evaluates through a shell.",
+            },
+            indent=2,
+        )
+    )
     return 0
 
 
@@ -828,6 +868,7 @@ def build_parser() -> argparse.ArgumentParser:
     pub.add_argument("--model")
     pub.add_argument("--note")
     pub.add_argument("--force", action="store_true")
+    pub.add_argument("--alternative", action="store_true", help="store a distinct remedy for an existing failure fingerprint")
     pub.set_defaults(func=cmd_publish)
     c = sub.add_parser("confirm")
     c.add_argument("id")
@@ -870,6 +911,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("show")
     s.add_argument("id")
     s.set_defaults(func=cmd_show)
+    explain = sub.add_parser("explain", help="show the v2 failure/remedy/proof/observation graph for a v1 claim")
+    explain.add_argument("id")
+    explain.set_defaults(func=cmd_explain)
+    explain_policy = sub.add_parser("explain-policy", help="show executable-proof admission policy")
+    explain_policy.set_defaults(func=cmd_explain_policy)
     ls = sub.add_parser("ls")
     ls.add_argument("--st")
     ls.add_argument("--eco")
@@ -916,6 +962,7 @@ def build_parser() -> argparse.ArgumentParser:
     ing.add_argument("--model")
     ing.add_argument("--note")
     ing.add_argument("--force", action="store_true")
+    ing.add_argument("--alternative", action="store_true", help="store a distinct remedy for an existing failure fingerprint")
     ing.set_defaults(func=cmd_ingest)
     hp = sub.add_parser("home-pull")
     hp.add_argument("--url")
