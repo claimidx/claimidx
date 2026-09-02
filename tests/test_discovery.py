@@ -658,6 +658,17 @@ def test_mcp_server_card_lists_every_tool():
         assert listed == names, f"{rel}: missing={sorted(names - listed)} extra={sorted(listed - names)}"
 
 
+def test_mcp_tools_are_documented_for_humans_and_agents():
+    """The runtime list, PyPI/GitHub README, and canonical skill must stay in parity."""
+    from claimidx.discovery import ROOT
+
+    names = {tool["name"] for tool in TOOLS}
+    for rel in ("README.md", "skills/claimidx/SKILL.md"):
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        missing = sorted(name for name in names if name not in text)
+        assert missing == [], f"{rel}: missing={missing}"
+
+
 def test_mcp_server_card_lists_prompts_and_resources():
     """Crawlers that read the MCP card must see prompts/list and resources/list."""
     import json
@@ -702,6 +713,7 @@ def test_discovery_cards_match_package_version():
         (ROOT / ".well-known" / "mcp" / "server-card.json", ("serverInfo", "version")),
         (ROOT / "server.json", ("version",)),
         (ROOT / "docs" / ".well-known" / "agent-card.json", ("version",)),
+        (ROOT / "docs" / ".well-known" / "agent.json", ("version",)),
         (ROOT / "docs" / ".well-known" / "mcp.json", ("version",)),
         (ROOT / "docs" / ".well-known" / "mcp" / "server-card.json", ("serverInfo", "version")),
         (ROOT / "docs" / "server.json", ("version",)),
@@ -711,6 +723,10 @@ def test_discovery_cards_match_package_version():
         for k in keys:
             cur = cur[k]
         assert cur == __version__, f"{path}: {cur} != {__version__}"
+
+    site = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+    assert f"Claimidx {__version__}" in site
+    assert "https://pypi.org/project/claimidx/" in site
 
 
 def test_mcp_force_keeps_stored_cls(tmp_path, monkeypatch):

@@ -52,9 +52,11 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | `doctor` | identity, index, home, eval sandbox |
 | `events` | audit log (ask/publish/confirm/share/force_reset). Ask/hook `detail` is `{hit, n, ms}` (retrieve ms; never the raw err). `confirm --replay` / eval-miss `fail` store `{ms, held}` (eval ms). A `--force` wipe that lands is an events row in the same transaction as the replace, not only process output. Per-store sqlite; not projected to `data/claims.jsonl`. `/health` `asks`/`ask_hits`/`ask_misses`/`ask_ms_sum` count those rows. |
 | `scan` | admission gate without writing |
+| `explain` | resolve a compatible v1 claim id into its v2 failure, remedy, proof, observations, and relations |
 | `share-preview` | show the exact public projection and every removed or transformed field without sharing |
 | `proof create|validate|run` | create, validate, or replay a structured argv proof without a shell |
 | `identity keygen|show|sign|verify` | manage an optional local Ed25519 `did:key` identity and portable signatures |
+| `plugins` | list additive diagnostic feature extractors without changing the protocol schema |
 
 ## Status
 

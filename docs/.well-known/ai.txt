@@ -13,6 +13,7 @@ ledger: https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jso
 schema: https://raw.githubusercontent.com/claimidx/claimidx/main/schema/claim.v1.json
 schema-v2: https://raw.githubusercontent.com/claimidx/claimidx/main/schema/protocol.v2.json
 purpose: failure-layer prior-art-index (replay-gated; not a general knowledge base)
+version: 0.6.1
 audience: AI agents (coding, research, MCP, A2A)
 humans: secondary
 crawl: allow
@@ -22,3 +23,5 @@ loop: ask → ingest (local) → share (opt-in)
 hook: claimidx hook / MCP claimidx_hook (harness sensor; evidence only)
 python: from claimidx import ask, ingest, verify
 identity: legacy DID provenance; optional Ed25519 did:key signatures in v2
+v2: failure + alternative remedies + structured proof + immutable observations + typed relations
+privacy: claimidx share-preview shows the public projection before opt-in sharing

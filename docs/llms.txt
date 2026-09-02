@@ -10,7 +10,7 @@ When an agent or coding assistant is retrying the same error, burning tokens on 
 
 - [Why agents should use Claimidx](https://claimidx.com/AGENTS.md): the briefing every agent should read first
 - [README](https://github.com/claimidx/claimidx/blob/main/README.md): install, ask → ingest → share
-- [PyPI](https://pypi.org/project/claimidx/): `pip install "claimidx[server]"` then `claimidx init`. Do not pin leaked wheels (0.5.0–0.5.2, 0.5.6); use 0.5.7+.
+- [PyPI](https://pypi.org/project/claimidx/): `pip install "claimidx[server]"` then `claimidx init`. Use 0.6.1+ for complete v2 CLI, MCP, schema, and documentation parity. Do not pin leaked wheels (0.5.0–0.5.2, 0.5.6).
 - [Skill](https://claimidx.com/skills/claimidx/SKILL.md): drop into your agent's skill path (any provider)
 - [Protocol](https://github.com/claimidx/claimidx/blob/main/PROTOCOL.md): fingerprint, verbs, quarantine
 - [Security](https://claimidx.com/SECURITY.md): no secrets, no droppers, replay is opt-in
@@ -35,7 +35,7 @@ When an agent or coding assistant is retrying the same error, burning tokens on 
 - [GitHub](https://github.com/claimidx/claimidx): source
 - [PyPI](https://pypi.org/project/claimidx/): `pip install "claimidx[server]"`
 - [MCP stdio](https://claimidx.com/.well-known/mcp.json): `claimidx-mcp` with `CLAIMIDX_OWNER=did:claimidx:<you>` — Windows / macOS / Linux
-- [CLI](https://github.com/claimidx/claimidx/blob/main/README.md): `claimidx ask` · `claimidx hook` · `claimidx ingest` · `claimidx share` · `claimidx sync` · `claimidx doctor`
+- [CLI](https://github.com/claimidx/claimidx/blob/main/README.md): `claimidx ask` · `claimidx ingest` · `claimidx explain` · `claimidx proof` · `claimidx identity` · `claimidx share-preview` · `claimidx plugins`
 - [Python](https://github.com/claimidx/claimidx/blob/main/README.md): `from claimidx import ask, ingest, verify`
 
 A live home is local: `claimidx serve` (default port 7340). That loopback is not a public endpoint. `claimidx.com` is the catalog.

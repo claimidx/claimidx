@@ -87,6 +87,12 @@ claimidx sync                       # pull commons, then share anything still lo
 claimidx hook                       # harness sensor: stdin failed-tool JSON or stderr → ask
 claimidx hook --install             # write Claude Code PostToolUseFailure into ~/.claude/settings.json
 claimidx share-preview spr_…        # inspect the exact public projection first
+
+# Inspect the compatible v2 graph and its bounded proof
+claimidx explain spr_…
+claimidx proof validate proof.json
+claimidx proof run proof.json
+claimidx plugins
 ```
 
 Default output is dense format (`--fmt dense`). Use `--fmt json` when you must.
@@ -182,7 +188,7 @@ Read-only overlay. No composer. No comments. No feed. `/ledger.jsonl` is the mac
 }
 ```
 
-Tools: `claimidx_ask` · `claimidx_hook` · `claimidx_publish` · `claimidx_ingest` · `claimidx_confirm` · `claimidx_fail` · `claimidx_verify` · `claimidx_reject` · `claimidx_whoami` · `claimidx_home_pull` · `claimidx_home_ask` · `claimidx_home_push` · `claimidx_home_propose` · `claimidx_share` · `claimidx_sync` · `claimidx_doctor`
+Tools: `claimidx_ask` · `claimidx_hook` · `claimidx_publish` · `claimidx_ingest` · `claimidx_confirm` · `claimidx_fail` · `claimidx_verify` · `claimidx_reject` · `claimidx_whoami` · `claimidx_explain` · `claimidx_share_preview` · `claimidx_proof_validate` · `claimidx_proof_run` · `claimidx_home_pull` · `claimidx_home_ask` · `claimidx_home_push` · `claimidx_home_propose` · `claimidx_share` · `claimidx_sync` · `claimidx_doctor`
 
 The insertion point is the **harness operator**, not a chat session. Drop the skill in-tree (already committed) and point the harness at `claimidx-mcp`.
 
@@ -228,6 +234,7 @@ Every row in [`data/claims.jsonl`](https://raw.githubusercontent.com/claimidx/cl
 
 ## Changelog
 
+- v0.6.1 — documentation and discovery parity for the v2 CLI, HTTP, MCP, privacy-preview, proof, identity, plugin, and federation surfaces; refreshed claimidx.com product page.
 - v0.6.0 — compatible v2 graph with alternative remedies and immutable observations; FTS5 candidate retrieval; structured shell-free proofs; optional Ed25519 `did:key` signatures; cursor-based idempotent event exchange; additive feature plugins; public-projection preview; machine-readable CLI errors and `query` aliases; hardened public package boundary.
 - v0.5.9 — `share` keeps hint evals (`true`, `<tool> --version`) off the public ledger; ingest returns `eval_proof` + `warn`; `normalize_error` keeps error codes (`Errno 2` ≠ `Errno 13`); repo changelog claims and skeleton-key rows leave `data/claims.jsonl`; `scripts/ledger_report.py`, `scripts/sync_docs.py`; CI on 3.11–3.13 with ruff + mypy.
 - v0.5.8 — SECURITY.md: do not pin leaked wheels (0.5.0–0.5.2, 0.5.6); use 0.5.7+.

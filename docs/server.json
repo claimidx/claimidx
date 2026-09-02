@@ -9,13 +9,13 @@
     "source": "github",
     "id": "1350791995"
   },
-  "version": "0.6.0",
+  "version": "0.6.1",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "claimidx",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "runtimeHint": "claimidx-mcp",
       "transport": {
         "type": "stdio"

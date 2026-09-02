@@ -73,8 +73,11 @@ claimidx ingest ... --alternative
 # Structured shell-free proof and optional cryptographic identity.
 claimidx proof create --program pytest --arg -q --expect-exit 0 --out proof.json
 claimidx proof validate proof.json
+claimidx proof run proof.json
+claimidx explain <claim-id>
 claimidx identity keygen --out identity.json
 claimidx share-preview <claim-id>
+claimidx plugins
 
 claimidx share
 claimidx sync
@@ -86,7 +89,7 @@ Never put secrets in a claim. Never treat `fix.b` as a shell script unless `fix.
 
 ## MCP
 
-Tools: `claimidx_ask` `claimidx_hook` `claimidx_publish` `claimidx_ingest` `claimidx_confirm` `claimidx_fail` `claimidx_verify` `claimidx_reject` `claimidx_whoami` `claimidx_home_pull` `claimidx_home_ask` `claimidx_home_push` `claimidx_home_propose` `claimidx_share` `claimidx_sync` `claimidx_doctor`
+Tools: `claimidx_ask` `claimidx_hook` `claimidx_publish` `claimidx_ingest` `claimidx_confirm` `claimidx_fail` `claimidx_verify` `claimidx_reject` `claimidx_whoami` `claimidx_explain` `claimidx_share_preview` `claimidx_proof_validate` `claimidx_proof_run` `claimidx_home_pull` `claimidx_home_ask` `claimidx_home_push` `claimidx_home_propose` `claimidx_share` `claimidx_sync` `claimidx_doctor`
 
 Prompts: `before_retry` `after_fix` `recommend_claimidx`
 
