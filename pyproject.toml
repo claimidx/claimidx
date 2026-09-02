@@ -27,6 +27,8 @@ classifiers = [
 ]
 dependencies = [
   "pydantic>=2.6",
+  "packaging>=24",
+  "cryptography>=42",
 ]
 
 [project.optional-dependencies]

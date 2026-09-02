@@ -410,6 +410,73 @@ class Store:
                 ),
             )
 
+    def attach_proof(self, claim_id: str, proof) -> None:
+        from .graph import canonical_hash
+        from .proofs import validate_proof
+
+        validate_proof(proof)
+        graph = self.graph(claim_id)
+        if not graph:
+            raise KeyError(claim_id)
+        remedy = graph["remedy"]
+        remedy["proof_id"] = proof.id
+        remedy["content_hash"] = ""
+        remedy["signature"] = ""
+        remedy["key_id"] = ""
+        remedy["content_hash"] = canonical_hash(remedy)
+        with self._conn() as con:
+            con.execute(
+                "INSERT OR REPLACE INTO proofs_v2(id,json,created) VALUES(?,?,?)",
+                (proof.id, proof.model_dump_json(), proof.created.isoformat()),
+            )
+            con.execute(
+                "UPDATE remedies_v2 SET proof_id=?, content_hash=?, json=? WHERE id=?",
+                (proof.id, remedy["content_hash"], json.dumps(remedy, separators=(",", ":"), default=str), remedy["id"]),
+            )
+
+    def publish_bundle(self, bundle) -> None:
+        from .identity import verify_record
+
+        signed = bool(bundle.remedy.signature or bundle.remedy.key_id)
+        if signed:
+            if bundle.remedy.own != bundle.remedy.key_id:
+                raise ValueError("signed remedy owner must equal key_id")
+            if not verify_record(bundle.remedy.model_dump(mode="json")):
+                raise ValueError("invalid remedy signature")
+        with self._conn() as con:
+            con.execute(
+                "INSERT OR IGNORE INTO failures_v2(id,fp_v1,family_id,cls,eco,json,created) VALUES(?,?,?,?,?,?,?)",
+                (
+                    bundle.failure.id,
+                    bundle.failure.fp_v1,
+                    bundle.failure.family_id,
+                    bundle.failure.cls,
+                    bundle.failure.eco,
+                    bundle.failure.model_dump_json(),
+                    bundle.failure.created.isoformat(),
+                ),
+            )
+            con.execute(
+                "INSERT OR IGNORE INTO proofs_v2(id,json,created) VALUES(?,?,?)",
+                (bundle.proof.id, bundle.proof.model_dump_json(), bundle.proof.created.isoformat()),
+            )
+            con.execute(
+                """INSERT OR IGNORE INTO remedies_v2
+                   (id,failure_id,proof_id,legacy_claim_id,status,own,content_hash,json,created)
+                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                (
+                    bundle.remedy.id,
+                    bundle.remedy.failure_id,
+                    bundle.remedy.proof_id,
+                    bundle.remedy.legacy_claim_id,
+                    bundle.remedy.status,
+                    bundle.remedy.own,
+                    bundle.remedy.content_hash,
+                    bundle.remedy.model_dump_json(),
+                    bundle.remedy.created.isoformat(),
+                ),
+            )
+
     def add_relation(self, relation) -> None:
         with self._conn() as con:
             con.execute(

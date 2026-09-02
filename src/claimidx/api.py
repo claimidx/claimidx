@@ -22,6 +22,7 @@ from .dense import encode
 from .discovery import LINK_HEADER, ROOT, ROUTES
 from .discovery import resolve as resolve_discovery
 from .fingerprint import classify, fingerprint, normalize_error
+from .graph import Bundle
 from .match import hit_row
 from .models import Claim, EvalSpec, Fix
 from .policy import PolicyError, require_identity
@@ -83,6 +84,7 @@ class PublishBody(BaseModel):
     force: bool = False
     alternative: bool = False
     id: str = ""
+    proof: dict[str, Any] | None = None
 
 
 def _bearer(authorization: str | None) -> str:
@@ -224,6 +226,15 @@ def create_app(db: str | None = None) -> FastAPI:
             raise HTTPException(404, "missing")
         return graph
 
+    @app.post("/api/v2/bundles")
+    def publish_v2_bundle(bundle: Bundle, _auth: str = Depends(require_write)):
+        try:
+            require_identity(bundle.remedy.own)
+            store.publish_bundle(bundle)
+        except (PolicyError, SecretError, ValueError) as e:
+            raise HTTPException(400, str(e)) from e
+        return {"accepted": True, "identity": "verified" if bundle.remedy.signature else "asserted", "remedy_id": bundle.remedy.id}
+
     @app.post("/api/ask")
     def ask(payload: AskBody):
         cls = payload.cls or classify(payload.err)
@@ -297,6 +308,10 @@ def create_app(db: str | None = None) -> FastAPI:
                 **extra,
             )
             store.publish(c, own, reset)
+            if payload.proof:
+                from .graph import Proof
+
+                store.attach_proof(c.id, Proof.model_validate(payload.proof))
             if existing and payload.alternative:
                 from .graph import Relation
 

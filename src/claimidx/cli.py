@@ -197,6 +197,10 @@ def cmd_publish(ns: argparse.Namespace) -> int:
         **extra,
     )
     store.publish(claim, claim.own, reset)
+    if ns.proof:
+        from .proofs import load_proof
+
+        store.attach_proof(claim.id, load_proof(ns.proof))
     if existing and ns.alternative:
         from .graph import Relation
 
@@ -400,6 +404,52 @@ def cmd_explain_policy(ns: argparse.Namespace) -> int:
         )
     )
     return 0
+
+
+def cmd_proof(ns: argparse.Namespace) -> int:
+    from .proofs import dump_proof, load_proof, proof_template, run_proof, validate_proof
+
+    if ns.proof_cmd == "create":
+        proof = proof_template(ns.program, ns.arg or [], expect_exit=ns.expect)
+        body = dump_proof(proof)
+        if ns.output:
+            from pathlib import Path
+
+            Path(ns.output).write_text(body + "\n", encoding="utf-8")
+        else:
+            print(body)
+        return 0
+    proof = load_proof(ns.path)
+    if ns.proof_cmd == "validate":
+        validate_proof(proof)
+        print(json.dumps({"ok": True, "v": 2, "proof_id": proof.id}))
+        return 0
+    result = run_proof(proof, cwd=ns.cwd)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result["held"] else 2
+
+
+def cmd_identity(ns: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from .identity import generate_identity, load_identity, sign_record, verify_record
+
+    default = Path.home() / ".claimidx" / "identity.json"
+    path = Path(ns.key or default)
+    if ns.identity_cmd == "keygen":
+        print(json.dumps(generate_identity(path, overwrite=ns.force), indent=2))
+        return 0
+    if ns.identity_cmd == "show":
+        did, _private = load_identity(path)
+        print(json.dumps({"did": did, "key": str(path), "identity": "verified"}, indent=2))
+        return 0
+    record = json.loads(Path(ns.record).read_text(encoding="utf-8"))
+    if ns.identity_cmd == "sign":
+        print(json.dumps(sign_record(record, path), indent=2, ensure_ascii=False, default=str))
+        return 0
+    held = verify_record(record)
+    print(json.dumps({"verified": held, "key_id": record.get("key_id", "")}))
+    return 0 if held else 2
 
 
 def cmd_verify(ns: argparse.Namespace) -> int:
@@ -869,6 +919,7 @@ def build_parser() -> argparse.ArgumentParser:
     pub.add_argument("--note")
     pub.add_argument("--force", action="store_true")
     pub.add_argument("--alternative", action="store_true", help="store a distinct remedy for an existing failure fingerprint")
+    pub.add_argument("--proof", help="attach a structured v2 proof JSON document")
     pub.set_defaults(func=cmd_publish)
     c = sub.add_parser("confirm")
     c.add_argument("id")
@@ -916,6 +967,38 @@ def build_parser() -> argparse.ArgumentParser:
     explain.set_defaults(func=cmd_explain)
     explain_policy = sub.add_parser("explain-policy", help="show executable-proof admission policy")
     explain_policy.set_defaults(func=cmd_explain_policy)
+    proof = sub.add_parser("proof", help="create, validate, or run a structured v2 proof")
+    proof_sub = proof.add_subparsers(dest="proof_cmd", required=True)
+    proof_create = proof_sub.add_parser("create", help="create a shell-free proof document")
+    proof_create.add_argument("--program", required=True)
+    proof_create.add_argument("--arg", action="append", default=[])
+    proof_create.add_argument("--expect", "--expect-exit", dest="expect", type=int, default=0)
+    proof_create.add_argument("--output")
+    proof_create.set_defaults(func=cmd_proof)
+    proof_validate = proof_sub.add_parser("validate")
+    proof_validate.add_argument("path")
+    proof_validate.set_defaults(func=cmd_proof)
+    proof_run = proof_sub.add_parser("run")
+    proof_run.add_argument("path")
+    proof_run.add_argument("--cwd")
+    proof_run.set_defaults(func=cmd_proof)
+    identity = sub.add_parser("identity", help="create and use optional Ed25519 did:key identity")
+    identity_sub = identity.add_subparsers(dest="identity_cmd", required=True)
+    identity_keygen = identity_sub.add_parser("keygen")
+    identity_keygen.add_argument("--key")
+    identity_keygen.add_argument("--force", action="store_true")
+    identity_keygen.set_defaults(func=cmd_identity)
+    identity_show = identity_sub.add_parser("show")
+    identity_show.add_argument("--key")
+    identity_show.set_defaults(func=cmd_identity)
+    identity_sign = identity_sub.add_parser("sign")
+    identity_sign.add_argument("record")
+    identity_sign.add_argument("--key")
+    identity_sign.set_defaults(func=cmd_identity)
+    identity_verify = identity_sub.add_parser("verify")
+    identity_verify.add_argument("record")
+    identity_verify.add_argument("--key")
+    identity_verify.set_defaults(func=cmd_identity)
     ls = sub.add_parser("ls")
     ls.add_argument("--st")
     ls.add_argument("--eco")
@@ -963,6 +1046,7 @@ def build_parser() -> argparse.ArgumentParser:
     ing.add_argument("--note")
     ing.add_argument("--force", action="store_true")
     ing.add_argument("--alternative", action="store_true", help="store a distinct remedy for an existing failure fingerprint")
+    ing.add_argument("--proof", help="attach a structured v2 proof JSON document")
     ing.set_defaults(func=cmd_ingest)
     hp = sub.add_parser("home-pull")
     hp.add_argument("--url")

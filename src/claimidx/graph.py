@@ -139,6 +139,21 @@ class Relation(BaseModel):
     created: datetime = Field(default_factory=utcnow)
 
 
+class Bundle(BaseModel):
+    v: Literal[2] = 2
+    failure: Failure
+    proof: Proof
+    remedy: Remedy
+
+    @model_validator(mode="after")
+    def links(self) -> Bundle:
+        if self.remedy.failure_id != self.failure.id:
+            raise ValueError("remedy failure_id does not match bundle failure")
+        if self.remedy.proof_id != self.proof.id:
+            raise ValueError("remedy proof_id does not match bundle proof")
+        return self
+
+
 def proof_from_claim(claim: Claim) -> Proof:
     steps = [
         ProofStep(op="run", program="legacy", args=[claim.eval.cmd]),
