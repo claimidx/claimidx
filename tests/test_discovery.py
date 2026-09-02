@@ -214,16 +214,15 @@ def test_llms_txt_names_pypi():
     assert "0.5.6" in text, "llms.txt must warn agents off leaked wheels"
 
 
-def test_llms_txt_is_the_agent_index_not_the_storefront():
-    """llms.txt / ai.txt are what agents fetch first. Storefront and sales@ stay off those pages."""
+def test_machine_indexes_are_technical_only():
+    """Machine discovery must describe the public technical product only."""
     from claimidx.discovery import ROOT
 
     for rel in ("llms.txt", "docs/llms.txt", "ai.txt", "docs/ai.txt", "docs/.well-known/ai.txt"):
         text = (ROOT / rel).read_text(encoding="utf-8")
-        assert "sales@" not in text, rel
-        assert "claimidx.com/pricing" not in text, rel
-        assert "claimidx.com/homes" not in text, rel
-        assert "ENTERPRISE.md" in text, rel
+        lowered = text.lower()
+        for forbidden in ("sales@", "support@", "contact@", "/pricing", "/enterprise", "enterprise.md"):
+            assert forbidden not in lowered, (rel, forbidden)
 
 
 def test_pypi_metadata_links_github_docs():
@@ -243,72 +242,86 @@ def test_pypi_metadata_links_github_docs():
     assert "https://github.com/claimidx/claimidx/blob/main/AGENTS.md" in readme
     assert "](AGENTS.md)" not in readme
     manifest = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
-    for n in ("AGENTS.md", "PROTOCOL.md", "SECURITY.md", "llms.txt", "skills/claimidx/SKILL.md", "schema/claim.v1.json"):
+    for n in (
+        "AGENTS.md",
+        "PROTOCOL.md",
+        "SECURITY.md",
+        "llms.txt",
+        "skills/claimidx/SKILL.md",
+        "schema/claim.v1.json",
+        "schema/protocol.v2.json",
+    ):
         assert n in manifest, n
 
 
-def test_sdist_manifest_excludes_hangout_and_worker_probes():
-    """The published sdist is protocol. Hangout bot and worker probes stay off PyPI."""
+def test_v2_schema_is_generated_from_runtime_models():
+    """The published schema must not drift from strict Pydantic validation."""
+    import subprocess
+    import sys
+    from claimidx.discovery import ROOT
+
+    subprocess.check_call([sys.executable, "scripts/export_v2_schema.py", "--check"], cwd=ROOT)
+
+
+def test_sdist_manifest_is_an_explicit_technical_allowlist():
+    """The sdist includes protocol surfaces without naming private local material."""
     from claimidx.discovery import ROOT
 
     text = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
-    missing = [
-        n
-        for n in (
-            "test_social_directed.py",
-            "test_worker_stripe.py",
-            "social_reply.py",
-            "worker_stripe_probe.mjs",
-            "stripe_hook.py",
-            "test_stripe_hook.py",
-            "INTERNAL",
-            "extras",
-            "BOTS.md",
-            "claimidx_ops.ps1",
-        )
-        if n not in text
-    ]
-    assert missing == [], missing
-    assert "prune tests" not in text.lower() or "recursive-include tests" in text
-    api = (ROOT / "src" / "claimidx" / "api.py").read_text(encoding="utf-8")
-    assert not (ROOT / "src" / "claimidx" / "stripe_hook.py").exists()
-    assert not any(line.startswith("from .stripe_hook import") or line.startswith("from claimidx.stripe_hook") for line in api.splitlines())
+    lowered = text.lower()
+    assert "graft src/claimidx" in text
+    assert "recursive-include tests" not in text
+    assert "schema/protocol.v2.json" in text
+    for forbidden in ("enterprise", "stripe", "social", "worker", "bot", "internal", "extras"):
+        assert forbidden not in lowered, forbidden
 
 
-def test_wheel_excludes_stripe_hook(tmp_path):
-    """pip installs the wheel. MANIFEST.in does not apply; stripe_hook must not live under src/claimidx."""
-    import shutil
+def test_sdist_excludes_tests_and_local_neighbors(tmp_path):
+    """PyPI source archives include only package/docs allowlist, never local ignored tests."""
+    import subprocess
+    import sys
+    import tarfile
+    from claimidx.discovery import ROOT
+
+    out = tmp_path / "dist"
+    subprocess.check_call([sys.executable, "-m", "build", "--sdist", "--outdir", str(out)], cwd=ROOT)
+    archives = list(out.glob("claimidx-*.tar.gz"))
+    assert len(archives) == 1, archives
+    with tarfile.open(archives[0]) as bundle:
+        names = [name.replace("\\", "/") for name in bundle.getnames()]
+    assert not any("/tests/" in name for name in names)
+    assert any(name.endswith("/schema/protocol.v2.json") for name in names)
+    assert any(name.endswith("/src/claimidx/graph.py") for name in names)
+
+
+def test_wheel_contains_only_public_package_modules(tmp_path):
+    """The wheel is built from the public package, not neighboring local tooling."""
     import subprocess
     import sys
     import zipfile
     from claimidx.discovery import ROOT
 
-    assert not (ROOT / "src" / "claimidx" / "stripe_hook.py").exists()
-    # The operator drop-in under extras/ is untracked; when it exists locally
-    # the wheel must still exclude it, and its absence must not break the build.
-    shutil.rmtree(ROOT / "build", ignore_errors=True)
     out = tmp_path / "dist"
     out.mkdir()
-    # Isolated backend: CI's pytest env has no setuptools (build-system only).
     subprocess.check_call(
         [
             sys.executable,
             "-m",
-            "pip",
-            "wheel",
-            str(ROOT),
-            "-w",
+            "build",
+            "--wheel",
+            "--outdir",
             str(out),
-            "--no-deps",
         ],
-        cwd=tmp_path,
+        cwd=ROOT,
     )
     wheels = list(out.glob("claimidx-*.whl"))
     assert len(wheels) == 1, wheels
     names = zipfile.ZipFile(wheels[0]).namelist()
-    assert not any(n.endswith("stripe_hook.py") for n in names)
     assert any(n.endswith("claimidx/cli.py") for n in names)
-    assert not any("INTERNAL/" in n.replace("\\", "/") for n in names)
+    assert any(n.endswith("claimidx/graph.py") for n in names)
+    assert any(n.endswith("claimidx/proofs.py") for n in names)
+    assert any(n.endswith("claimidx/identity.py") for n in names)
+    assert all(n.startswith("claimidx/") or ".dist-info/" in n for n in names)
 
 
 def test_mcp_server_json_is_honest():
@@ -354,8 +367,8 @@ def test_mcp_registry_publish_uses_github_oidc():
     assert "secrets." not in text
 
 
-def test_mcp_registry_hides_leaked_pypi_versions():
-    """0.5.6 leaked operated extras and was yanked. MCP registry must not leave it active."""
+def test_mcp_registry_hides_invalid_pypi_versions():
+    """A yanked package with incorrect contents must not remain active in discovery."""
     from claimidx.discovery import ROOT
 
     text = (ROOT / ".github" / "workflows" / "mcp-registry.yml").read_text(encoding="utf-8")
@@ -412,7 +425,6 @@ def test_sitemap_lists_machine_discovery():
             "https://claimidx.com/.well-known/security.txt",
             "https://claimidx.com/SECURITY.md",
             "https://claimidx.com/PROTOCOL.md",
-            "https://claimidx.com/ENTERPRISE.md",
         )
         if n not in text
     ]
@@ -481,7 +493,7 @@ def test_api_catalog_lists_protocol_docs():
 
 
 def test_api_whoami_and_events(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:grok")
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:agent-a")
     app = create_app(str(tmp_path / "ix.sqlite"))
     client = TestClient(app)
     me = client.get("/api/whoami")
@@ -489,7 +501,7 @@ def test_api_whoami_and_events(tmp_path, monkeypatch):
     body = me.json()
     assert body["home"] is True
     assert body["product"] == "Claimidx"
-    assert body["operator"]["did"] == "did:claimidx:grok"
+    assert body["operator"]["did"] == "did:claimidx:agent-a"
     assert "actors" in body
     ev = client.get("/api/events")
     assert ev.status_code == 200
@@ -744,7 +756,7 @@ def test_mcp_force_keeps_stored_cls(tmp_path, monkeypatch):
 
 
 def test_mcp_ingest_honors_own(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:grok")
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:agent-a")
     monkeypatch.setenv("CLAIMIDX_SHARE", "0")
     store = Store(tmp_path / "ix.sqlite")
     rec = handle(
@@ -760,7 +772,7 @@ def test_mcp_ingest_honors_own(tmp_path, monkeypatch):
                     "fix_b": "pass own on claimidx_ingest",
                     "eval": "true",
                     "eco": "mcp",
-                    "own": "did:claimidx:benjamin",
+                    "own": "did:claimidx:agent-b",
                 },
             },
         },
@@ -768,7 +780,7 @@ def test_mcp_ingest_honors_own(tmp_path, monkeypatch):
     )
     assert rec.get("result", {}).get("isError") is not True
     claims = store.all()
-    assert claims and claims[0].own == "did:claimidx:benjamin"
+    assert claims and claims[0].own == "did:claimidx:agent-b"
 
 
 def test_mcp_prompts_and_resources(tmp_path):

@@ -1,6 +1,6 @@
-# Claimidx protocol v1
+# Claimidx protocol v1 + v2
 
-A **claim** is the only writeable object.
+Protocol v1 is the frozen compatibility wire format. Every v1 claim is projected into the additive v2 graph; existing clients, fingerprints, and ledgers continue to work.
 
 ```
 fingerprint → executable fix → eval → confirm|fail
@@ -32,12 +32,12 @@ Classification is first-match. Specific classes beat generic `type_error`.
 
 | verb | effect |
 |---|---|
-| `ask` | rank by fingerprint exact, then class+error+dep similarity |
+| `ask` / `query` | rank by fingerprint exact, then FTS candidates and class+error+dep similarity |
 | `hook` (`claimidx hook` / MCP `claimidx_hook`) | harness sensor: stdin failed-tool JSON or stderr → ask. `claimidx init` / `claimidx hook --install` writes Claude `PostToolUseFailure`. Evidence only; never applies `fix.b`. Fail-open. |
 | Python `ask()` | in-process query (`from claimidx import ask`). Same payload as JSON ask. Never auto-confirms. |
 | Python `ingest()` | in-process local write (`from claimidx import ingest`). Does not share unless `share=True`. Combined: `from claimidx import ask, ingest`. |
 | Python `verify()` | in-process batch replay (`from claimidx import verify`). `dry_run` defaults true: lists claims and does not run evals, venv, or pip. Combined: `from claimidx import ask, ingest, verify`. |
-| `publish` / `ingest` | insert if fingerprint unseen; refuse secrets, droppers, anon owners. `--force` reuses the id, resets `nr`/`nc`/`nf` to 0, and surfaces the previous counters plus the wiped `rt` as `force_reset` on stdout/JSON. The same payload is an append-only `events` row (`kind=force_reset`, `detail={nr,nc,nf,rt}`) in the **same sqlite transaction** as the replace — a wipe event without the new row is a lie. It does not keep a hold across a rewritten `rt`. Events stay on that local index (`claimidx events` / FastAPI `GET /api/events` on `claimidx serve`). Operated cloud homes do not expose this overwrite log. Public `data/claims.jsonl` does not carry overwrite history. |
+| `publish` / `ingest` | insert if fingerprint and remedy are unseen; refuse secrets, droppers, anonymous owners. Exact duplicates are no-ops. `--alternative` records a distinct remedy for the same failure. `--force` preserves the v2 history while replacing the legacy v1 projection and resetting its counters. |
 | `confirm` | `nc += 1`; maybe `confirmed`. Home claims require `--replay` (HTTP: `?replay=true`). `confirm --replay` that holds increments `nr` only when python/node evals observe the executing runtime (`ReplayResult.env`, e.g. `py@3.12`) and it matches claim.rt at proof grain (Python major.minor, Node major). Empty claim.rt cannot mint `nr` for those heads. |
 | `fail` | `nf += 1`; maybe `contested`. This is the contradiction on the same `fp`. Different pin → different `fp` (ingest a sibling). |
 | `verify` (`claimidx verify` / MCP `claimidx_verify`) | batch replay. Confirm if the eval held. Fail only on a proven miss. Skip builtin `true`/`false`, missing trees, missing interpreters, and evals that cannot prove the pin. CLI default is `verify --dry-run` (MCP / Python `dry_run` default true): lists chosen claims and does not run evals, venv, or pip. CLI `--apply` or MCP `dry_run=false` runs evals. `--harness` is two-state pin replay: confirm only if unpinned misses and the pin holds. CLI `--cwd` / MCP `cwd` / Python `cwd` is the tree root for tree-scoped evals; pin/harness venv stays in an isolated scratch. |
@@ -52,6 +52,9 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | `doctor` | identity, index, home, eval sandbox |
 | `events` | audit log (ask/publish/confirm/share/force_reset). Ask/hook `detail` is `{hit, n, ms}` (retrieve ms; never the raw err). `confirm --replay` / eval-miss `fail` store `{ms, held}` (eval ms). A `--force` wipe that lands is an events row in the same transaction as the replace, not only process output. Per-store sqlite; not projected to `data/claims.jsonl`. `/health` `asks`/`ask_hits`/`ask_misses`/`ask_ms_sum` count those rows. |
 | `scan` | admission gate without writing |
+| `share-preview` | show the exact public projection and every removed or transformed field without sharing |
+| `proof create|validate|run` | create, validate, or replay a structured argv proof without a shell |
+| `identity keygen|show|sign|verify` | manage an optional local Ed25519 `did:key` identity and portable signatures |
 
 ## Status
 
@@ -68,7 +71,7 @@ proposed ──nc≥1──► confirmed ──stale──► stale
 
 `st` is a rank weight, not a write lock. Confirmed goes `stale` at `exp`, or 90 days after `ts`. Score already decays with age (`1 / (1 + days/45)`).
 
-Ask surfaces what the agent can act on: `age_days`, `dep_drift` (same package, different pin), `rt_drift` (proof-grain runtime differs; fingerprint still keeps Python major only), `src`, `nf`, `nr` (replay-held confirms **for this consumer's rt**; 0 when `rt_drift` or query rt omitted against a keyed claim — no same-major fallback), `eval_proof` (recipe-shaped eval on that claim's fp, not a match against the query error; the 1.08 weight lifts every recipe sibling equally and does not adjudicate ties; ask warns `eval_proof is recipe-per-fp, not query-err match` when the query err string differs from the stored canonical row — same `normalize_error` form is not exact; quoted non-module tokens collapse to `<STR>`), `warn`. Same package + different version is still a hit, ranked lower. Replay before applying if `warn`, `dep_drift`, `rt_drift`, `nf>0`, `normalization_risk`, `nc without replay`, or `st=contested`. `claimidx hook` injects two hits when top-2 sim is a near-tie; it still does not apply `fix.b`. `normalization_risk` is content-based: it fires when the query has a path, URL, integer, hex, or non-module quoted token that `normalize_error` erases, or already contains those placeholders (`<STR>`, `<URL>`, `<PATH>`, `<HEX>`, `<N>`). Counter-only `confirm` still increments `nc`; `confirm --replay` that holds increments `nr` only when python/node env matches claim.rt. Do not spawn a second `proposed` row for the same `fp`. `--force` overwrites that row and resets `nr`/`nc`/`nf` (JSON `force_reset` carries the previous counters and the wiped `rt`; the same payload is `events.kind=force_reset` in the same sqlite transaction as the replace); it does not retarget a hold onto a new `rt`. Contradiction is `fail` on that `fp`; a new pin is a new fingerprint. Pulled ledger rows with a stored `fp` that does not recompute from the claimed fields are skipped.
+Ask surfaces what the agent can act on: `age_days`, `dep_drift`, `rt_drift`, `src`, `nf`, `nr`, `eval_proof`, and `warn`. Same package + different version remains a lower-ranked hit. Replay before applying if evidence is stale, drifting, contested, normalization-sensitive, or lacks held proof. Exact duplicate failure/remedy input is a no-op; a different valid fix for the same fingerprint is a v2 alternative remedy. `--force` replaces only the legacy projection while preserving graph history. Contradiction is an immutable observation against a remedy. Pulled v1 rows whose fingerprint does not recompute are skipped.
 
 Provenance is on the claim: `src` (`seed` corpus / `home` harvested / `local`), `tried`, `eval`, `ts`, `nc`. Seed is not proof. Pulled home claims stay `proposed` until `confirm --replay`.
 
@@ -84,4 +87,18 @@ Provenance is on the claim: `src` (`seed` corpus / `home` harvested / `local`), 
 
 ## Schema
 
-See `schema/claim.v1.json`.
+See `schema/claim.v1.json` and `schema/protocol.v2.json`.
+
+## V2 graph
+
+The graph has five first-class records:
+
+- `Failure`: the stable v1 fingerprint plus a broader family fingerprint and extracted features.
+- `Remedy`: one proposed resolution, applicability constraints, owner, proof reference, and optional signature.
+- `Proof`: structured, bounded steps (`run`, `expect_exit`, runtime and package observations). Legacy eval commands are wrapped without changing v1.
+- `Observation`: an immutable held/failed result by an actor in an environment.
+- `Relation`: typed edges such as alternative and supersedes.
+
+Protocol events are cursor-addressed and idempotent. Batches carry a canonical hash, so peers can exchange evidence without sharing SQLite files or rewriting history. Public projection remains opt-in and removes private fields before transport.
+
+V1 `did:claimidx:*` values assert provenance but are not cryptographic signatures. V2 can use Ed25519 `did:key`; signatures cover canonical JSON with the `signature` field omitted. Unsigned legacy data remains readable and is never relabeled as cryptographically verified.

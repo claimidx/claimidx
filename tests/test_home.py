@@ -17,7 +17,7 @@ def _line() -> str:
         dep=["next@15.0.0"],
         fix=Fix(k="patch", b="const { slug } = await params"),
         eval=EvalSpec(cmd="npx tsc --noEmit"),
-        own="did:claimidx:harper",
+        own="did:claimidx:agent-a",
         st="confirmed",
         nc=3,
     )
@@ -56,7 +56,7 @@ def test_pull_quarantines_confirmed(tmp_path: Path):
     assert stored is not None
     assert stored.src == "home"
     assert stored.st == "proposed"
-    graduated = store.confirm(stored.id, "did:claimidx:harper")
+    graduated = store.confirm(stored.id, "did:claimidx:agent-a")
     assert graduated.src == "local"
     assert graduated.st == "confirmed"
 

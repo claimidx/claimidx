@@ -158,11 +158,7 @@ def error_features(raw: str) -> dict[str, Any]:
     codes = [m.group(2) for m in _CODE_NUM.finditer(raw)]
     packages = [m.group(1).lower() for m in _PACKAGE.finditer(raw)]
     symbols = sorted(
-        {
-            token.lower()
-            for token in _SYMBOL.findall(normalized)
-            if token.lower() not in {"error", "exception", "traceback", "typeerror", "runtimeerror"}
-        }
+        {token.lower() for token in _SYMBOL.findall(normalized) if token.lower() not in {"error", "exception", "traceback", "typeerror", "runtimeerror"}}
     )[:24]
     return {
         "codes": list(dict.fromkeys(codes))[:8],

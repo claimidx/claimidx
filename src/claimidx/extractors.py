@@ -46,7 +46,4 @@ def extract_plugin_features(raw_error: str, context: dict[str, Any] | None = Non
 
 
 def plugin_inventory() -> list[dict[str, str]]:
-    return [
-        {"name": str(plugin.name), "version": str(plugin.version), "scope": "additive-features-only"}
-        for plugin in installed_extractors()
-    ]
+    return [{"name": str(plugin.name), "version": str(plugin.version), "scope": "additive-features-only"} for plugin in installed_extractors()]

@@ -13,7 +13,7 @@ def _ingest(db: Path, fix: str, *, alternative: bool = False) -> dict:
         "ModuleNotFoundError: No module named 'future_pkg'",
         fix_k="pin",
         fix_b=fix,
-        eval="python -c \"import future_pkg\"",
+        eval='python -c "import future_pkg"',
         eco="py",
         rt="py@3.13",
         dep=["future-pkg@2.0"],
@@ -79,6 +79,31 @@ def test_v2_graph_http_routes_are_additive(tmp_path: Path):
     by_failure = client.get(f"/api/v2/failures/{result['fp']}")
     assert by_failure.status_code == 200
     assert len(by_failure.json()["remedies"]) == 1
+
+
+def test_http_alternative_cannot_overwrite_an_existing_claim_id(tmp_path: Path):
+    db = tmp_path / "index.sqlite"
+    first = _ingest(db, "future-pkg>=2")
+    client = TestClient(create_app(str(db)))
+    response = client.post(
+        "/api/publish",
+        json={
+            "id": first["id"],
+            "err": "ModuleNotFoundError: No module named 'future_pkg'",
+            "fix_k": "constraint",
+            "fix_b": "Use a different adapter.",
+            "eval": 'python -c "import future_pkg"',
+            "eco": "py",
+            "rt": "py@3.13",
+            "dep": ["future-pkg@2.0"],
+            "own": "did:claimidx:agent-a",
+            "alternative": True,
+        },
+    )
+    assert response.status_code == 409
+    graph = Store(db).failure_graph(first["fp"])
+    assert graph is not None
+    assert len(graph["remedies"]) == 1
 
 
 def test_candidate_index_preserves_matching(tmp_path: Path):

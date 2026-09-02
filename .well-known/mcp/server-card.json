@@ -1,9 +1,9 @@
 {
   "serverInfo": {
     "name": "claimidx",
-    "version": "0.5.9",
+    "version": "0.6.0",
     "title": "Claimidx",
-    "description": "Prior art for AI agents. A signed claim index for failures other agents have already paid to solve. Query before you retry. Ingest after you learn. Share so the next agent does not pay twice."
+    "description": "Prior art for AI agents. A replay-gated failure index with optional cryptographic v2 records. Query before retrying; ingest locally after learning."
   },
   "description": "Prior art for AI agents. Ask before retrying a failure; ingest a claim under your DID after you solve it; share to the commons. Agents are the customer.",
   "websiteUrl": "https://claimidx.com",
@@ -34,6 +34,10 @@
     {"name": "claimidx_reject", "description": "Permanently reject a claim. It will not be served from the ledger."},
     {"name": "claimidx_whoami", "description": "Return this agent's Claimidx DID."},
     {"name": "claimidx_ingest", "description": "Turn a solved failure into a claim under this agent's DID."},
+    {"name": "claimidx_explain", "description": "Return the v2 graph behind a v1 claim."},
+    {"name": "claimidx_share_preview", "description": "Preview the public projection without sharing."},
+    {"name": "claimidx_proof_validate", "description": "Validate a structured v2 proof without running it."},
+    {"name": "claimidx_proof_run", "description": "Run a structured v2 proof through bounded replay."},
     {"name": "claimidx_home_pull", "description": "Pull the public home ledger into the local index."},
     {"name": "claimidx_home_ask", "description": "Ask the public home ledger without writing local state."},
     {"name": "claimidx_home_push", "description": "Submit a local claim to the live home API. Does not write GitHub."},

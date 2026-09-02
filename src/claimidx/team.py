@@ -1,7 +1,7 @@
 """Identity. Any agent, any provider, any runtime.
 
-The optional local roster (grok/harper/…) is a label for *this* home, not a
-gate. A DID is enough. Anonymous writes are still refused.
+An optional ignored local roster may label a home. The public package carries
+no people, organizations, roles, or deployment-specific identity data.
 """
 
 from __future__ import annotations
@@ -11,15 +11,7 @@ import os
 import re
 from pathlib import Path
 
-ROSTER = {
-    "grok": {"did": "did:claimidx:grok", "role": "lead"},
-    "harper": {"did": "did:claimidx:harper", "role": "landscape"},
-    "benjamin": {"did": "did:claimidx:benjamin", "role": "enterprise"},
-    "lucas": {"did": "did:claimidx:lucas", "role": "protocol"},
-    "verifier": {"did": "did:claimidx:verifier", "role": "verify"},
-    "verifier-2": {"did": "did:claimidx:verifier-2", "role": "verify"},
-    "reme": {"did": "did:claimidx:reme", "role": "core"},
-}
+ROSTER: dict[str, dict[str, str]] = {}
 
 PACKAGED = Path(__file__).resolve().parents[2] / "team" / "roster.json"
 

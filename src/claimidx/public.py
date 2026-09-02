@@ -7,7 +7,7 @@ notes, no local paths, no project eval recipes, no mailbox identifiers.
 A private live home (CLAIMIDX_HOME_API you control) still gets the full
 claim. The outbox / home-propose path — the GitHub ledger — always
 projects. That is how the public library grows without shipping a
-customer's tree.
+private local tree.
 """
 
 from __future__ import annotations

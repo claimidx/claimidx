@@ -94,4 +94,3 @@ def proof_template(program: str, args: list[str], *, expect_exit: int = 0) -> Pr
 
 def dump_proof(proof: Proof) -> str:
     return json.dumps(proof.model_dump(mode="json"), indent=2, ensure_ascii=False, default=str)
-

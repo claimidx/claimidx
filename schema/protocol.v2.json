@@ -1,44 +1,603 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/claimidx/claimidx/schema/protocol.v2.json",
-  "title": "Claimidx protocol v2 graph envelope",
-  "oneOf": [
-    { "$ref": "#/$defs/failure" },
-    { "$ref": "#/$defs/remedy" },
-    { "$ref": "#/$defs/proof" },
-    { "$ref": "#/$defs/observation" },
-    { "$ref": "#/$defs/relation" }
-  ],
   "$defs": {
-    "id": { "type": "string", "pattern": "^(flr_|rmd_|prf_|obs_|rel_)[0-9a-f]{16}$" },
-    "failure": {
-      "type": "object",
-      "required": ["v", "id", "fp_v1", "family_id", "cls", "err"],
+    "Applicability": {
+      "additionalProperties": false,
       "properties": {
-        "v": { "const": 2 }, "id": { "$ref": "#/$defs/id" },
-        "fp_v1": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-        "family_id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-        "cls": { "type": "string" }, "err": { "type": "string" },
-        "eco": { "type": "string" }, "rt": { "type": "string" },
-        "dep": { "type": "array", "items": { "type": "string" } },
-        "features": { "type": "object" }, "created": { "type": "string", "format": "date-time" }
-      }
+        "arch": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Arch",
+          "type": "array"
+        },
+        "dependency": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Dependency",
+          "type": "array"
+        },
+        "os": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Os",
+          "type": "array"
+        },
+        "runtime": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Runtime",
+          "type": "array"
+        }
+      },
+      "title": "Applicability",
+      "type": "object"
     },
-    "remedy": {
-      "type": "object",
-      "required": ["v", "id", "failure_id", "fix", "proof_id", "own", "content_hash"],
+    "Bundle": {
+      "additionalProperties": false,
       "properties": {
-        "v": { "const": 2 }, "id": { "$ref": "#/$defs/id" },
-        "failure_id": { "$ref": "#/$defs/id" }, "proof_id": { "$ref": "#/$defs/id" },
-        "fix": { "type": "object" }, "applicability": { "type": "object" },
-        "own": { "type": "string", "pattern": "^did:" }, "status": { "type": "string" },
-        "legacy_claim_id": { "type": "string" }, "content_hash": { "type": "string" },
-        "key_id": { "type": "string" }, "signature": { "type": "string" },
-        "created": { "type": "string", "format": "date-time" }
-      }
+        "failure": {
+          "$ref": "#/$defs/Failure"
+        },
+        "proof": {
+          "$ref": "#/$defs/Proof"
+        },
+        "remedy": {
+          "$ref": "#/$defs/Remedy"
+        },
+        "v": {
+          "const": 2,
+          "default": 2,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "failure",
+        "proof",
+        "remedy"
+      ],
+      "title": "Bundle",
+      "type": "object"
     },
-    "proof": { "type": "object", "required": ["v", "id", "steps"], "properties": { "v": { "const": 2 }, "id": { "$ref": "#/$defs/id" }, "steps": { "type": "array" }, "legacy_cmd": { "type": "string" }, "created": { "type": "string", "format": "date-time" } } },
-    "observation": { "type": "object", "required": ["v", "id", "remedy_id", "proof_id", "actor", "held"], "properties": { "v": { "const": 2 }, "id": { "$ref": "#/$defs/id" }, "remedy_id": { "$ref": "#/$defs/id" }, "proof_id": { "$ref": "#/$defs/id" }, "actor": { "type": "string", "pattern": "^did:" }, "held": { "type": "boolean" } } },
-    "relation": { "type": "object", "required": ["v", "id", "source_id", "target_id", "kind", "actor"], "properties": { "v": { "const": 2 }, "id": { "$ref": "#/$defs/id" }, "source_id": { "$ref": "#/$defs/id" }, "target_id": { "$ref": "#/$defs/id" }, "kind": { "enum": ["alternative", "supersedes", "contradicts", "derived_from", "duplicate_of"] }, "actor": { "type": "string", "pattern": "^did:" } } }
-  }
+    "Failure": {
+      "additionalProperties": false,
+      "properties": {
+        "cls": {
+          "title": "Cls",
+          "type": "string"
+        },
+        "created": {
+          "format": "date-time",
+          "title": "Created",
+          "type": "string"
+        },
+        "dep": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dep",
+          "type": "array"
+        },
+        "eco": {
+          "default": "other",
+          "title": "Eco",
+          "type": "string"
+        },
+        "err": {
+          "title": "Err",
+          "type": "string"
+        },
+        "family_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Family Id",
+          "type": "string"
+        },
+        "features": {
+          "additionalProperties": true,
+          "title": "Features",
+          "type": "object"
+        },
+        "fp_v1": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fp V1",
+          "type": "string"
+        },
+        "fp_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Fp Version",
+          "type": "integer"
+        },
+        "id": {
+          "pattern": "^flr_[0-9a-f]{16}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "rt": {
+          "default": "",
+          "title": "Rt",
+          "type": "string"
+        },
+        "v": {
+          "const": 2,
+          "default": 2,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "fp_v1",
+        "family_id",
+        "cls",
+        "err"
+      ],
+      "title": "Failure",
+      "type": "object"
+    },
+    "Fix": {
+      "properties": {
+        "b": {
+          "maxLength": 4000,
+          "title": "B",
+          "type": "string"
+        },
+        "k": {
+          "enum": [
+            "pin",
+            "patch",
+            "config",
+            "constraint",
+            "cmd",
+            "wontfix"
+          ],
+          "title": "K",
+          "type": "string"
+        }
+      },
+      "required": [
+        "k",
+        "b"
+      ],
+      "title": "Fix",
+      "type": "object"
+    },
+    "Observation": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "pattern": "^did:[^\\s]{1,500}$",
+          "title": "Actor",
+          "type": "string"
+        },
+        "actual_exit": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Exit"
+        },
+        "created": {
+          "format": "date-time",
+          "title": "Created",
+          "type": "string"
+        },
+        "environment": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Environment",
+          "type": "object"
+        },
+        "evidence_hash": {
+          "default": "",
+          "title": "Evidence Hash",
+          "type": "string"
+        },
+        "expected_exit": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Exit"
+        },
+        "held": {
+          "title": "Held",
+          "type": "boolean"
+        },
+        "id": {
+          "pattern": "^obs_[0-9a-f]{16}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "key_id": {
+          "default": "",
+          "title": "Key Id",
+          "type": "string"
+        },
+        "proof_id": {
+          "pattern": "^prf_[0-9a-f]{16}$",
+          "title": "Proof Id",
+          "type": "string"
+        },
+        "remedy_id": {
+          "pattern": "^rmd_[0-9a-f]{16}$",
+          "title": "Remedy Id",
+          "type": "string"
+        },
+        "replayed": {
+          "default": false,
+          "title": "Replayed",
+          "type": "boolean"
+        },
+        "sandbox": {
+          "default": "legacy",
+          "title": "Sandbox",
+          "type": "string"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "v": {
+          "const": 2,
+          "default": 2,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "remedy_id",
+        "proof_id",
+        "actor",
+        "held"
+      ],
+      "title": "Observation",
+      "type": "object"
+    },
+    "Proof": {
+      "additionalProperties": false,
+      "properties": {
+        "created": {
+          "format": "date-time",
+          "title": "Created",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^prf_[0-9a-f]{16}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "legacy_cmd": {
+          "default": "",
+          "title": "Legacy Cmd",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/ProofStep"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Steps",
+          "type": "array"
+        },
+        "v": {
+          "const": 2,
+          "default": 2,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "steps"
+      ],
+      "title": "Proof",
+      "type": "object"
+    },
+    "ProofStep": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Args",
+          "type": "array"
+        },
+        "code": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Code"
+        },
+        "op": {
+          "enum": [
+            "run",
+            "expect_exit",
+            "observe_runtime",
+            "expect_package"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "package": {
+          "default": "",
+          "title": "Package",
+          "type": "string"
+        },
+        "program": {
+          "default": "",
+          "title": "Program",
+          "type": "string"
+        },
+        "runtime": {
+          "default": "",
+          "title": "Runtime",
+          "type": "string"
+        },
+        "specifier": {
+          "default": "",
+          "title": "Specifier",
+          "type": "string"
+        },
+        "timeout_s": {
+          "default": 45,
+          "maximum": 45,
+          "minimum": 1,
+          "title": "Timeout S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "title": "ProofStep",
+      "type": "object"
+    },
+    "ProtocolEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "pattern": "^did:[^\\s]{1,500}$",
+          "title": "Actor",
+          "type": "string"
+        },
+        "created": {
+          "format": "date-time",
+          "title": "Created",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^evt_[0-9a-f]{16}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "key_id": {
+          "default": "",
+          "title": "Key Id",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "object_id": {
+          "default": "",
+          "title": "Object Id",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "v": {
+          "const": 2,
+          "default": 2,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "actor"
+      ],
+      "title": "ProtocolEvent",
+      "type": "object"
+    },
+    "Relation": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "pattern": "^did:[^\\s]{1,500}$",
+          "title": "Actor",
+          "type": "string"
+        },
+        "created": {
+          "format": "date-time",
+          "title": "Created",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^rel_[0-9a-f]{16}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "alternative",
+            "supersedes",
+            "contradicts",
+            "derived_from",
+            "duplicate_of"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_id": {
+          "pattern": "^(?:flr|rmd|prf|obs|rel)_[0-9a-f]{16}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "target_id": {
+          "pattern": "^(?:flr|rmd|prf|obs|rel)_[0-9a-f]{16}$",
+          "title": "Target Id",
+          "type": "string"
+        },
+        "v": {
+          "const": 2,
+          "default": 2,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_id",
+        "target_id",
+        "kind",
+        "actor"
+      ],
+      "title": "Relation",
+      "type": "object"
+    },
+    "Remedy": {
+      "additionalProperties": false,
+      "properties": {
+        "applicability": {
+          "$ref": "#/$defs/Applicability"
+        },
+        "content_hash": {
+          "default": "",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "created": {
+          "format": "date-time",
+          "title": "Created",
+          "type": "string"
+        },
+        "failure_id": {
+          "pattern": "^flr_[0-9a-f]{16}$",
+          "title": "Failure Id",
+          "type": "string"
+        },
+        "fix": {
+          "$ref": "#/$defs/Fix"
+        },
+        "id": {
+          "pattern": "^rmd_[0-9a-f]{16}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "key_id": {
+          "default": "",
+          "title": "Key Id",
+          "type": "string"
+        },
+        "legacy_claim_id": {
+          "default": "",
+          "title": "Legacy Claim Id",
+          "type": "string"
+        },
+        "own": {
+          "pattern": "^did:[^\\s]{1,500}$",
+          "title": "Own",
+          "type": "string"
+        },
+        "proof_id": {
+          "pattern": "^prf_[0-9a-f]{16}$",
+          "title": "Proof Id",
+          "type": "string"
+        },
+        "signature": {
+          "default": "",
+          "title": "Signature",
+          "type": "string"
+        },
+        "status": {
+          "default": "proposed",
+          "enum": [
+            "proposed",
+            "confirmed",
+            "contested",
+            "stale",
+            "rejected",
+            "superseded"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "v": {
+          "const": 2,
+          "default": 2,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "failure_id",
+        "fix",
+        "proof_id",
+        "own"
+      ],
+      "title": "Remedy",
+      "type": "object"
+    }
+  },
+  "$id": "https://github.com/claimidx/claimidx/blob/main/schema/protocol.v2.json",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/Failure"
+    },
+    {
+      "$ref": "#/$defs/Remedy"
+    },
+    {
+      "$ref": "#/$defs/Proof"
+    },
+    {
+      "$ref": "#/$defs/Observation"
+    },
+    {
+      "$ref": "#/$defs/Relation"
+    },
+    {
+      "$ref": "#/$defs/ProtocolEvent"
+    },
+    {
+      "$ref": "#/$defs/Bundle"
+    }
+  ],
+  "title": "Claimidx protocol v2 envelope"
 }

@@ -1,7 +1,5 @@
 name: pages
-# Storefront HTML (pricing/homes/thanks) is live but not in git.
-# A checkout of this repo would publish a site without paid pages.
-# Deploy from the operator machine: npx wrangler pages deploy docs --project-name claimidx
+# Publish the repository's technical documentation and discovery files.
 on:
   workflow_dispatch:
 jobs:

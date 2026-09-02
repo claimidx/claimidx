@@ -132,6 +132,51 @@ class Store:
                 if claim:
                     self._sync_v2_claim(con, claim)
             con.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES('v2_backfill','1')")
+        self._backfill_fts(con)
+        self._backfill_protocol_events(con)
+
+    def _backfill_fts(self, con: sqlite3.Connection) -> None:
+        """Populate a newly available FTS5 table even on an already-v2 database."""
+        if not self._fts or con.execute("SELECT value FROM metadata WHERE key='fts_backfill'").fetchone():
+            return
+        con.execute("DELETE FROM claims_fts")
+        for row in con.execute("SELECT id,json FROM claims").fetchall():
+            claim = self._claim_from_json(row["json"])
+            if claim:
+                con.execute(
+                    "INSERT INTO claims_fts(id,err,cls,eco,dep) VALUES(?,?,?,?,?)",
+                    (claim.id, claim.err, claim.cls, claim.eco, " ".join(claim.dep)),
+                )
+        con.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES('fts_backfill','1')")
+
+    def _backfill_protocol_events(self, con: sqlite3.Connection) -> None:
+        """Project legacy audit rows once, preserving their timestamp and payload."""
+        if con.execute("SELECT value FROM metadata WHERE key='event_backfill'").fetchone():
+            return
+        from .graph import ProtocolEvent, stable_id
+
+        for row in con.execute("SELECT id,claim_id,kind,actor,ts,detail FROM events ORDER BY id").fetchall():
+            try:
+                payload = json.loads(row["detail"]) if row["detail"] else {}
+            except (TypeError, json.JSONDecodeError):
+                payload = {"legacy_detail": str(row["detail"])}
+            actor = str(row["actor"] or "did:claimidx:anon")
+            if not actor.startswith("did:"):
+                actor = "did:claimidx:anon"
+            material = f"legacy-event:{row['id']}:{row['ts']}:{row['kind']}:{row['claim_id']}"
+            event = ProtocolEvent(
+                id=stable_id("evt_", material),
+                kind=str(row["kind"] or "legacy"),
+                object_id=str(row["claim_id"] or ""),
+                actor=actor,
+                payload=payload if isinstance(payload, dict) else {"legacy_detail": payload},
+                created=row["ts"] or utcnow(),
+            )
+            con.execute(
+                "INSERT OR IGNORE INTO protocol_events_v2(id,kind,object_id,actor,json,created) VALUES(?,?,?,?,?,?)",
+                (event.id, event.kind, event.object_id, event.actor, event.model_dump_json(), event.created.isoformat()),
+            )
+        con.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES('event_backfill','1')")
 
     def _sync_v2_claim(self, con: sqlite3.Connection, claim: Claim) -> None:
         from .graph import failure_from_claim, proof_from_claim, remedy_from_claim
@@ -367,7 +412,7 @@ class Store:
         tokens = [t for t in __import__("re").findall(r"[A-Za-z0-9_@.-]{3,}", err) if t.lower() not in {"error", "exception", "traceback"}]
         ids: list[str] = [c.id for c in exact]
         if tokens:
-            expression = " OR ".join('"' + t.replace('"', '') + '"' for t in list(dict.fromkeys(tokens))[:12])
+            expression = " OR ".join('"' + t.replace('"', "") + '"' for t in list(dict.fromkeys(tokens))[:12])
             try:
                 with self._conn() as con:
                     rows = con.execute("SELECT id FROM claims_fts WHERE claims_fts MATCH ? LIMIT ?", (expression, max(1, limit))).fetchall()
@@ -399,8 +444,16 @@ class Store:
             remedy = json.loads(remedy_row["json"])
             failure_row = con.execute("SELECT json FROM failures_v2 WHERE id=?", (remedy["failure_id"],)).fetchone()
             proof_row = con.execute("SELECT json FROM proofs_v2 WHERE id=?", (remedy["proof_id"],)).fetchone()
-            observations = [json.loads(row["json"]) for row in con.execute("SELECT json FROM observations_v2 WHERE remedy_id=? ORDER BY created", (remedy["id"],)).fetchall()]
-            relations = [json.loads(row["json"]) for row in con.execute("SELECT json FROM relations_v2 WHERE source_id=? OR target_id=? ORDER BY created", (remedy["id"], remedy["id"])).fetchall()]
+            observations = [
+                json.loads(row["json"])
+                for row in con.execute("SELECT json FROM observations_v2 WHERE remedy_id=? ORDER BY created", (remedy["id"],)).fetchall()
+            ]
+            relations = [
+                json.loads(row["json"])
+                for row in con.execute(
+                    "SELECT json FROM relations_v2 WHERE source_id=? OR target_id=? ORDER BY created", (remedy["id"], remedy["id"])
+                ).fetchall()
+            ]
         return {
             "failure": json.loads(failure_row["json"]) if failure_row else None,
             "remedy": remedy,
@@ -449,7 +502,44 @@ class Store:
             )
 
     def publish_bundle(self, bundle) -> None:
+        from .fingerprint import family_fingerprint, fingerprint
+        from .graph import canonical_hash, stable_id
         from .identity import verify_record
+        from .policy import inspect_claim
+        from .proofs import validate_proof
+
+        if bundle.failure.id != stable_id("flr_", bundle.failure.fp_v1):
+            raise ValueError("failure id does not match fp_v1")
+        expected_fp = fingerprint(
+            err=bundle.failure.err,
+            cls=bundle.failure.cls,
+            eco=bundle.failure.eco,
+            rt=bundle.failure.rt,
+            dep=bundle.failure.dep,
+        )
+        if bundle.failure.fp_v1 != expected_fp:
+            raise ValueError("failure fp_v1 does not match failure fields")
+        expected_family = family_fingerprint(err=bundle.failure.err, cls=bundle.failure.cls, eco=bundle.failure.eco)
+        if bundle.failure.family_id != expected_family:
+            raise ValueError("failure family_id does not match failure fields")
+        if bundle.remedy.status != "proposed":
+            raise ValueError("remote remedies must enter as proposed")
+        validate_proof(bundle.proof)
+        inspect_claim(
+            err=bundle.failure.err,
+            fix_k=bundle.remedy.fix.k,
+            fix_b=bundle.remedy.fix.b,
+            eval_cmd=bundle.proof.legacy_cmd or "true",
+            note="",
+            own=bundle.remedy.own,
+            src="home",
+        )
+        remedy_payload = bundle.remedy.model_dump(mode="json")
+        content_hash = remedy_payload.get("content_hash") or ""
+        remedy_payload["content_hash"] = ""
+        remedy_payload["signature"] = ""
+        if content_hash != canonical_hash(remedy_payload):
+            raise ValueError("remedy content_hash does not match remedy fields")
 
         signed = bool(bundle.remedy.signature or bundle.remedy.key_id)
         if signed:
@@ -458,6 +548,14 @@ class Store:
             if not verify_record(bundle.remedy.model_dump(mode="json")):
                 raise ValueError("invalid remedy signature")
         with self._conn() as con:
+            for table, object_id, payload in (
+                ("failures_v2", bundle.failure.id, bundle.failure.model_dump(mode="json")),
+                ("proofs_v2", bundle.proof.id, bundle.proof.model_dump(mode="json")),
+                ("remedies_v2", bundle.remedy.id, bundle.remedy.model_dump(mode="json")),
+            ):
+                row = con.execute(f"SELECT json FROM {table} WHERE id=?", (object_id,)).fetchone()
+                if row and json.loads(row["json"]) != payload:
+                    raise ValueError(f"{table} id collision with different content")
             con.execute(
                 "INSERT OR IGNORE INTO failures_v2(id,fp_v1,family_id,cls,eco,json,created) VALUES(?,?,?,?,?,?,?)",
                 (

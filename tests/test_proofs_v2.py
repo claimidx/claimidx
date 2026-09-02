@@ -47,7 +47,7 @@ def test_signed_bundle_is_accepted_and_invalid_signature_is_refused(tmp_path: Pa
         "TypeError: signed bundle",
         fix_k="constraint",
         fix_b="Use the verified form.",
-        eval="python -c \"raise SystemExit(0)\"",
+        eval='python -c "raise SystemExit(0)"',
         db=source,
     )
     graph = Store(source).graph(written["id"])
@@ -74,6 +74,20 @@ def test_signed_bundle_is_accepted_and_invalid_signature_is_refused(tmp_path: Pa
     with pytest.raises(ValueError, match="invalid remedy signature"):
         target.publish_bundle(broken)
 
+    tampered = bundle.model_copy(deep=True)
+    tampered.remedy.signature = ""
+    tampered.remedy.key_id = ""
+    tampered.remedy.fix.b = "Different content under the old hash."
+    with pytest.raises(ValueError, match="content_hash"):
+        target.publish_bundle(tampered)
+
+    elevated = bundle.model_copy(deep=True)
+    elevated.remedy.signature = ""
+    elevated.remedy.key_id = ""
+    elevated.remedy.status = "confirmed"
+    with pytest.raises(ValueError, match="must enter as proposed"):
+        target.publish_bundle(elevated)
+
 
 def test_v1_ingest_can_attach_structured_proof(tmp_path: Path):
     db = tmp_path / "index.sqlite"
@@ -97,7 +111,7 @@ def test_v1_ingest_can_attach_structured_proof(tmp_path: Path):
                 "--fix-b",
                 "Use the structured API.",
                 "--eval",
-                "python -c \"raise SystemExit(0)\"",
+                'python -c "raise SystemExit(0)"',
                 "--proof",
                 str(proof_path),
             ]

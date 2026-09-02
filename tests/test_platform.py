@@ -46,7 +46,7 @@ def test_file_uri_ledger_roundtrip(tmp_path: Path):
         dep=["next@15.0.0"],
         fix=Fix(k="patch", b="const { slug } = await params"),
         eval=EvalSpec(cmd="npx tsc --noEmit"),
-        own="did:claimidx:harper",
+        own="did:claimidx:agent-a",
     )
     ledger = tmp_path / "home.jsonl"
     ledger.write_text(propose_line(c) + "\n", encoding="utf-8")

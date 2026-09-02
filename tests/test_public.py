@@ -54,12 +54,12 @@ def test_public_eval_strips_project_paths():
 def test_public_eval_blanks_truncated_python_c_not_true():
     cmd = (
         "python -c \"import sys; sys.path.insert(0,'scripts'); "
-        "import social_reply as s; assert s.moltbook_solve_challenge("
-        "'a claw force is thirty two newtons and it is multiplied by two "
-        "what is total force')=='64.00'\""
+        "import private_project_module as p; assert p.validate_generated_value("
+        "'a deliberately long local-only test payload that exceeds the public "
+        "projection limit without identifying a real project')=='ok'\""
     )
     assert public_eval(cmd) == ""
-    p = project_public(_claim(eval=cmd, fix_b="flex-match multiplied"))
+    p = project_public(_claim(eval=cmd, fix_b="Validate the generated value."))
     assert p.eval.cmd == ""
     assert p.fp  # fingerprint unchanged by eval blanking
 

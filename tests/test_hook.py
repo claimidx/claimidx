@@ -252,7 +252,7 @@ def test_hook_install_merges_without_clobber(tmp_path, capsys, monkeypatch):
 
 def test_init_no_hooks_skips_settings(tmp_path, capsys, monkeypatch):
     db = str(tmp_path / "ix.sqlite")
-    rc = main(["--db", db, "init", "--agent", "harper", "--offline", "--no-hooks"])
+    rc = main(["--db", db, "init", "--agent", "agent-a", "--offline", "--no-hooks"])
     assert rc == 0
     assert not (tmp_path / "claude" / "settings.json").exists()
 

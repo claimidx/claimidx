@@ -473,12 +473,10 @@ h2 {
 .trust-row,
 .steps,
 .gallery,
-.pricing-grid,
 .foot-grid,
 .card,
 .ledger-card,
 .claim-card,
-.price-card,
 .code-win {
   min-width: 0;
   max-width: 100%;
@@ -637,68 +635,6 @@ h2 {
   border-color: transparent;
 }
 
-.pricing-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-top: 32px;
-}
-
-.price-card {
-  padding: 30px 28px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: var(--shadow);
-}
-
-.price-card.featured { border-color: var(--accent); }
-
-.price-card h3 {
-  margin: 0 0 8px;
-  font-family: var(--sans);
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.price {
-  margin: 0 0 16px;
-  font-family: var(--serif);
-  font-size: 40px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-
-.price span {
-  color: var(--muted);
-  font-family: var(--sans);
-  font-size: 15px;
-}
-
-.price-card ul {
-  margin: 0 0 24px;
-  padding: 0;
-  list-style: none;
-}
-
-.price-card li {
-  position: relative;
-  padding: 8px 0 8px 20px;
-  color: var(--ink-soft);
-  font-size: 14.5px;
-}
-
-.price-card li:before {
-  content: "→";
-  position: absolute;
-  left: 0;
-  color: var(--accent);
-  font-family: var(--mono);
-}
-
-.price-card .btn { width: 100%; }
-
 .fine {
   margin: 16px 0 0;
   color: var(--muted);
@@ -826,8 +762,7 @@ blockquote.not {
   line-height: 1.35;
 }
 
-.hero-cta,
-.plan-cta {
+.hero-cta {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -839,43 +774,12 @@ blockquote.not {
   font-size: 14px;
 }
 
-.freeband {
-  margin-top: 24px;
-  padding: 28px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  box-shadow: var(--shadow);
-}
-
-.freeband h2 {
-  margin: 0 0 8px;
-  font-size: 28px;
-}
-
-.pay-note {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 11.5px;
-}
-
-.page-pricing .trust {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  margin: 8px 0 20px;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 12px;
-}
-
 .section-label { margin: 40px 0 12px; }
 
 @media (max-width: 760px) {
   .nav-links { display: none; }
   .steps, .gallery, .procedure { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .trust-grid, .pricing-grid, .foot-grid { grid-template-columns: 1fr; }
+  .trust-grid, .foot-grid { grid-template-columns: 1fr; }
   .metrics, .facts { grid-template-columns: 1fr 1fr; }
 }
 
@@ -893,56 +797,11 @@ blockquote.not {
   .ledger-card.is-swap { opacity: 1; }
 }
 
-/* Pricing / inner pages keep existing structure on the new tokens */
-.page-pricing .rates,
-.page-pricing .addons,
-.page-pricing .compare-wrap {
-  width: 100%;
-  margin-top: 16px;
-  overflow-x: auto;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  box-shadow: var(--shadow);
-}
-
-.page-pricing table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.page-pricing th, .page-pricing td {
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-  vertical-align: top;
-}
-.page-pricing .amt { font-family: var(--serif); font-size: 22px; font-variant-numeric: tabular-nums; }
-.page-pricing .amt span {
-  display: block;
-  margin-top: 4px;
-  color: var(--muted);
-  font-family: var(--sans);
-  font-size: 12px;
-  font-weight: 400;
-}
-.page-pricing th.rec { box-shadow: inset 0 3px 0 var(--accent); }
-.page-pricing .rates { min-width: 720px; }
-.interval small {
-  margin-left: 6px;
-  font-weight: 400;
-  font-size: 12px;
-}
 .faq { padding-top: clamp(24px, 4vw, 48px); }
-.billing > input[type="radio"] {
-  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
-}
-#bill-yr:checked ~ * .for-mo,
-#bill-mo:checked ~ * .for-yr { display: none !important; }
-.interval { margin: 16px 0; font-size: 15px; }
-.interval label { cursor: pointer; font-weight: 600; color: var(--muted); }
-#bill-mo:checked ~ .interval label[for="bill-mo"],
-#bill-yr:checked ~ .interval label[for="bill-yr"] { color: var(--accent); }
 .faq dl { margin: 0; }
 .faq dt { margin-top: 16px; font-weight: 600; }
 .faq dd { margin: 4px 0 0; color: var(--ink-soft); }
-.page-pricing pre, .install pre {
+.install pre {
   padding: 16px;
   overflow-x: auto;
   background: var(--code-bg);

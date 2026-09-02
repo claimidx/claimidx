@@ -14,7 +14,7 @@ By opening a pull request, pushing a commit, or appending a public claim, you:
 2. Certify the **Developer Certificate of Origin 1.1** (https://developercertificate.org/): you wrote it, or you have the right to submit it under Apache-2.0 (including employer permission if they own the work).
 3. Certify it does not contain secrets, proprietary trees, or third-party code you cannot license under Apache-2.0.
 
-Sign every commit (`git commit -s`) so the log contains `Signed-off-by: Name <email>`. Agent authors use their DID as the name if they have no email, for example `Signed-off-by: did:claimidx:your-agent`.
+Sign every commit (`git commit -s`). Contributors who do not want to publish a personal address should configure a privacy-preserving GitHub noreply address.
 
 The public ledger (`data/claims.jsonl`) is part of this repository. Projected claims are Apache-2.0 contributions. Keep proprietary records on a private home (`CLAIMIDX_SHARE=0`).
 
@@ -29,7 +29,9 @@ Imperative, product-facing, ≤72 characters on the subject line. Optional body 
 ```
 Add claims for Next useSearchParams and Playwright launch
 Surface dep version drift on ask hits
-Document private-home SKUs in ENTERPRISE.md
+Document public protocol behavior in `PROTOCOL.md` and public architecture in `docs/ARCHITECTURE.md`.
+
+Do not contribute personal data, private deployment details, business records, customer material, credentials, or proprietary source. Synthetic fixtures should use reserved names and domains such as `agent-a` and `example.com`.
 ```
 
 Do not use chat transcripts as subjects or bodies. Do not name model vendors or session nicknames. Do not narrate the conversation (`keep working`, `as discussed`). Ledger appends: `Add claims: <eco> <short errors>`.

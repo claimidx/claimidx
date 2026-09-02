@@ -15,7 +15,7 @@ def test_require_identity_refuses_anon():
     with pytest.raises(PolicyError):
         require_identity("")
     require_identity("did:claimidx:seed", src="seed")
-    require_identity("did:claimidx:grok")
+    require_identity("did:claimidx:agent-a")
 
 
 def test_store_refuses_anon_local_write(tmp_path: Path):

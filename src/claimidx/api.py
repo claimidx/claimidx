@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from . import __version__
 from . import tokens as home_tokens
 from .dense import encode
-from .discovery import LINK_HEADER, ROOT, ROUTES
+from .discovery import LINK_HEADER, ROUTES
 from .discovery import resolve as resolve_discovery
 from .fingerprint import classify, fingerprint, normalize_error
 from .graph import Bundle, ProtocolEvent
@@ -33,27 +33,6 @@ from .team import activity
 from .team import whoami as team_whoami
 
 WEB = Path(__file__).resolve().parents[2] / "web" / "index.html"
-
-
-def _stripe_hook():
-    """Optional operator billing webhook, loaded from a local extras/ drop-in when present."""
-    try:
-        from .stripe_hook import WebhookError, handle_payload
-
-        return WebhookError, handle_payload
-    except ImportError:
-        pass
-    extra = ROOT / "extras" / "stripe_hook.py"
-    if not extra.is_file():
-        return None
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location("_claimidx_stripe_hook", extra)
-    if spec is None or spec.loader is None:
-        return None
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod.WebhookError, mod.handle_payload
 
 
 class AskBody(BaseModel):
@@ -303,6 +282,8 @@ def create_app(db: str | None = None) -> FastAPI:
         cid = (payload.id or "").strip()
         if cid:
             by_id = store.get(cid)
+            if by_id and payload.alternative:
+                raise HTTPException(409, "alternative remedy requires a new claim id")
             if by_id and by_id.fp != fp and not payload.force:
                 raise HTTPException(409, "id exists under a different fingerprint")
             extra["id"] = cid
@@ -404,26 +385,6 @@ def create_app(db: str | None = None) -> FastAPI:
         except PolicyError as e:
             raise HTTPException(403, str(e)) from e
         return store.reject(claim_id, actor).model_dump(mode="json")
-
-    @app.post("/api/stripe/webhook")
-    async def stripe_webhook(request: Request):
-        secret = (os.environ.get("STRIPE_WEBHOOK_SECRET") or "").strip()
-        if not secret:
-            raise HTTPException(503, "webhook secret not configured")
-        hook = _stripe_hook()
-        if hook is None:
-            raise HTTPException(503, "webhook module not installed")
-        WebhookError, handle_payload = hook
-        payload = await request.body()
-        header = request.headers.get("stripe-signature") or request.headers.get("Stripe-Signature") or ""
-        try:
-            result = handle_payload(payload, header, secret)
-        except WebhookError as e:
-            raise HTTPException(400, str(e)) from e
-        paid = result.get("paid")
-        if paid:
-            store.log("stripe", paid.get("customer_email") or paid.get("id") or "", str(paid.get("type") or ""))
-        return result
 
     return app
 

@@ -67,6 +67,7 @@ TOOLS = [
                 "note": {"type": "string"},
                 "own": {"type": "string"},
                 "force": {"type": "boolean"},
+                "alternative": {"type": "boolean", "description": "record a distinct remedy for an existing failure"},
             },
         },
     },
@@ -142,7 +143,32 @@ TOOLS = [
                 "note": {"type": "string"},
                 "own": {"type": "string"},
                 "force": {"type": "boolean"},
+                "alternative": {"type": "boolean", "description": "record a distinct remedy for an existing failure"},
             },
+        },
+    },
+    {
+        "name": "claimidx_explain",
+        "description": "Return the v2 failure, remedy, proof, observations, and relations behind a v1 claim.",
+        "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}},
+    },
+    {
+        "name": "claimidx_share_preview",
+        "description": "Preview the exact public projection and list removed or transformed fields. Does not share.",
+        "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}},
+    },
+    {
+        "name": "claimidx_proof_validate",
+        "description": "Validate a structured v2 proof object without running it.",
+        "inputSchema": {"type": "object", "required": ["proof"], "properties": {"proof": {"type": "object"}}},
+    },
+    {
+        "name": "claimidx_proof_run",
+        "description": "Run one validated structured v2 proof through the bounded allowlisted replay path.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["proof"],
+            "properties": {"proof": {"type": "object"}, "cwd": {"type": "string"}},
         },
     },
     {
@@ -397,9 +423,9 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             cls = classify(err)
             fp = fingerprint(err=err, cls=cls, eco=args.get("eco") or "", rt=args.get("rt") or "", dep=dep)
             existing = store.by_fp(fp)
-        if existing and not args.get("force"):
+        if existing and not args.get("force") and not args.get("alternative"):
             return {"exists": True, "id": existing[0].id, "st": existing[0].st}
-        extra: dict[str, Any] = {"id": existing[0].id} if existing else {}
+        extra: dict[str, Any] = {"id": existing[0].id} if existing and args.get("force") else {}
         reset = {}
         if existing and args.get("force"):
             reset = force_reset_from(existing[0])
@@ -421,6 +447,20 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             **extra,
         )
         store.publish(c, c.own, reset)
+        if existing and args.get("alternative"):
+            from .graph import Relation
+
+            new_graph = store.graph(c.id)
+            old_graph = store.graph(existing[0].id)
+            if new_graph and old_graph:
+                store.add_relation(
+                    Relation(
+                        source_id=new_graph["remedy"]["id"],
+                        target_id=old_graph["remedy"]["id"],
+                        kind="alternative",
+                        actor=c.own,
+                    )
+                )
         from .home import maybe_share
 
         shared = maybe_share(store, c)
@@ -501,6 +541,27 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         return team_whoami()
     if name == "claimidx_ingest":
         return _call("claimidx_publish", args, store)
+    if name == "claimidx_explain":
+        graph = store.graph(args["id"])
+        if not graph:
+            raise KeyError(args["id"])
+        return graph
+    if name == "claimidx_share_preview":
+        from .public import projection_preview
+
+        claim = store.get(args["id"])
+        if not claim:
+            raise KeyError(args["id"])
+        return projection_preview(claim)
+    if name in {"claimidx_proof_validate", "claimidx_proof_run"}:
+        from .graph import Proof
+        from .proofs import run_proof, validate_proof
+
+        proof = Proof.model_validate(args["proof"])
+        validate_proof(proof)
+        if name == "claimidx_proof_run":
+            return run_proof(proof, cwd=args.get("cwd"))
+        return {"valid": True, "proof_id": proof.id}
     if name == "claimidx_home_pull":
         from .home import pull
 

@@ -1,9 +1,11 @@
 from pathlib import Path
+import sqlite3
 
 import pytest
 
 from claimidx.extractors import extract_plugin_features, plugin_inventory
 from claimidx.graph import ProtocolEvent
+from claimidx.mcp_server import TOOLS, _call
 from claimidx.public import projection_preview
 from claimidx.query import ingest
 from claimidx.store import Store
@@ -71,5 +73,48 @@ def test_protocol_event_sync_is_cursor_based_and_idempotent(tmp_path: Path):
 
 
 def test_protocol_event_rejects_non_did_actor():
-    with pytest.raises(ValueError, match="must be a DID"):
+    with pytest.raises(ValueError, match="did:"):
         ProtocolEvent(kind="confirm", actor="not-a-did")
+
+
+def test_existing_v2_database_backfills_fts_and_legacy_events(tmp_path: Path):
+    db = tmp_path / "upgrade.sqlite"
+    result = ingest(
+        "ModuleNotFoundError: No module named 'upgrade_pkg'",
+        fix_k="pin",
+        fix_b="upgrade-pkg>=1",
+        eval='python -c "import upgrade_pkg"',
+        eco="py",
+        db=db,
+    )
+    with sqlite3.connect(db) as con:
+        con.execute("DELETE FROM claims_fts")
+        con.execute("DELETE FROM protocol_events_v2")
+        con.execute("DELETE FROM metadata WHERE key IN ('fts_backfill','event_backfill')")
+    upgraded = Store(db)
+    assert upgraded.candidates(fp=result["fp"], err="upgrade_pkg", cls="missing_module")
+    assert upgraded.protocol_events()["n"] >= 1
+
+
+def test_mcp_exposes_v2_preview_explain_proof_and_alternatives(tmp_path: Path):
+    names = {tool["name"] for tool in TOOLS}
+    assert {"claimidx_explain", "claimidx_share_preview", "claimidx_proof_validate", "claimidx_proof_run"} <= names
+    publish = next(tool for tool in TOOLS if tool["name"] == "claimidx_publish")
+    assert "alternative" in publish["inputSchema"]["properties"]
+
+    store = Store(tmp_path / "mcp.sqlite")
+    base = {
+        "err": "ModuleNotFoundError: No module named 'mcp_v2_pkg'",
+        "fix_k": "pin",
+        "fix_b": "mcp-v2-pkg>=1",
+        "eval": 'python -c "import mcp_v2_pkg"',
+        "eco": "py",
+        "own": "did:claimidx:agent-a",
+    }
+    first = _call("claimidx_publish", base, store)
+    second = _call("claimidx_publish", {**base, "fix_b": "Use the compatibility module", "alternative": True}, store)
+    assert first["id"] != second["id"]
+    graph = _call("claimidx_explain", {"id": second["id"]}, store)
+    assert graph["relations"][0]["kind"] == "alternative"
+    preview = _call("claimidx_share_preview", {"id": second["id"]}, store)
+    assert preview["fingerprint_preserved"] is True

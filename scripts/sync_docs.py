@@ -3,7 +3,8 @@
     python scripts/sync_docs.py          # write the copies
     python scripts/sync_docs.py --check  # exit 1 if any copy is stale (CI)
 
-Sources of truth: AGENTS.md, skills/claimidx/SKILL.md, PROTOCOL.md, README.md, llms.txt.
+Sources of truth: AGENTS.md, skills/claimidx/SKILL.md, PROTOCOL.md, README.md,
+llms.txt, ai.txt, server.json, and root well-known discovery files.
 Everything else here is a copy: the harness skill drops (.claude/, .cursor/, …),
 docs/AGENTS.md, docs/llms.txt, and the llms-full.txt dumps crawlers fetch.
 """
@@ -35,8 +36,16 @@ SKILL_DROPS = (
 
 COPIES = {
     "AGENTS.md": ("docs/AGENTS.md",),
-    "ENTERPRISE.md": ("docs/ENTERPRISE.md",),
     "llms.txt": ("docs/llms.txt",),
+    "ai.txt": ("docs/ai.txt", "docs/.well-known/ai.txt"),
+    "server.json": ("docs/server.json",),
+    ".well-known/agent-card.json": ("docs/.well-known/agent-card.json",),
+    ".well-known/agent.json": ("docs/.well-known/agent.json",),
+    ".well-known/mcp.json": ("docs/.well-known/mcp.json",),
+    ".well-known/mcp/server-card.json": ("docs/.well-known/mcp/server-card.json",),
+    ".well-known/api-catalog": ("docs/.well-known/api-catalog",),
+    ".well-known/security.txt": ("docs/.well-known/security.txt",),
+    ".well-known/agent-skills/index.json": ("docs/.well-known/agent-skills/index.json",),
     SKILL: tuple(f"{d}/skills/claimidx/SKILL.md" for d in SKILL_DROPS),
 }
 

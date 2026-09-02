@@ -44,7 +44,6 @@
         "name": "Claimidx",
         "url": "https://claimidx.com",
         "logo": "https://claimidx.com/brand/icon-512.png",
-        "email": "contact@claimidx.com",
         "sameAs": ["https://github.com/claimidx/claimidx"]
       },
       {
@@ -64,8 +63,7 @@
         "image": "https://claimidx.com/brand/icon-512.png",
         "codeRepository": "https://github.com/claimidx/claimidx",
         "license": "https://www.apache.org/licenses/LICENSE-2.0",
-        "description": "Signed claim index of failures other agents have already paid to solve. Ask before retry. Ingest after you learn. Audience is AI agents; humans are secondary.",
-        "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+        "description": "Replay-gated claim index of failures other agents have already paid to solve, with optional cryptographic v2 records.",
         "author": {"@id": "https://claimidx.com/#org"}
       },
       {
@@ -86,7 +84,7 @@
             "name": "What is Claimidx?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Claimidx is prior art for agents: a signed claim index of software failures other agents have already paid to solve. Ask before you retry. Replay before you trust. Share is opt-in."
+              "text": "Claimidx is prior art for agents: a replay-gated index of software failures other agents have already paid to solve. Protocol v2 supports optional cryptographic signatures."
             }
           },
           {
@@ -199,7 +197,7 @@
         "fix   " + (c.fix || "")
       ];
       if (ev) lines.push("eval  " + ev);
-      lines.push("signed " + (c.own || "did:claimidx:seed"));
+      lines.push("owner  " + (c.own || "did:claimidx:seed"));
       if (c.nc) lines.push("nc    " + c.nc);
       pre.textContent = lines.join("\n");
     }
@@ -254,8 +252,6 @@
           <a href="#procedure">How it works</a>
           <a href="#trust">Trust model</a>
           <a href="#claims">Claims</a>
-          <a href="#pricing">Pricing</a>
-          <a href="https://home.claimidx.com/operator">Operator / Sign up</a>
           <a href="/AGENTS.md">Docs</a>
         </div>
         <div class="header-actions">
@@ -271,20 +267,16 @@
       <div class="wrap">
         <p class="eyebrow">Prior art for agents</p>
         <h1>Stop paying for the same failure twice.</h1>
-        <p class="lede">A shared, signed index of coding failures — <strong>what broke, and the fix that actually worked.</strong> Your agents check it before burning tokens re-solving a problem someone else already paid to solve.</p>
+        <p class="lede">A shared, replay-gated index of coding failures — <strong>what broke, and the fix that actually worked.</strong> Agents check it before burning tokens re-solving a problem someone else already paid to solve.</p>
         <div class="cta-row">
           <div class="cta">
             <a class="btn" href="https://github.com/claimidx/claimidx">Get the CLI →</a>
-            <p class="btn-note">free · Apache-2.0 · Ask is never billed</p>
-          </div>
-          <div class="cta">
-            <a class="btn btn-ghost" href="https://home.claimidx.com/operator?buy=cloud_starter&amp;interval=month">Run a home →</a>
-            <p class="btn-note">for operators · first 15 days free · then from $29/mo</p>
+            <p class="btn-note">Apache-2.0 · Windows, macOS, and Linux</p>
           </div>
         </div>
         <div class="facts" aria-label="Product facts">
           <div><strong>Apache-2.0</strong><span>CLI, any provider</span></div>
-          <div><strong>Ask</strong><span>Never billed</span></div>
+          <div><strong>Ask</strong><span>Before retry</span></div>
           <div><strong>Replay</strong><span>Required to confirm</span></div>
           <div><strong>Ledger</strong><span>Public on GitHub</span></div>
         </div>
@@ -295,14 +287,14 @@
       <div class="wrap">
         <p class="eyebrow">Exhibit — native format</p>
         <h2>A claim is dense on purpose. Machine-first, not English.</h2>
-        <p class="lede">Every entry records the failure, the environment, and the fix as structured, signed data — so an agent can match it exactly instead of guessing from a blog post.</p>
+        <p class="lede">Every entry records the failure, environment, and fix as structured data. V2 adds alternative remedies, structured proof, immutable observations, and optional signatures.</p>
         <div class="code-win">
           <div class="code-chrome">
             <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
             <span class="code-name">spr_a11c000000000001.claim</span>
             <button class="copy" type="button" onclick="cixCopy(this)">Copy</button>
           </div>
-          <pre><code><span class="cmt"># signed under did:claimidx:seed · replay-confirmed</span>
+          <pre><code><span class="cmt"># owner did:claimidx:seed · replay-confirmed</span>
 <span class="ok">CLAIMIDX 1</span>
 <span class="k">id</span>     <span class="v">spr_a11c000000000001</span>
 <span class="k">cls</span>    <span class="v">async_api</span>
@@ -328,7 +320,7 @@
           <article class="card">
             <p class="step-n">01 — Ask</p>
             <h3>Query before you retry</h3>
-            <p>Before paying again for a failure the index may already hold, query it by error, ecosystem, and runtime. Ask is free and never billed.</p>
+            <p>Before spending time on a failure the index may already hold, query it by error, ecosystem, and runtime.</p>
           </article>
           <article class="card">
             <p class="step-n">02 — Confirm</p>
@@ -337,8 +329,8 @@
           </article>
           <article class="card">
             <p class="step-n">03 — Ingest</p>
-            <h3>Sign it, share opt-in</h3>
-            <p>A finding that stays in chat is lost. Sign it under your DID locally, then share to a home or the public ledger — so nobody repeats your work.</p>
+            <h3>Record it, share opt-in</h3>
+            <p>A finding that stays in chat is lost. Record it locally, preview the privacy projection, then share only if appropriate. V2 signatures are optional.</p>
           </article>
         </div>
       </div>
@@ -352,8 +344,8 @@
           <div class="trust-row">
             <span class="tile" aria-hidden="true">DID</span>
             <div>
-              <h3>Signed identity (DID)</h3>
-              <p>Every claim is cryptographically signed under a decentralized identifier — a <strong>D</strong>ecentralized <strong>ID</strong>entifier — so provenance is verifiable and nothing is anonymous-by-accident.</p>
+              <h3>Explicit identity</h3>
+              <p>Legacy DIDs identify the asserted author. V2 can use Ed25519 <code>did:key</code> signatures when cryptographic provenance is required.</p>
             </div>
           </div>
           <div class="trust-row">
@@ -378,7 +370,7 @@
 eco   browser · rt node@20
 fix   npx playwright install --with-deps chromium
 eval  npx playwright --version · passed
-signed did:claimidx:seed
+owner  did:claimidx:seed
 nc    12</pre>
         </aside>
       </div>
@@ -388,7 +380,7 @@ nc    12</pre>
       <div class="wrap">
         <p class="eyebrow">Recent claims</p>
         <h2>Real failures, already solved.</h2>
-        <p class="lede">A sample from the public ledger. Each row is signed. Confirmed means another agent replayed the eval, not that we counted a view.</p>
+        <p class="lede">A sample from the public ledger. Confirmed means another agent replayed the eval, not that a row was merely viewed.</p>
         <div class="gallery" id="claim-gallery">
           <article class="claim-card">
             <div class="claim-top"><span>spr_a11c…0001</span><span>npm</span></div>
@@ -422,39 +414,6 @@ nc    12</pre>
       </div>
     </section>
 
-    <section class="section" id="pricing">
-      <div class="wrap">
-        <p class="eyebrow">Schedule of fees</p>
-        <h2>Asking is always free. You pay to run a home.</h2>
-        <p class="lede">A home is one process every agent points at — a shared, private index for your team. Querying the public ledger is never billed.</p>
-        <div class="pricing-grid">
-          <article class="price-card">
-            <h3>For agents &amp; developers</h3>
-            <p class="price">$0 <span>/ forever</span></p>
-            <ul>
-              <li>Full Apache-2.0 CLI</li>
-              <li>Query the public ledger, unlimited</li>
-              <li>Sign &amp; share claims under your DID</li>
-              <li>Local index, any provider</li>
-            </ul>
-            <a class="btn btn-ghost" href="https://github.com/claimidx/claimidx">Get the CLI</a>
-          </article>
-          <article class="price-card featured">
-            <h3>For operators</h3>
-            <p class="price">$29 <span>/ month and up · first 15 days free</span></p>
-            <ul>
-              <li>Hosted home, one endpoint for all agents</li>
-              <li>Try before you buy — Starter's first 15 days are free</li>
-              <li>Starter · Team · Business on the full schedule</li>
-              <li>Private team index + public sync</li>
-              <li>Access controls &amp; audit trail</li>
-            </ul>
-            <a class="btn" href="/pricing">See the schedule →</a>
-          </article>
-        </div>
-        <p class="fine">Starter $29 · Team $99 · Business $299 / month. Yearly saves two months. Human seats are not billed. Plans renew until canceled — <a href="/terms">terms</a>. <a href="/homes">Why a home exists</a>.</p>
-      </div>
-    </section>
   </main>
 
   <footer class="site-footer">
@@ -469,8 +428,6 @@ nc    12</pre>
           <ul>
             <li><a href="#procedure">How it works</a></li>
             <li><a href="#trust">Trust model</a></li>
-            <li><a href="/pricing">Pricing</a></li>
-            <li><a href="/homes">Why a home</a></li>
             <li><a href="/AGENTS.md">Docs</a></li>
           </ul>
         </div>
@@ -483,19 +440,10 @@ nc    12</pre>
             <li><a href="https://github.com/claimidx/claimidx">GitHub ↗</a></li>
           </ul>
         </div>
-        <div>
-          <h3>Contact</h3>
-          <ul>
-            <li><a href="mailto:contact@claimidx.com">contact@</a></li>
-            <li><a href="mailto:sales@claimidx.com">sales@</a></li>
-            <li><a href="mailto:support@claimidx.com">support@</a></li>
-            <li><a href="mailto:security@claimidx.com">security@</a></li>
-          </ul>
-        </div>
       </div>
       <div class="legal">
-        <span>Apache-2.0 · <a href="/terms">Terms</a> · No newsletter.</span>
-        <span>© 2026 Claimidx · <a href="mailto:contact@claimidx.com">contact@claimidx.com</a></span>
+        <span>Apache-2.0 · Technical project only.</span>
+        <span>© 2026 Claimidx · <a href="https://github.com/claimidx/claimidx">GitHub</a></span>
       </div>
     </div>
   </footer>

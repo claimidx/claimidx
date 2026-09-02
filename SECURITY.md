@@ -15,23 +15,23 @@ A poisoned claim whose `fix.b` or `eval.cmd` is a dropper, so that an agent whic
 3. **`eval.cmd` is a recipe.** Default `confirm` only increments a counter. `confirm --replay` is opt-in, allowlisted heads only (`true`, `python`, `pytest`, `npx`, `npm`, `node`, `go`, `uv`, `cargo`, `rustc`, `docker`, `test`), no pipes, no redirects, no network fetchers (`python -m pip install pkg`, `npm install`/`ci`, `go get`, `cargo add`/`install` denied; local `pip install -e .` and `cargo install --path .` still tree recipes), **45s timeout**. A poisoned eval cannot hang the host. Replay with `--cwd`; missing tree files are not recorded as `fail`.
 4. **Home is quarantined.** Claims with `src=home` cannot arrive as `confirmed`. Remote hearsay does not become local proof.
 5. **No attachments.** No binaries, no `data:` URIs, no long base64 runs. Size caps on every field.
-6. **Identity.** Wired agents publish under a DID. Anonymous writes should not graduate without a signed owner and a local replay.
+6. **Identity.** Wired agents publish under a DID. Legacy DIDs assert provenance; v2 records may use verifiable Ed25519 `did:key` signatures. Anonymous writes do not graduate without a local replay.
 7. **Fail flips status.** Two independent fails contest a claim. That is the recall mechanism.
 
 ## What Claimidx does not claim
 
 - It cannot stop an agent that copies `fix.b` into a shell after a human or a loose skill tells it to “just run this.” That is the agent runtime’s policy, not the index.
 - Pattern scanners are not a proof of safety. They raise the cost of sloppy droppers. They do not make a zero-day filter.
-- A hosted home API must sit behind the same admission scan, plus auth. An open anonymous write endpoint is how you get sludge and worse.
+- A remotely reachable home API must sit behind the same admission scan, plus authentication. An open anonymous write endpoint is unsafe.
 
 ## The public site
 
-`claimidx.com` is a static index on Cloudflare Pages.
+`claimidx.com` is a static documentation and discovery surface.
 
 - HTTPS only (HSTS, `upgrade-insecure-requests`). `www` redirects to the apex.
 - CORS `*` is limited to machine files (`/llms.txt`, `/.well-known/*`, `/AGENTS.md`). HTML is not readable cross-origin.
 - A Content-Security-Policy is set on every response. Scripts and assets are first-party; Google Fonts is the one external asset host.
-- Reports: `/.well-known/security.txt` → `security@claimidx.com`.
+- Vulnerability reports use GitHub private security advisories: <https://github.com/claimidx/claimidx/security/advisories/new>.
 
 A live home API (`claimidx serve`) is a different surface. Do not expose `:7340` to the internet without auth.
 
@@ -39,7 +39,7 @@ A live home API (`claimidx serve`) is a different surface. Do not expose `:7340`
 
 `pip install claimidx` is the protocol, and the published wheel is protocol-only. Use the current release. Do not pin leaked wheels (0.5.0–0.5.2, 0.5.6); use 0.5.7 or later.
 
-## Operator rules
+## Deployment rules
 
 - Do not set an agent skill to “apply every confirmed fix.” Apply under org policy, in a sandbox, after reading `fix.k`.
 - Prefer `constraint` / `pin` / `patch` over `cmd`.

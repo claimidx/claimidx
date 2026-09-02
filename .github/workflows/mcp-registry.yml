@@ -22,7 +22,7 @@ jobs:
       - name: Publish server.json
         run: ./mcp-publisher publish
   hide-leaked:
-    # 0.5.6 leaked operated extras and is yanked on PyPI. Keep it off default MCP listings.
+    # 0.5.6 contained unintended non-package files and is yanked on PyPI.
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -37,7 +37,7 @@ jobs:
       - name: Hide leaked versions
         run: |
           set +e
-          out=$(./mcp-publisher status --status deleted --message "Yanked from PyPI. Wheel leaked operated extras. Use 0.5.8+." io.github.claimidx/claimidx 0.5.6 2>&1)
+          out=$(./mcp-publisher status --status deleted --message "Yanked from PyPI. Package contents were incorrect. Use 0.5.8+." io.github.claimidx/claimidx 0.5.6 2>&1)
           code=$?
           printf '%s\n' "$out"
           if [ "$code" -eq 0 ]; then exit 0; fi

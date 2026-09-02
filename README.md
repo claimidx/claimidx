@@ -4,7 +4,7 @@
 
 **Stop making your agents solve the same problem twice.**
 
-Claimidx is prior art for agents: a signed, compressed index of software failures other agents have already paid to solve. It is the **failure layer** — what broke and how it was fixed — not a general knowledge base, not a chat memory, and not Stack Overflow with an LLM wrapper. A GitHub issue with an accepted PR is still prose; the product is the **protocol**: fingerprint, eval, confirm|fail, quarantine. That is what an agent can retrieve without reading a thread.
+Claimidx is prior art for agents: a compact, replay-gated index of software failures other agents have already paid to solve. It is the **failure layer** — what broke and how it was fixed — not a general knowledge base or chat memory. Protocol v1 remains compatible; v2 separates failures, alternative remedies, structured proofs, immutable observations, and relations. V2 records may be signed with Ed25519 `did:key` identities.
 
 Trust comes from **local replay** (`confirm --replay`), never from a reputation score. A hit is evidence, not a command: the loop is retrieve → reason → attempt → observe → verify → update — never retrieve → execute.
 
@@ -86,6 +86,7 @@ claimidx share                      # live home if CLAIMIDX_HOME_API is set, els
 claimidx sync                       # pull commons, then share anything still local
 claimidx hook                       # harness sensor: stdin failed-tool JSON or stderr → ask
 claimidx hook --install             # write Claude Code PostToolUseFailure into ~/.claude/settings.json
+claimidx share-preview spr_…        # inspect the exact public projection first
 ```
 
 Default output is dense format (`--fmt dense`). Use `--fmt json` when you must.
@@ -215,6 +216,7 @@ src/claimidx/     CLI, store, policy, home, MCP, HTTP, hook, in-process ask/inge
 tests/         pytest
 data/          public claims.jsonl ledger; claims-claimidx.jsonl is this repo's own changelog claims; claims-retired.jsonl is rows pulled for skeleton keys or duplication
 schema/        claim.v1.json
+               protocol.v2.json (failure/remedy/proof/observation/relation records)
 skills/claimidx/  agent skill (canonical; copies under .claude/.opencode/…)
 examples/      MCP configs, claude-hooks.json
 web/           inspector (hits show age, src, warn)
@@ -226,6 +228,7 @@ Every row in [`data/claims.jsonl`](https://raw.githubusercontent.com/claimidx/cl
 
 ## Changelog
 
+- v0.6.0 — compatible v2 graph with alternative remedies and immutable observations; FTS5 candidate retrieval; structured shell-free proofs; optional Ed25519 `did:key` signatures; cursor-based idempotent event exchange; additive feature plugins; public-projection preview; machine-readable CLI errors and `query` aliases; hardened public package boundary.
 - v0.5.9 — `share` keeps hint evals (`true`, `<tool> --version`) off the public ledger; ingest returns `eval_proof` + `warn`; `normalize_error` keeps error codes (`Errno 2` ≠ `Errno 13`); repo changelog claims and skeleton-key rows leave `data/claims.jsonl`; `scripts/ledger_report.py`, `scripts/sync_docs.py`; CI on 3.11–3.13 with ruff + mypy.
 - v0.5.8 — SECURITY.md: do not pin leaked wheels (0.5.0–0.5.2, 0.5.6); use 0.5.7+.
 - v0.5.7 — packaging: the pip wheel matches the sdist.
@@ -239,8 +242,6 @@ Every row in [`data/claims.jsonl`](https://raw.githubusercontent.com/claimidx/cl
 - v0.4.1 — larger public seed ledger, site discovery (`llms.txt`, well-known), git install path, `claimidx hook` harness sensor, `from claimidx import ask, ingest`, ask surfaces `age_days` / `dep_drift` / `warn`.
 - v0.4.0 — public name is Claimidx (`pip`/`CLI`/`MCP`). `cix_` ids; existing `spr_` ledger ids still resolve.
 - v0.3.0 — identity-required writes, `init`/`doctor`/`share`/`sync`, auto-share to a live home, outbox for the public ledger, home write tokens, Windows-safe `true` replay, MCP share/sync, public GitHub ledger, seeded failures.
-
-Private home for operators: [`ENTERPRISE.md`](https://github.com/claimidx/claimidx/blob/main/ENTERPRISE.md) and [claimidx.com/enterprise](https://claimidx.com/enterprise). Agents ask before retry. Operators run a home so the organization does not pay the same failure per agent. Ask is free. Hosted homes: mail `sales@claimidx.com`.
 
 Contributions are Apache-2.0 inbound equals outbound. See [`CONTRIBUTING.md`](https://github.com/claimidx/claimidx/blob/main/CONTRIBUTING.md). Sign commits (`git commit -s`).
 

@@ -11,9 +11,9 @@ import hashlib
 import json
 import secrets
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from .models import Claim, Fix, utcnow
 
@@ -32,7 +32,22 @@ def canonical_hash(payload: BaseModel | dict[str, Any]) -> str:
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
-class Applicability(BaseModel):
+FailureId = Annotated[str, StringConstraints(pattern=r"^flr_[0-9a-f]{16}$")]
+RemedyId = Annotated[str, StringConstraints(pattern=r"^rmd_[0-9a-f]{16}$")]
+ProofId = Annotated[str, StringConstraints(pattern=r"^prf_[0-9a-f]{16}$")]
+ObservationId = Annotated[str, StringConstraints(pattern=r"^obs_[0-9a-f]{16}$")]
+RelationId = Annotated[str, StringConstraints(pattern=r"^rel_[0-9a-f]{16}$")]
+EventId = Annotated[str, StringConstraints(pattern=r"^evt_[0-9a-f]{16}$")]
+GraphId = Annotated[str, StringConstraints(pattern=r"^(?:flr|rmd|prf|obs|rel)_[0-9a-f]{16}$")]
+Digest = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+Did = Annotated[str, StringConstraints(pattern=r"^did:[^\s]{1,500}$")]
+
+
+class V2Model(BaseModel):
+    model_config = ConfigDict(extra="forbid", validate_default=True)
+
+
+class Applicability(V2Model):
     os: list[str] = Field(default_factory=list, max_length=16)
     arch: list[str] = Field(default_factory=list, max_length=16)
     runtime: list[str] = Field(default_factory=list, max_length=16)
@@ -42,7 +57,7 @@ class Applicability(BaseModel):
 ProofOp = Literal["run", "expect_exit", "observe_runtime", "expect_package"]
 
 
-class ProofStep(BaseModel):
+class ProofStep(V2Model):
     op: ProofOp
     program: str = ""
     args: list[str] = Field(default_factory=list, max_length=64)
@@ -65,27 +80,20 @@ class ProofStep(BaseModel):
         return self
 
 
-class Proof(BaseModel):
+class Proof(V2Model):
     v: Literal[2] = 2
-    id: str = Field(default_factory=lambda: _id("prf_"))
+    id: ProofId = Field(default_factory=lambda: _id("prf_"))
     steps: list[ProofStep] = Field(min_length=1, max_length=32)
     legacy_cmd: str = ""
     created: datetime = Field(default_factory=utcnow)
 
-    @field_validator("id")
-    @classmethod
-    def proof_id(cls, value: str) -> str:
-        if not value.startswith("prf_") or len(value) != 20:
-            raise ValueError("proof id must be prf_ + 16 hex")
-        return value
 
-
-class Failure(BaseModel):
+class Failure(V2Model):
     v: Literal[2] = 2
-    id: str
-    fp_v1: str
+    id: FailureId
+    fp_v1: Digest
     fp_version: Literal[1] = 1
-    family_id: str
+    family_id: Digest
     cls: str
     err: str
     eco: str = "other"
@@ -95,14 +103,14 @@ class Failure(BaseModel):
     created: datetime = Field(default_factory=utcnow)
 
 
-class Remedy(BaseModel):
+class Remedy(V2Model):
     v: Literal[2] = 2
-    id: str = Field(default_factory=lambda: _id("rmd_"))
-    failure_id: str
+    id: RemedyId = Field(default_factory=lambda: _id("rmd_"))
+    failure_id: FailureId
     fix: Fix
-    proof_id: str
+    proof_id: ProofId
     applicability: Applicability = Field(default_factory=Applicability)
-    own: str
+    own: Did
     status: Literal["proposed", "confirmed", "contested", "stale", "rejected", "superseded"] = "proposed"
     legacy_claim_id: str = ""
     content_hash: str = ""
@@ -111,12 +119,12 @@ class Remedy(BaseModel):
     created: datetime = Field(default_factory=utcnow)
 
 
-class Observation(BaseModel):
+class Observation(V2Model):
     v: Literal[2] = 2
-    id: str = Field(default_factory=lambda: _id("obs_"))
-    remedy_id: str
-    proof_id: str
-    actor: str
+    id: ObservationId = Field(default_factory=lambda: _id("obs_"))
+    remedy_id: RemedyId
+    proof_id: ProofId
+    actor: Did
     held: bool
     replayed: bool = False
     actual_exit: int | None = None
@@ -129,17 +137,17 @@ class Observation(BaseModel):
     created: datetime = Field(default_factory=utcnow)
 
 
-class Relation(BaseModel):
+class Relation(V2Model):
     v: Literal[2] = 2
-    id: str = Field(default_factory=lambda: _id("rel_"))
-    source_id: str
-    target_id: str
+    id: RelationId = Field(default_factory=lambda: _id("rel_"))
+    source_id: GraphId
+    target_id: GraphId
     kind: Literal["alternative", "supersedes", "contradicts", "derived_from", "duplicate_of"]
-    actor: str
+    actor: Did
     created: datetime = Field(default_factory=utcnow)
 
 
-class Bundle(BaseModel):
+class Bundle(V2Model):
     v: Literal[2] = 2
     failure: Failure
     proof: Proof
@@ -154,23 +162,16 @@ class Bundle(BaseModel):
         return self
 
 
-class ProtocolEvent(BaseModel):
+class ProtocolEvent(V2Model):
     v: Literal[2] = 2
-    id: str = Field(default_factory=lambda: _id("evt_"))
+    id: EventId = Field(default_factory=lambda: _id("evt_"))
     kind: str
     object_id: str = ""
-    actor: str
+    actor: Did
     payload: dict[str, Any] = Field(default_factory=dict)
     key_id: str = ""
     signature: str = ""
     created: datetime = Field(default_factory=utcnow)
-
-    @field_validator("actor")
-    @classmethod
-    def actor_is_did(cls, value: str) -> str:
-        if not value.startswith("did:"):
-            raise ValueError("protocol event actor must be a DID")
-        return value
 
 
 def proof_from_claim(claim: Claim) -> Proof:

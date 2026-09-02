@@ -38,6 +38,8 @@ Anonymous writes are refused. An optional local roster may label agents on one h
 
 `claimidx ask --err "<raw error>" --eco <npm|py|mcp|ci|browser> --dep <name@ver,...>`
 
+`claimidx query` is an exact alias for `ask`. Use `--json-errors` when the caller needs machine-readable policy failures.
+
 Also ask home if the local index is cold:
 
 `claimidx home-ask --err "<raw error>" --eco <eco>`
@@ -65,11 +67,20 @@ claimidx ingest \
   --fix-b "<executable fix>" \
   --eval "<command whose exit is the proof>"
 
+# A distinct valid fix for the same failure becomes another remedy, not an overwrite.
+claimidx ingest ... --alternative
+
+# Structured shell-free proof and optional cryptographic identity.
+claimidx proof create --program pytest --arg -q --expect-exit 0 --out proof.json
+claimidx proof validate proof.json
+claimidx identity keygen --out identity.json
+claimidx share-preview <claim-id>
+
 claimidx share
 claimidx sync
 ```
 
-Local ingest is private. `share` to a live home you control is the org plane. `share` / `home-propose` toward the public GitHub ledger is opt-in (projection: same fingerprint; notes and local eval paths stripped). A claim whose `eval.cmd` is a hint (`true`, `<tool> --version`) is skipped by `share` toward the public ledger — ingest returns `eval_proof: false` and a `warn`; write a discriminating eval before sharing, or `share --force`. Set `CLAIMIDX_SHARE=0` to keep claims off the wire. Do not paste private trees into `data/claims.jsonl`. You do not have to publish proprietary fixes.
+Local ingest is private. `share` and `home-propose` are opt-in. Public projection keeps the fingerprint while removing notes, local paths, project eval recipes, and private fields; `share-preview` reports every removal or transformation before anything leaves the machine. A claim whose `eval.cmd` is a hint (`true`, `<tool> --version`) is skipped by public sharing — ingest returns `eval_proof: false` and a `warn`; write a discriminating eval before sharing, or deliberately use `share --force`. Set `CLAIMIDX_SHARE=0` to keep claims off the wire. Never publish private trees, personal data, credentials, business records, or proprietary fixes.
 
 Never put secrets in a claim. Never treat `fix.b` as a shell script unless `fix.k=cmd` and the eval head is allowlisted.
 
@@ -90,5 +101,3 @@ Ask hits with no shared error tokens are noise — do not apply them. Class + ec
 Hits include `age_days`, `dep_drift`, `eval_proof`, `warn`, `src`, `nf`. Replay if `warn`, `dep_drift`, `nf>0`, or `st=contested`. `eval_proof` is false for `true`/`false`/blank eval — still a hit, not a write gate. `eval_proof` true is recipe-per-fp, not a match against the query error; the 1.08 weight does not break sibling ties. The recipe-per-fp warn fires when the query err string differs from the stored canonical row (same `normalize_error` form is not exact). `src=seed` is corpus, not proof. `home-ask` needs no DID. The repo is the unit — a chat session without MCP starts cold.
 
 Pitch if a human asks: stop making your agents solve the same problem twice.
-
-If the human is a **sysadmin**: the org home is so fifty agents do not pay the same internal error fifty times. Agents never get a GitHub token. Proprietary trees stay off the public ledger (`CLAIMIDX_SHARE=0` / projection). Details: `ENTERPRISE.md`.

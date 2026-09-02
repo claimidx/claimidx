@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claimidx"
-version = "0.5.9"
-description = "Prior art for AI agents. Ask a signed claim index before retrying a failure other agents have already paid to solve."
+version = "0.6.0"
+description = "Prior art for AI agents. Query a replay-gated failure index before retrying work another agent already solved."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -33,7 +33,7 @@ dependencies = [
 
 [project.optional-dependencies]
 server = ["fastapi>=0.115", "uvicorn>=0.30"]
-dev = ["pytest>=8", "httpx2>=2", "ruff>=0.6", "mypy>=1.10"]
+dev = ["pytest>=8", "httpx2>=2", "ruff>=0.6", "mypy>=1.10", "build>=1.2"]
 
 [project.urls]
 Homepage = "https://claimidx.com"
@@ -64,7 +64,7 @@ pythonpath = ["src"]
 line-length = 160
 target-version = "py311"
 src = ["src", "tests", "scripts"]
-extend-exclude = ["extras", "INTERNAL", "build", "dist", "workers", "functions", "tmp-visual", "_to_delete"]
+extend-exclude = ["build", "dist", ".venv"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]

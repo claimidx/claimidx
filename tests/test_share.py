@@ -10,7 +10,7 @@ from claimidx.models import Claim, EvalSpec, Fix
 from claimidx.store import Store
 
 
-def _local_claim(own: str = "did:claimidx:grok") -> Claim:
+def _local_claim(own: str = "did:claimidx:agent-a") -> Claim:
     err = "ModuleNotFoundError: No module named 'share_demo'"
     return Claim(
         fp=fingerprint(err=err, eco="py", rt="py@3.13", dep=["share-demo@1.0"]),
@@ -50,7 +50,7 @@ def test_cli_share_and_second_agent_pull(tmp_path: Path, monkeypatch):
     app = create_app(str(home_db))
     client = TestClient(app)
 
-    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:grok")
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:agent-a")
     rc = main(
         [
             "--db",
@@ -82,12 +82,12 @@ def test_cli_share_and_second_agent_pull(tmp_path: Path, monkeypatch):
         "eval": "true",
         "eco": "py",
         "rt": "py@3.13",
-        "own": "did:claimidx:grok",
+        "own": "did:claimidx:agent-a",
     }
     posted = client.post("/api/publish", json=body)
     assert posted.status_code == 200, posted.text
     payload = posted.json()
-    assert payload["claim"]["own"] == "did:claimidx:grok"
+    assert payload["claim"]["own"] == "did:claimidx:agent-a"
     assert payload["claim"]["src"] == "home"
     assert payload["claim"]["st"] == "proposed"
 
@@ -122,7 +122,7 @@ def test_cli_share_and_second_agent_pull(tmp_path: Path, monkeypatch):
 
 def test_http_ask_stamps_caller_not_home_operator(tmp_path: Path, monkeypatch):
     """Serve process CLAIMIDX_OWNER is grok. Other providers hitting /api/ask must not become grok."""
-    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:grok")
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:agent-a")
     db = tmp_path / "home.sqlite"
     app = create_app(str(db))
     client = TestClient(app)
@@ -138,11 +138,11 @@ def test_http_ask_stamps_caller_not_home_operator(tmp_path: Path, monkeypatch):
     assert bare.status_code == 200, bare.text
     actors = {e["actor"] for e in Store(db).events(limit=20) if e["kind"] == "ask"}
     assert "did:claimidx:anon" in actors
-    assert actors != {"did:claimidx:grok"}
+    assert actors != {"did:claimidx:agent-a"}
 
 
 def test_http_publish_without_own_does_not_become_operator(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:grok")
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:agent-a")
     app = create_app(str(tmp_path / "home.sqlite"))
     client = TestClient(app)
     r = client.post(
@@ -183,7 +183,7 @@ def test_home_token_required(tmp_path: Path, monkeypatch):
         "fix_k": "constraint",
         "fix_b": "do not retry blindly",
         "eval": "true",
-        "own": "did:claimidx:harper",
+        "own": "did:claimidx:agent-b",
     }
     denied = client.post("/api/publish", json=body)
     assert denied.status_code == 401
@@ -200,7 +200,7 @@ def test_publish_preserves_id_and_force(tmp_path: Path):
         "fix_k": "constraint",
         "fix_b": "do not retry blindly",
         "eval": "true",
-        "own": "did:claimidx:harper",
+        "own": "did:claimidx:agent-b",
     }
     first = client.post("/api/publish", json=body)
     assert first.status_code == 200, first.text
@@ -226,7 +226,7 @@ def test_api_force_keeps_stored_cls(tmp_path: Path):
             "fix_k": "patch",
             "fix_b": "await x()",
             "eval": "true",
-            "own": "did:claimidx:harper",
+            "own": "did:claimidx:agent-b",
         },
     )
     assert first.status_code == 200, first.text
@@ -241,7 +241,7 @@ def test_api_force_keeps_stored_cls(tmp_path: Path):
             "fix_b": "await x().catch(()=>{})",
             "eval": "true",
             "force": True,
-            "own": "did:claimidx:harper",
+            "own": "did:claimidx:agent-b",
         },
     )
     assert second.status_code == 200, second.text
@@ -260,14 +260,14 @@ def test_api_confirm_replay(tmp_path: Path):
             "fix_k": "constraint",
             "fix_b": "ok",
             "eval": 'python -c "print(1)"',
-            "own": "did:claimidx:lucas",
+            "own": "did:claimidx:agent-c",
             "rt": "py@3.13",
         },
     )
     cid = posted.json()["claim"]["id"]
-    denied = client.post(f"/api/claims/{cid}/confirm?own=did:claimidx:lucas")
+    denied = client.post(f"/api/claims/{cid}/confirm?own=did:claimidx:agent-c")
     assert denied.status_code == 409
-    ok = client.post(f"/api/claims/{cid}/confirm?replay=true&own=did:claimidx:lucas")
+    ok = client.post(f"/api/claims/{cid}/confirm?replay=true&own=did:claimidx:agent-c")
     assert ok.status_code == 200, ok.text
     assert ok.json()["held"] is True
     assert ok.json().get("recorded") is True
@@ -284,7 +284,7 @@ def test_api_publish_refuses_id_clobber(tmp_path: Path):
             "fix_k": "constraint",
             "fix_b": "a",
             "eval": "true",
-            "own": "did:claimidx:lucas",
+            "own": "did:claimidx:agent-c",
             "id": "cix_aaaaaaaaaaaaaaaa",
         },
     )
@@ -296,7 +296,7 @@ def test_api_publish_refuses_id_clobber(tmp_path: Path):
             "fix_k": "constraint",
             "fix_b": "b",
             "eval": "true",
-            "own": "did:claimidx:lucas",
+            "own": "did:claimidx:agent-c",
             "id": "cix_aaaaaaaaaaaaaaaa",
         },
     )
@@ -308,7 +308,7 @@ def test_api_publish_refuses_id_clobber(tmp_path: Path):
             "fix_k": "constraint",
             "fix_b": "b",
             "eval": "true",
-            "own": "did:claimidx:lucas",
+            "own": "did:claimidx:agent-c",
             "id": "cix_aaaaaaaaaaaaaaaa",
             "force": True,
         },
@@ -331,11 +331,11 @@ def test_api_reject(tmp_path: Path):
             "fix_k": "constraint",
             "fix_b": "no",
             "eval": "true",
-            "own": "did:claimidx:harper",
+            "own": "did:claimidx:agent-b",
         },
     )
     cid = posted.json()["claim"]["id"]
-    r = client.post(f"/api/claims/{cid}/reject?own=did:claimidx:harper")
+    r = client.post(f"/api/claims/{cid}/reject?own=did:claimidx:agent-b")
     assert r.status_code == 200, r.text
     assert r.json()["st"] == "rejected"
     ledger = client.get("/ledger.jsonl").text

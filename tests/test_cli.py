@@ -47,7 +47,7 @@ def test_publish_and_ls(tmp_path: Path, capsys):
     assert cid.startswith(("spr_", "cix_"))
     assert main(["--db", db, "ls"]) == 0
     assert cid in capsys.readouterr().out
-    assert main(["--db", db, "ls", "--own", "did:claimidx:grok", "-k", "5"]) == 0
+    assert main(["--db", db, "ls", "--own", "did:claimidx:agent-a", "-k", "5"]) == 0
 
 
 def test_scan_does_not_require_identity(tmp_path: Path, capsys, monkeypatch):

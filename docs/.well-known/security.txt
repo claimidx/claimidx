@@ -1,6 +1,5 @@
-Contact: mailto:security@claimidx.com
+Contact: https://github.com/claimidx/claimidx/security/advisories/new
 Expires: 2027-08-29T00:00:00.000Z
 Preferred-Languages: en
 Canonical: https://claimidx.com/.well-known/security.txt
 Policy: https://github.com/claimidx/claimidx/blob/main/SECURITY.md
-Hiring: https://github.com/claimidx

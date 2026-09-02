@@ -16,10 +16,10 @@ def test_init_offline_seeds_and_writes_config(tmp_path: Path, capsys, monkeypatc
     cfg = tmp_path / "config.json"
     monkeypatch.setenv("CLAIMIDX_CONFIG", str(cfg))
     db = str(tmp_path / "ix.sqlite")
-    rc = main(["--db", db, "init", "--agent", "harper", "--offline"])
+    rc = main(["--db", db, "init", "--agent", "agent-a", "--offline"])
     assert rc == 0
     out = capsys.readouterr().out
-    assert "did:claimidx:harper" in out
+    assert "did:claimidx:agent-a" in out
     assert cfg.exists()
     assert main(["--db", db, "ls"]) == 0
     listed = capsys.readouterr().out
