@@ -725,8 +725,14 @@ def test_discovery_cards_match_package_version():
         assert cur == __version__, f"{path}: {cur} != {__version__}"
 
     site = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
-    assert f"Claimidx {__version__}" in site
+    assert f"Claimidx {__version__}" not in site
+    assert "https://pypi.org/pypi/claimidx/json" in site
+    assert "data-latest-version" in site
     assert "https://pypi.org/project/claimidx/" in site
+    assert "https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl" in site
+    assert 'claim.st === "confirmed"' in site
+    assert 'claim.src !== "seed"' in site
+    assert "data-ledger-feed" in site
 
 
 def test_mcp_force_keeps_stored_cls(tmp_path, monkeypatch):

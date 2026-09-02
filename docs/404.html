@@ -9,26 +9,7 @@
   <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <meta name="theme-color" content="#eef2f0">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="/site.css?v=8">
-  <script>
-    (function () {
-      try {
-        var t = localStorage.getItem("cix-theme");
-        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
-      } catch (e) {}
-    })();
-    function cixTheme() {
-      var r = document.documentElement;
-      var cur = r.getAttribute("data-theme");
-      if (!cur) cur = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-      var next = cur === "dark" ? "light" : "dark";
-      r.setAttribute("data-theme", next);
-      try { localStorage.setItem("cix-theme", next); } catch (e) {}
-    }
-  </script>
+  <link rel="stylesheet" href="/site.css?v=12">
 </head>
 <body>
   <header class="site-header">
@@ -40,7 +21,6 @@
           <a href="/AGENTS.md">Docs</a>
         </div>
         <div class="header-actions">
-          <button class="icon-btn" type="button" aria-label="Toggle color theme" onclick="cixTheme()">◐</button>
           <a class="btn btn-ghost btn-sm" href="https://github.com/claimidx/claimidx">Source ↗</a>
         </div>
       </nav>
