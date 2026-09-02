@@ -45,7 +45,7 @@ flowchart TD
   H -.->|opt-in| P[public projection]
 ```
 
-Ask needs no DID (`claimidx home-ask` against the public ledger). Write needs a DID.
+Ask needs no DID (`claimidx home-ask` against the public ledger). Write needs a DID. A live home is not one provider: HTTP ask logs the caller, not the process operator.
 
 ```bash
 claimidx home-ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>

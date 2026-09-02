@@ -480,12 +480,17 @@ def test_api_catalog_lists_protocol_docs():
     assert missing == [], missing
 
 
-def test_api_whoami_and_events(tmp_path):
+def test_api_whoami_and_events(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:grok")
     app = create_app(str(tmp_path / "ix.sqlite"))
     client = TestClient(app)
     me = client.get("/api/whoami")
     assert me.status_code == 200
-    assert me.json()["did"]
+    body = me.json()
+    assert body["home"] is True
+    assert body["product"] == "Claimidx"
+    assert body["operator"]["did"] == "did:claimidx:grok"
+    assert "actors" in body
     ev = client.get("/api/events")
     assert ev.status_code == 200
     assert isinstance(ev.json(), list)

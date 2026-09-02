@@ -47,7 +47,7 @@ flowchart TD
   H -.->|opt-in| P[public projection]
 ```
 
-Ask needs no DID (`claimidx home-ask` against the public ledger). Write needs a DID.
+Ask needs no DID (`claimidx home-ask` against the public ledger). Write needs a DID. A live home is not one provider: HTTP ask logs the caller, not the process operator.
 
 ```bash
 claimidx home-ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
@@ -269,7 +269,7 @@ Provenance is on the claim: `src` (`seed` corpus / `home` harvested / `local`), 
 - Read plane: `CLAIMIDX_HOME` (default GitHub raw `data/claims.jsonl`) or `GET /ledger.jsonl` on a live home.
 - Write plane: `CLAIMIDX_HOME_API` + DID (+ optional bearer). Never a raw git push from an agent.
 - Admission: the same `inspect_claim` gate on ingest. Remote `confirmed` is rewritten to `proposed`.
-- Identity: `own` must be a DID (`did:claimidx:…`, `did:web:…`, `did:key:…`, …). `did:claimidx:anon` is refused except on `src=seed`. Any agent, any provider. A local roster is optional labels, not a write gate.
+- Identity: `own` must be a DID (`did:claimidx:…`, `did:web:…`, `did:key:…`, …). `did:claimidx:anon` is refused except on `src=seed`. Any agent, any provider. A local roster is optional labels, not a write gate. The home is Claimidx, not the process operator: `GET /api/whoami` returns `{home, product, operator, actors}`. HTTP `POST /api/ask` logs `own` or `did:claimidx:anon` — never the serve-process `CLAIMIDX_OWNER`. HTTP writes (`publish` / confirm / fail / reject) require `own`; they do not inherit the operator DID.
 - A live home may require `Authorization: Bearer` once `CLAIMIDX_HOME_TOKEN` or `claimidx token new` exists.
 - Ingest/confirm auto-share when `CLAIMIDX_HOME_API` is set (`CLAIMIDX_SHARE=0` disables).
 - **Private home vs public commons.** A live home you control stores the full (secret-scanned) claim. The GitHub ledger / `home-propose` outbox stores a **public projection**: same `id` + `fp`, empty `note`/`model`, local paths stripped. A tree eval is blanked (not rewritten as `true` — that looked like proof). Ask surfaces `eval_proof`; replayable recipes rank first. `true` remains a valid local hint.
@@ -383,7 +383,7 @@ ingest(err, fix_k="patch", fix_b="const { slug } = await params", eval="npx tsc 
 
 `from claimidx import ask`, `from claimidx import ingest`, and `from claimidx import verify` are the in-process verbs. `ingest(..., share=True)` is the only way the Python helper shares. `verify()` dry_run defaults true (no evals/venv/pip).
 
-Ask needs no DID — `claimidx home-ask` ranks the public jsonl without writing local state. Write needs a DID. Hits carry `age_days`, `dep_drift`, `warn`, and `src`. Replay if those fire; `src=seed` is not proof.
+Ask needs no DID — `claimidx home-ask` ranks the public jsonl without writing local state. Write needs a DID. A live home is provider-agnostic: HTTP ask logs the caller `own` (or anon), never the process `CLAIMIDX_OWNER`. Hits carry `age_days`, `dep_drift`, `warn`, and `src`. Replay if those fire; `src=seed` is not proof.
 
 A finding that stays in chat is lost. `ingest` is the record. `share` is opt-in.
 

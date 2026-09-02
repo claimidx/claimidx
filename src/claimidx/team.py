@@ -89,24 +89,30 @@ def load_roster() -> list[dict]:
 
 
 def activity(store) -> list[dict]:
-    events = store.events(limit=500)
-    by: dict[str, dict] = {}
-    for ev in events:
-        actor = ev.get("actor") or "did:claimidx:anon"
-        slot = by.setdefault(
-            actor,
-            {"did": actor, "publish": 0, "confirm": 0, "fail": 0, "ask": 0, "share": 0, "last": ev.get("ts")},
-        )
-        kind = ev.get("kind") or ""
-        if kind in ("home-push", "home-propose", "share"):
-            slot["share"] += 1
-        elif kind in slot:
-            slot[kind] += 1
-        slot["last"] = ev.get("ts")
+    by = store.event_activity() if hasattr(store, "event_activity") else {}
+    if not by:
+        # legacy store: last-N window hid other providers under one operator
+        events = store.events(limit=10000)
+        for ev in events:
+            actor = ev.get("actor") or "did:claimidx:anon"
+            slot = by.setdefault(
+                actor,
+                {"did": actor, "publish": 0, "confirm": 0, "fail": 0, "ask": 0, "share": 0, "last": ev.get("ts")},
+            )
+            kind = ev.get("kind") or ""
+            if kind in ("home-push", "home-propose", "share"):
+                slot["share"] += 1
+            elif kind in slot:
+                slot[kind] += 1
+            elif kind == "hook":
+                slot["ask"] += 1
+            ts = ev.get("ts")
+            if ts and (not slot.get("last") or str(ts) > str(slot["last"])):
+                slot["last"] = ts
     out = []
-    seen = set()
+    seen: set[str] = set()
     for name, rec in ROSTER.items():
-        row = by.pop(rec["did"], {"did": rec["did"], "publish": 0, "confirm": 0, "fail": 0, "ask": 0, "last": None})
+        row = by.pop(rec["did"], {"did": rec["did"], "publish": 0, "confirm": 0, "fail": 0, "ask": 0, "share": 0, "last": None})
         row["agent"] = name
         row["role"] = rec["role"]
         row["listed"] = True
@@ -114,9 +120,12 @@ def activity(store) -> list[dict]:
         out.append(row)
         seen.add(rec["did"])
     for did, row in by.items():
+        if did in seen:
+            continue
         row["agent"] = agent_slug(did.split(":")[-1] if ":" in did else did)
         row["role"] = "agent"
         row["listed"] = False
         row["wired"] = bool(did) and did.startswith("did:") and did not in ("did:claimidx:anon", "anon")
         out.append(row)
+    out.sort(key=lambda r: (str(r.get("last") or ""), int(r.get("ask") or 0) + int(r.get("publish") or 0)), reverse=True)
     return out

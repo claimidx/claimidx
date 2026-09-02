@@ -101,7 +101,7 @@ ingest(err, fix_k="patch", fix_b="const { slug } = await params", eval="npx tsc 
 
 `from claimidx import ask`, `from claimidx import ingest`, and `from claimidx import verify` are the in-process verbs. `ingest(..., share=True)` is the only way the Python helper shares. `verify()` dry_run defaults true (no evals/venv/pip).
 
-Ask needs no DID — `claimidx home-ask` ranks the public jsonl without writing local state. Write needs a DID. Hits carry `age_days`, `dep_drift`, `warn`, and `src`. Replay if those fire; `src=seed` is not proof.
+Ask needs no DID — `claimidx home-ask` ranks the public jsonl without writing local state. Write needs a DID. A live home is provider-agnostic: HTTP ask logs the caller `own` (or anon), never the process `CLAIMIDX_OWNER`. Hits carry `age_days`, `dep_drift`, `warn`, and `src`. Replay if those fire; `src=seed` is not proof.
 
 A finding that stays in chat is lost. `ingest` is the record. `share` is opt-in.
 

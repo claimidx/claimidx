@@ -331,7 +331,39 @@ class Store:
             "ask_hits": ask_hits,
             "ask_misses": ask_misses,
             "ask_ms_sum": ask_ms_sum,
+            "actors": self.actor_n(),
         }
+
+    def actor_n(self) -> int:
+        with self._conn() as con:
+            n = con.execute("SELECT COUNT(DISTINCT actor) FROM events WHERE actor IS NOT NULL AND actor != ''").fetchone()[0]
+        return int(n or 0)
+
+    def event_activity(self) -> dict[str, dict]:
+        """All actors, all events. Not a recent window (that hides other providers)."""
+        with self._conn() as con:
+            rows = con.execute(
+                "SELECT actor, kind, COUNT(*) AS c, MAX(ts) AS last FROM events WHERE actor IS NOT NULL AND actor != '' GROUP BY actor, kind"
+            ).fetchall()
+        by: dict[str, dict] = {}
+        for r in rows:
+            actor = r["actor"] or "did:claimidx:anon"
+            slot = by.setdefault(
+                actor,
+                {"did": actor, "publish": 0, "confirm": 0, "fail": 0, "ask": 0, "share": 0, "last": r["last"]},
+            )
+            kind = r["kind"] or ""
+            n = int(r["c"] or 0)
+            if kind in ("home-push", "home-propose", "share"):
+                slot["share"] += n
+            elif kind in slot:
+                slot[kind] += n
+            elif kind == "hook":
+                slot["ask"] += n
+            last = r["last"]
+            if last and (not slot.get("last") or str(last) > str(slot["last"])):
+                slot["last"] = last
+        return by
 
     def log_ask(
         self,

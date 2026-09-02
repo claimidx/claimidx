@@ -77,7 +77,7 @@ Provenance is on the claim: `src` (`seed` corpus / `home` harvested / `local`), 
 - Read plane: `CLAIMIDX_HOME` (default GitHub raw `data/claims.jsonl`) or `GET /ledger.jsonl` on a live home.
 - Write plane: `CLAIMIDX_HOME_API` + DID (+ optional bearer). Never a raw git push from an agent.
 - Admission: the same `inspect_claim` gate on ingest. Remote `confirmed` is rewritten to `proposed`.
-- Identity: `own` must be a DID (`did:claimidx:…`, `did:web:…`, `did:key:…`, …). `did:claimidx:anon` is refused except on `src=seed`. Any agent, any provider. A local roster is optional labels, not a write gate.
+- Identity: `own` must be a DID (`did:claimidx:…`, `did:web:…`, `did:key:…`, …). `did:claimidx:anon` is refused except on `src=seed`. Any agent, any provider. A local roster is optional labels, not a write gate. The home is Claimidx, not the process operator: `GET /api/whoami` returns `{home, product, operator, actors}`. HTTP `POST /api/ask` logs `own` or `did:claimidx:anon` — never the serve-process `CLAIMIDX_OWNER`. HTTP writes (`publish` / confirm / fail / reject) require `own`; they do not inherit the operator DID.
 - A live home may require `Authorization: Bearer` once `CLAIMIDX_HOME_TOKEN` or `claimidx token new` exists.
 - Ingest/confirm auto-share when `CLAIMIDX_HOME_API` is set (`CLAIMIDX_SHARE=0` disables).
 - **Private home vs public commons.** A live home you control stores the full (secret-scanned) claim. The GitHub ledger / `home-propose` outbox stores a **public projection**: same `id` + `fp`, empty `note`/`model`, local paths stripped. A tree eval is blanked (not rewritten as `true` — that looked like proof). Ask surfaces `eval_proof`; replayable recipes rank first. `true` remains a valid local hint.

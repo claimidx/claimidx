@@ -1,7 +1,8 @@
 from pathlib import Path
 
 from claimidx.cli import main
-from claimidx.team import resolve_owner, whoami
+from claimidx.store import Store
+from claimidx.team import activity, resolve_owner, whoami
 
 
 def test_resolve_owner_env(monkeypatch):
@@ -66,3 +67,17 @@ def test_whoami_team_ingest(tmp_path: Path, capsys, monkeypatch):
     out = capsys.readouterr().out
     assert "did:claimidx:benjamin" in out
     assert "publish" in out
+
+
+def test_activity_keeps_unlisted_providers_when_operator_floods(tmp_path: Path):
+    """events(limit=500) DESC drops older callers. The home is every DID, not grok."""
+    store = Store(tmp_path / "ix.sqlite")
+    store.log("ask", "did:claimidx:claude", "")
+    store.log("ask", "did:claimidx:codex", "")
+    for _ in range(500):
+        store.log("ask", "did:claimidx:grok", "")
+    rows = activity(store)
+    dids = {r["did"] for r in rows}
+    assert "did:claimidx:claude" in dids
+    assert "did:claimidx:codex" in dids
+    assert "did:claimidx:grok" in dids

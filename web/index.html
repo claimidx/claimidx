@@ -62,7 +62,7 @@
     async function refreshStats() {
       const s = await fetch("/api/stats").then(r => r.json());
       const st = Object.entries(s.status || {}).map(([k,v]) => k+"="+v).join(" ");
-      $("stats").textContent = `n=${s.n}  nc=${s.confirms}  nf=${s.fails}  ${st}`;
+      $("stats").textContent = `n=${s.n}  nc=${s.confirms}  nf=${s.fails}  actors=${s.actors ?? "—"}  ${st}`;
     }
     function dense(c) {
       return ["CLAIMIDX 1",`id  ${c.id}`,`fp  ${c.fp}`,`cls ${c.cls}`,`err ${c.err}`,`eco ${c.eco||""}`,`rt  ${c.rt||""}`,`dep ${(c.dep||[]).join("|")}`,`fix.k ${c.fix.k}`,`fix.b ${c.fix.b}`,`eval ${c.eval.cmd}`,`st  ${c.st}`,`nc  ${c.nc}  nf ${c.nf}`].join("\n");
@@ -74,8 +74,15 @@
       el.textContent = msg || "";
     }
     async function vote(id, kind, replay) {
-      const q = replay ? "?replay=true" : "";
-      const r = await fetch(`/api/claims/${id}/${kind}${q}`, {method:"POST"});
+      let own = "";
+      try {
+        const me = await fetch("/api/whoami").then(r => r.json());
+        own = (me.operator && me.operator.did) || "";
+      } catch {}
+      const q = new URLSearchParams();
+      if (replay) q.set("replay", "true");
+      if (own) q.set("own", own);
+      const r = await fetch(`/api/claims/${id}/${kind}?${q}`, {method:"POST"});
       if (!r.ok) {
         let detail = r.statusText;
         try { const j = await r.json(); detail = j.detail || JSON.stringify(j); } catch {}

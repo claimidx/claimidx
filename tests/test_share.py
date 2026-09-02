@@ -120,6 +120,44 @@ def test_cli_share_and_second_agent_pull(tmp_path: Path, monkeypatch):
     assert rc == 0
 
 
+def test_http_ask_stamps_caller_not_home_operator(tmp_path: Path, monkeypatch):
+    """Serve process CLAIMIDX_OWNER is grok. Other providers hitting /api/ask must not become grok."""
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:grok")
+    db = tmp_path / "home.sqlite"
+    app = create_app(str(db))
+    client = TestClient(app)
+    r = client.post(
+        "/api/ask",
+        json={"err": "ModuleNotFoundError: No module named 'caller_mod'", "eco": "py", "own": "did:claimidx:claude"},
+    )
+    assert r.status_code == 200, r.text
+    rows = [e for e in Store(db).events(limit=20) if e["kind"] == "ask"]
+    assert rows
+    assert rows[0]["actor"] == "did:claimidx:claude"
+    bare = client.post("/api/ask", json={"err": "TypeError: x", "eco": "py"})
+    assert bare.status_code == 200, bare.text
+    actors = {e["actor"] for e in Store(db).events(limit=20) if e["kind"] == "ask"}
+    assert "did:claimidx:anon" in actors
+    assert actors != {"did:claimidx:grok"}
+
+
+def test_http_publish_without_own_does_not_become_operator(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:grok")
+    app = create_app(str(tmp_path / "home.sqlite"))
+    client = TestClient(app)
+    r = client.post(
+        "/api/publish",
+        json={
+            "err": "ModuleNotFoundError: No module named 'no_own_mod'",
+            "fix_k": "pin",
+            "fix_b": "pip install no-own-mod",
+            "eval": "true",
+        },
+    )
+    assert r.status_code == 400
+    assert "DID" in r.text or "did" in r.text.lower() or "own" in r.text.lower()
+
+
 def test_home_api_refuses_anon(tmp_path: Path):
     app = create_app(str(tmp_path / "home.sqlite"))
     client = TestClient(app)
@@ -227,9 +265,9 @@ def test_api_confirm_replay(tmp_path: Path):
         },
     )
     cid = posted.json()["claim"]["id"]
-    denied = client.post(f"/api/claims/{cid}/confirm")
+    denied = client.post(f"/api/claims/{cid}/confirm?own=did:claimidx:lucas")
     assert denied.status_code == 409
-    ok = client.post(f"/api/claims/{cid}/confirm?replay=true")
+    ok = client.post(f"/api/claims/{cid}/confirm?replay=true&own=did:claimidx:lucas")
     assert ok.status_code == 200, ok.text
     assert ok.json()["held"] is True
     assert ok.json().get("recorded") is True
@@ -297,7 +335,7 @@ def test_api_reject(tmp_path: Path):
         },
     )
     cid = posted.json()["claim"]["id"]
-    r = client.post(f"/api/claims/{cid}/reject")
+    r = client.post(f"/api/claims/{cid}/reject?own=did:claimidx:harper")
     assert r.status_code == 200, r.text
     assert r.json()["st"] == "rejected"
     ledger = client.get("/ledger.jsonl").text

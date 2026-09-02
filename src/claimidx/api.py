@@ -28,7 +28,7 @@ from .policy import PolicyError, require_identity
 from .public import refine_eval
 from .security import SecretError
 from .store import Store, force_reset_emits, force_reset_from
-from .team import resolve_owner
+from .team import activity
 from .team import whoami as team_whoami
 
 WEB = Path(__file__).resolve().parents[2] / "web" / "index.html"
@@ -62,6 +62,7 @@ class AskBody(BaseModel):
     rt: str | None = None
     dep: list[str] = Field(default_factory=list)
     k: int = 5
+    own: str = ""
 
 
 class PublishBody(BaseModel):
@@ -168,7 +169,13 @@ def create_app(db: str | None = None) -> FastAPI:
 
     @app.get("/api/whoami")
     def api_whoami():
-        return team_whoami()
+        """The home is Claimidx, not the process operator DID."""
+        return {
+            "home": True,
+            "product": "Claimidx",
+            "operator": team_whoami(),
+            "actors": activity(store),
+        }
 
     @app.get("/api/events")
     def api_events(limit: int = 50, actor: str | None = None):
@@ -209,7 +216,8 @@ def create_app(db: str | None = None) -> FastAPI:
         q = {"err": payload.err, "cls": cls, "eco": payload.eco or "", "rt": payload.rt or "", "dep": payload.dep, "fp": fp}
         from .query import retrieve
 
-        hits = retrieve(store, q, k=payload.k)
+        caller = (payload.own or "").strip() or "did:claimidx:anon"
+        hits = retrieve(store, q, k=payload.k, actor=caller)
         return {
             "hit": bool(hits),
             "fp": fp,
@@ -221,7 +229,9 @@ def create_app(db: str | None = None) -> FastAPI:
 
     @app.post("/api/publish")
     def publish(payload: PublishBody, _auth: str = Depends(require_write)):
-        own = payload.own.strip() if payload.own else resolve_owner(None)
+        own = (payload.own or "").strip()
+        if not own:
+            raise HTTPException(400, "write needs a DID (own). The home operator is not the caller.")
         try:
             require_identity(own, src="local")
         except PolicyError as e:
@@ -291,7 +301,9 @@ def create_app(db: str | None = None) -> FastAPI:
             raise HTTPException(404, "missing")
         if getattr(c, "src", "local") == "home" and not replay:
             raise HTTPException(409, "quarantine: home claims require confirm ?replay=true")
-        actor = resolve_owner(own or None)
+        actor = (own or "").strip()
+        if not actor:
+            raise HTTPException(400, "write needs a DID (own). The home operator is not the caller.")
         try:
             require_identity(actor)
         except PolicyError as e:
@@ -306,7 +318,9 @@ def create_app(db: str | None = None) -> FastAPI:
     def fail(claim_id: str, own: str = Query(""), _auth: str = Depends(require_write)):
         if not store.get(claim_id):
             raise HTTPException(404, "missing")
-        actor = resolve_owner(own or None)
+        actor = (own or "").strip()
+        if not actor:
+            raise HTTPException(400, "write needs a DID (own). The home operator is not the caller.")
         try:
             require_identity(actor)
         except PolicyError as e:
@@ -317,7 +331,9 @@ def create_app(db: str | None = None) -> FastAPI:
     def reject(claim_id: str, own: str = Query(""), _auth: str = Depends(require_write)):
         if not store.get(claim_id):
             raise HTTPException(404, "missing")
-        actor = resolve_owner(own or None)
+        actor = (own or "").strip()
+        if not actor:
+            raise HTTPException(400, "write needs a DID (own). The home operator is not the caller.")
         try:
             require_identity(actor)
         except PolicyError as e:
