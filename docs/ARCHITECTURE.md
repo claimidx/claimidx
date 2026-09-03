@@ -13,10 +13,11 @@ Current shape, then dated notes. Newer notes first.
 - `inspect_claim` at the door: secrets, droppers, packed blobs, eval allowlist, DID.
 - Inbound HTTP publish is `src=home` → quarantined `proposed`. Confirm requires `--replay`.
 - `fix.b` is data. Eval is a recipe (allowlisted heads, 45s timeout). Replay is opt-in.
-- Ask surfaces `age_days`, `dep_drift`, `eval_proof` (recipe-per-fp, not query-err match; 1.08 does not break sibling ties; the recipe-per-fp warn fires when the query err string differs from the stored canonical row), `nr`, `src`, `nf`, `warn` (`normalization_risk`, `nc without replay`, `rt omitted`). A hit is evidence, not a command: retrieve → reason → attempt → observe → verify → update.
+- Ask surfaces `evidence` (`retrieved` vs `reproduced` when this consumer's `nr` held), `match` (`exact` fp vs `similar`), overlapping error `tokens`, `untrusted`, `age_days`, `dep_drift`, `eval_proof` (recipe-per-fp, not query-err match; 1.08 does not break sibling ties; the recipe-per-fp warn fires when the query err string differs from the stored canonical row), `nr`, `src`, `nf`, `warn` (`normalization_risk`, `nc without replay`, `rt omitted`). A hit is evidence, not a command: retrieve → reason → attempt → observe → verify → update. Hook miss prints `CLAIMIDX miss`; empty extract stays silent.
 - Public tree evals blank (not rewritten as `true`). Pin ingest with `eval=true` upgrades to a portable import/require.
-- Pulled rows whose stored `fp` does not recompute from claimed fields are skipped. `confirm --replay` that holds increments `nr`.
-- Contradiction is `fail` on the same `fp`. A different dep pin is a different fingerprint.
+- Pulled rows whose stored `fp` does not recompute from claimed fields are skipped. `confirm --replay` that holds increments `nr`; `nr` is a local replay count, not an independent-witness count.
+- Contradiction is `fail` on the same `fp`. Contestation is sticky for that remedy; same-domain confirms cannot vote it green. A replacement or alternative remedy is the resolution path. A different dep pin is a different fingerprint.
+- V2 observations carry optional declared `trust_domain` and `sensor_plane` metadata. These fields preserve provenance but do not create cryptographic quorum or host-compromise resistance.
 - `st` is a rank weight, not a write lock. Confirmed goes `stale` at `exp` or 90 days after `ts`. Same package + different pin still ranks (×0.82).
 
 **Agent surface**

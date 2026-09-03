@@ -670,6 +670,8 @@ class Store:
         if not isinstance(actual, int):
             actual = (detail or {}).get("exit")
         env = (detail or {}).get("env") or {}
+        trust_domain = (detail or {}).get("trust_domain") or ""
+        sensor_plane = (detail or {}).get("sensor_plane") or ""
         observation = Observation(
             remedy_id=remedy["id"],
             proof_id=proof["id"],
@@ -681,6 +683,8 @@ class Store:
             environment={str(k): str(v) for k, v in env.items()} if isinstance(env, dict) else {},
             evidence_hash=hashlib.sha256(blob.encode("utf-8")).hexdigest() if detail else "",
             sandbox="legacy-allowlist" if replayed else "asserted",
+            trust_domain=str(trust_domain),
+            sensor_plane=str(sensor_plane),
         )
         self.add_observation(observation)
 

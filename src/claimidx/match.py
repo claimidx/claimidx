@@ -133,10 +133,58 @@ def hit_warn(query: Claim | dict, claim: Claim) -> list[str]:
     return warns
 
 
+def _query_fp(query: Claim | dict) -> str:
+    if isinstance(query, Claim):
+        return query.fp
+    fp = str(query.get("fp") or "")
+    if fp:
+        return fp
+    qerr = query.get("err") or ""
+    qcls = query.get("cls") or classify(qerr)
+    qeco = query.get("eco") or ""
+    qrt = query.get("rt") or ""
+    qdep = query.get("dep") or []
+    return fingerprint(err=qerr, cls=qcls, eco=qeco, rt=qrt, dep=qdep)
+
+
+def match_tokens(query_err: str, claim_err: str) -> list[str]:
+    da = _err_tokens(query_err) - _ERR_BOILER
+    db = _err_tokens(claim_err) - _ERR_BOILER
+    return sorted(da & db)[:12]
+
+
+def untrusted(query: Claim | dict, claim: Claim, *, nr: int) -> list[str]:
+    codes: list[str] = []
+    src = getattr(claim, "src", "local") or "local"
+    if src == "home":
+        codes.append("src=home")
+    elif src == "seed":
+        codes.append("src=seed")
+    if claim.st == "contested":
+        codes.append("st=contested")
+    if not eval_is_proof(claim.eval.cmd):
+        codes.append("eval_hint")
+    qdep = query.dep if isinstance(query, Claim) else (query.get("dep") or [])
+    if dep_drift(qdep, claim.dep):
+        codes.append("dep_drift")
+    qrt = (query.rt if isinstance(query, Claim) else (query.get("rt") or "")).strip()
+    if rt_drift(qrt, claim.rt):
+        codes.append("rt_drift")
+    if int(claim.nc or 0) >= 1 and nr == 0:
+        codes.append("nc without replay")
+    qerr = query.err if isinstance(query, Claim) else (query.get("err") or "")
+    if normalization_risk(qerr):
+        codes.append("normalization_risk")
+    return codes
+
+
 def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
     qdep = query.dep if isinstance(query, Claim) else (query.get("dep") or [])
     qrt = (query.rt if isinstance(query, Claim) else (query.get("rt") or "")).strip()
+    qerr = query.err if isinstance(query, Claim) else (query.get("err") or "")
     stored_nr = int(getattr(claim, "nr", 0) or 0)
+    nr = stored_nr if hold_applies(qrt, claim.rt) else 0
+    exact = _query_fp(query) == claim.fp
     return {
         "sim": round(sim, 4),
         "score": round(claim.score(), 4),
@@ -144,8 +192,12 @@ def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
         "dep_drift": dep_drift(qdep, claim.dep),
         "rt_drift": rt_drift(qrt, claim.rt) or {},
         "eval_proof": eval_is_proof(claim.eval.cmd),
-        "nr": stored_nr if hold_applies(qrt, claim.rt) else 0,
+        "nr": nr,
         "warn": hit_warn(query, claim),
+        "evidence": "reproduced" if nr > 0 else "retrieved",
+        "match": "exact" if exact else "similar",
+        "tokens": match_tokens(qerr, claim.err),
+        "untrusted": untrusted(query, claim, nr=nr),
     }
 
 

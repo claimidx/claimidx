@@ -132,6 +132,8 @@ class Observation(V2Model):
     environment: dict[str, str] = Field(default_factory=dict)
     evidence_hash: str = ""
     sandbox: str = "legacy"
+    trust_domain: str = Field(default="", max_length=200)
+    sensor_plane: str = Field(default="", max_length=200)
     key_id: str = ""
     signature: str = ""
     created: datetime = Field(default_factory=utcnow)

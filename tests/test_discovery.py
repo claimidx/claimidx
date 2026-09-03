@@ -553,6 +553,12 @@ def test_mcp_confirm_schema_includes_cwd():
     assert "cwd" in spec["inputSchema"]["properties"]
 
 
+def test_mcp_confirm_schema_includes_observation_domain_metadata():
+    spec = next(t for t in TOOLS if t["name"] == "claimidx_confirm")
+    assert "trust_domain" in spec["inputSchema"]["properties"]
+    assert "sensor_plane" in spec["inputSchema"]["properties"]
+
+
 def test_mcp_fail_schema_includes_note():
     """CLI fail --note. MCP claimidx_fail must advertise note so the contradiction can record why."""
     spec = next(t for t in TOOLS if t["name"] == "claimidx_fail")

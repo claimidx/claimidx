@@ -192,6 +192,39 @@ def test_nc_without_replay_and_omitted_runtime_warn():
     assert not any(x.startswith("rt omitted") for x in w2)
 
 
+def test_hit_surfaces_evidence_match_and_untrusted():
+    from claimidx.match import annotate, fingerprint
+
+    err = "TypeError: params is a Promise"
+    c = _claim(err, eco="npm", dep=["next@15.0.0"])
+    c.src = "home"
+    c.nc = 2
+    c.nr = 0
+    c.st = "proposed"
+    q = {
+        "err": err,
+        "eco": "npm",
+        "dep": ["next@15.0.0"],
+        "rt": "py@3.12",
+        "fp": fingerprint(err=err, cls=c.cls, eco="npm", rt="py@3.12", dep=["next@15.0.0"]),
+    }
+    meta = annotate(q, c, 1.0)
+    assert meta["evidence"] == "retrieved"
+    assert meta["match"] == "exact"
+    assert "params" in meta["tokens"] or "promise" in meta["tokens"]
+    assert "src=home" in meta["untrusted"]
+    assert "nc without replay" in meta["untrusted"]
+    assert "eval_hint" in meta["untrusted"]
+    c.nr = 2
+    c.src = "local"
+    c.rt = "py@3.12"
+    c.eval.cmd = "npx tsc --noEmit"
+    held = annotate({**q, "rt": "py@3.12"}, c, 1.0)
+    assert held["evidence"] == "reproduced"
+    assert held["nr"] == 2
+    assert "src=home" not in held["untrusted"]
+
+
 def test_fail_count_and_contested_surface_on_ask():
     from claimidx.match import hit_warn
 

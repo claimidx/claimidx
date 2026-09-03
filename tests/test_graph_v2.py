@@ -61,6 +61,26 @@ def test_confirmation_appends_immutable_observation(tmp_path: Path):
     assert observation["evidence_hash"]
 
 
+def test_observation_records_declared_domain_and_sensor_plane(tmp_path: Path):
+    db = tmp_path / "index.sqlite"
+    result = _ingest(db, "future-pkg>=2")
+    store = Store(db)
+    store.confirm(
+        result["id"],
+        "did:claimidx:test",
+        replayed=True,
+        detail={
+            "returncode": 0,
+            "env": {"rt": "py@3.13"},
+            "trust_domain": "ci:isolated-runner",
+            "sensor_plane": "clean-rebuild",
+        },
+    )
+    observation = store.graph(result["id"])["observations"][0]
+    assert observation["trust_domain"] == "ci:isolated-runner"
+    assert observation["sensor_plane"] == "clean-rebuild"
+
+
 def test_family_features_do_not_change_v1_fingerprint_contract():
     raw = "HTTP 429: package future_pkg failed at C:/private/tree/file.py"
     features = error_features(raw)

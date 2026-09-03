@@ -73,7 +73,7 @@ TOOLS = [
     },
     {
         "name": "claimidx_confirm",
-        "description": "Mark a claim as held after replay. Home claims require replay=true. cwd is the tree for replay.",
+        "description": "Mark a claim as held after replay. Home claims require replay=true. Domain metadata is provenance, not quorum.",
         "inputSchema": {
             "type": "object",
             "required": ["id"],
@@ -82,6 +82,8 @@ TOOLS = [
                 "own": {"type": "string"},
                 "replay": {"type": "boolean"},
                 "cwd": {"type": "string", "description": "working directory for replay eval (tree-scoped recipes)"},
+                "trust_domain": {"type": "string", "description": "declared trust domain; not independently attested"},
+                "sensor_plane": {"type": "string", "description": "declared sensor plane; not independently attested"},
             },
         },
     },
@@ -483,7 +485,13 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             from .sandbox import replay, replay_records_hold
 
             result = replay(current.eval.cmd, current.eval.expect, cwd=args.get("cwd"))
-            eval_detail = {"ms": int(result.ms or 0), "held": bool(result.held)}
+            eval_detail = {
+                "ms": int(result.ms or 0),
+                "held": bool(result.held),
+                "env": {"rt": result.env} if result.env else {},
+                "trust_domain": args.get("trust_domain") or "",
+                "sensor_plane": args.get("sensor_plane") or "",
+            }
             if result.is_hint():
                 return {"id": current.id, "st": current.st, "held": False, "recorded": False, "replay": result.as_dict()}
             if not result.held:
@@ -499,11 +507,20 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                     "reason": why,
                     "replay": result.as_dict(),
                 }
+        confirm_detail = None
+        if args.get("replay") or args.get("trust_domain") or args.get("sensor_plane"):
+            confirm_detail = {
+                "ms": int(result.ms or 0) if args.get("replay") else 0,
+                "held": True,
+                "env": {"rt": result.env} if args.get("replay") and result.env else {},
+                "trust_domain": args.get("trust_domain") or "",
+                "sensor_plane": args.get("sensor_plane") or "",
+            }
         c = store.confirm(
             args["id"],
             resolve_owner(args.get("own")),
             replayed=bool(args.get("replay")),
-            detail={"ms": int(result.ms or 0), "held": True} if args.get("replay") else None,
+            detail=confirm_detail,
         )
         from .home import maybe_share
 

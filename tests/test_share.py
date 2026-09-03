@@ -274,6 +274,36 @@ def test_api_confirm_replay(tmp_path: Path):
     assert "replay" not in ok.json()
 
 
+def test_api_confirm_records_declared_observation_domain(tmp_path: Path):
+    app = create_app(str(tmp_path / "home.sqlite"))
+    client = TestClient(app)
+    posted = client.post(
+        "/api/publish",
+        json={
+            "err": "x failed domain replay",
+            "fix_k": "constraint",
+            "fix_b": "ok",
+            "eval": 'python -c "print(1)"',
+            "own": "did:claimidx:agent-c",
+            "rt": "py@3.13",
+        },
+    )
+    cid = posted.json()["claim"]["id"]
+    ok = client.post(
+        f"/api/claims/{cid}/confirm",
+        params={
+            "replay": "true",
+            "own": "did:claimidx:agent-c",
+            "trust_domain": "ci:isolated-runner",
+            "sensor_plane": "clean-rebuild",
+        },
+    )
+    assert ok.status_code == 200, ok.text
+    observation = Store(tmp_path / "home.sqlite").graph(cid)["observations"][0]
+    assert observation["trust_domain"] == "ci:isolated-runner"
+    assert observation["sensor_plane"] == "clean-rebuild"
+
+
 def test_api_publish_refuses_id_clobber(tmp_path: Path):
     app = create_app(str(tmp_path / "home.sqlite"))
     client = TestClient(app)

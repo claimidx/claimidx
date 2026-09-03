@@ -7,6 +7,7 @@ include schema/protocol.v2.json
 include server.json
 include .well-known/agent-card.json
 include .well-known/agent.json
+include .well-known/agents.json
 include .well-known/mcp.json
 include .well-known/mcp/server-card.json
 include .well-known/api-catalog
@@ -14,5 +15,8 @@ include .well-known/security.txt
 include .well-known/agent-skills/index.json
 graft src/claimidx
 prune tests
+prune build
+prune dist
 global-exclude *.pyc
 global-exclude __pycache__
+global-exclude *.egg-info

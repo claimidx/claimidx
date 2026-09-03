@@ -20,7 +20,8 @@ FORBIDDEN_TEXT = (
     "support" + "@claimidx.com",
     "contact" + "@claimidx.com",
     "security" + "@claimidx.com",
-    "home.claimidx.com/" + "operator",
+    # Public nav may link home.claimidx.com/operator and /pricing; keep absolute
+    # claimidx.com/{pricing,enterprise} out of the open protocol package.
     "claimidx.com/" + "pricing",
     "claimidx.com/" + "enterprise",
 )

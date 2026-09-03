@@ -341,7 +341,14 @@ def create_app(db: str | None = None) -> FastAPI:
         return publish(payload, _auth)
 
     @app.post("/api/claims/{claim_id}/confirm")
-    def confirm(claim_id: str, own: str = Query(""), replay: bool = Query(False), _auth: str = Depends(require_write)):
+    def confirm(
+        claim_id: str,
+        own: str = Query(""),
+        replay: bool = Query(False),
+        trust_domain: str = Query("", max_length=200),
+        sensor_plane: str = Query("", max_length=200),
+        _auth: str = Depends(require_write),
+    ):
         c = store.get(claim_id)
         if not c:
             raise HTTPException(404, "missing")
@@ -355,7 +362,14 @@ def create_app(db: str | None = None) -> FastAPI:
         except PolicyError as e:
             raise HTTPException(403, str(e)) from e
         # Never run eval.cmd in the home process. Replay is `claimidx confirm --replay` on the agent.
-        confirmed = store.confirm(claim_id, actor, replayed=bool(replay))
+        detail = None
+        if replay or trust_domain or sensor_plane:
+            detail = {
+                "held": True,
+                "trust_domain": trust_domain,
+                "sensor_plane": sensor_plane,
+            }
+        confirmed = store.confirm(claim_id, actor, replayed=bool(replay), detail=detail)
         if replay:
             return {"held": True, "recorded": True, "claim": confirmed.model_dump(mode="json")}
         return confirmed.model_dump(mode="json")

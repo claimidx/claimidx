@@ -257,13 +257,43 @@ def test_init_no_hooks_skips_settings(tmp_path, capsys, monkeypatch):
     assert not (tmp_path / "claude" / "settings.json").exists()
 
 
-def test_hook_cli_miss_is_silent(tmp_path, capsys, monkeypatch):
+def test_hook_cli_miss_is_visible(tmp_path, capsys, monkeypatch):
     db = str(tmp_path / "ix.sqlite")
-    monkeypatch.setattr("sys.stdin", StringIO("definitely-not-a-known-error-xyzzy\n"))
+    payload = json.dumps(
+        {
+            "hook_event_name": "PostToolUseFailure",
+            "tool_response": "ModuleNotFoundError: No module named 'xyzzy_unknown_pkg'\n",
+        }
+    )
+    monkeypatch.setattr("sys.stdin", StringIO(payload))
+    rc = main(["--db", db, "hook", "--eco", "py"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    body = json.loads(out)
+    ctx = body["hookSpecificOutput"]["additionalContext"]
+    assert "CLAIMIDX miss" in ctx
+    assert "hit 0" in ctx
+    assert "xyzzy_unknown_pkg" in ctx or "fp " in ctx or "fp=" in ctx
+    assert "Do not execute fix.b" not in ctx or "ingest" in ctx.lower() or "miss" in ctx
+
+
+def test_hook_cli_no_err_stays_silent(tmp_path, capsys, monkeypatch):
+    db = str(tmp_path / "ix.sqlite")
+    monkeypatch.setattr("sys.stdin", StringIO(""))
     rc = main(["--db", db, "hook", "--eco", "py"])
     out = capsys.readouterr().out
     assert rc == 0
     assert out == ""
+
+
+def test_hook_cli_raw_stderr_miss_prints_line(tmp_path, capsys, monkeypatch):
+    db = str(tmp_path / "ix.sqlite")
+    monkeypatch.setattr("sys.stdin", StringIO("ModuleNotFoundError: No module named 'xyzzy_unknown_pkg'\n"))
+    rc = main(["--db", db, "hook", "--eco", "py"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert out.startswith("CLAIMIDX miss")
+    assert "hit 0" in out
 
 
 def test_mcp_hook_is_evidence_only(tmp_path):

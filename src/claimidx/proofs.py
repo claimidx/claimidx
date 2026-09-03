@@ -11,7 +11,7 @@ from typing import Any
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 
 from .graph import Proof, ProofStep
-from .policy import ALLOWED_EVAL_HEADS, PolicyError, _norm_head
+from .policy import ALLOWED_EVAL_HEADS, PolicyError, _norm_head, eval_allowed
 from .sandbox import ReplayResult, replay
 
 
@@ -37,6 +37,9 @@ def validate_proof(proof: Proof) -> None:
     if run.program == "legacy":
         if len(run.args) != 1 or not proof.legacy_cmd:
             raise PolicyError("legacy proof requires one canonical command")
+        ok, reason = eval_allowed(proof.legacy_cmd)
+        if not ok:
+            raise PolicyError(reason)
         return
     if _norm_head(run.program) not in ALLOWED_EVAL_HEADS:
         raise PolicyError(f"proof program not allowlisted: {_norm_head(run.program)}")

@@ -252,9 +252,21 @@
           "title": "Sandbox",
           "type": "string"
         },
+        "sensor_plane": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Sensor Plane",
+          "type": "string"
+        },
         "signature": {
           "default": "",
           "title": "Signature",
+          "type": "string"
+        },
+        "trust_domain": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Trust Domain",
           "type": "string"
         },
         "v": {

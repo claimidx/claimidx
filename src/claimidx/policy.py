@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 import shlex
 
+from .public import pin_error
 from .security import reject_secrets
 
 
@@ -164,10 +165,15 @@ def reject_payload(text: str | None, field: str = "fix") -> None:
 
 
 def _prep_eval(raw: str) -> str:
-    """Unix recipes are canonical. Rewrite Windows drive paths so shlex does not eat backslashes."""
+    """Unix recipes are canonical. Rewrite Windows paths so shlex does not eat backslashes.
+
+    Handles drive letters (`C:\\foo`), UNC roots (`\\\\server\\share`), and mixed separators.
+    """
     if "\\" not in raw:
         return raw
-    return re.sub(r"([A-Za-z]):\\", r"\1:/", raw).replace("\\", "/")
+    out = re.sub(r"([A-Za-z]):\\", r"\1:/", raw)
+    out = re.sub(r"(^|[\s\"'])\\\\+", r"\1//", out)
+    return out.replace("\\", "/")
 
 
 def _norm_head(token: str) -> str:
@@ -287,8 +293,6 @@ def inspect_claim(*, err: str, fix_k: str, fix_b: str, eval_cmd: str, note: str 
     _scan_dropper(err, "err")
     _scan_dropper(note, "note")
     reject_payload(fix_b, "fix")
-    from .public import pin_error
-
     bad_pin = pin_error(fix_k, fix_b)
     if bad_pin:
         raise PolicyError(bad_pin)
