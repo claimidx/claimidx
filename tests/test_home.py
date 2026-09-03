@@ -66,10 +66,7 @@ def test_pull_quarantines_confirmed(tmp_path: Path):
     assert graduated.nf == 0
     assert int(getattr(graduated, "nr", 0) or 0) == 0
     events = store.events(limit=5)
-    assert any(
-        e.get("kind") == "confirm" and (e.get("detail") or {}).get("home_graduate", {}).get("hearsay_nc") == 3
-        for e in events
-    )
+    assert any(e.get("kind") == "confirm" and (e.get("detail") or {}).get("home_graduate", {}).get("hearsay_nc") == 3 for e in events)
 
 
 def test_home_fail_does_not_mint_confirmed_from_remote_nc(tmp_path: Path):

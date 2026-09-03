@@ -866,11 +866,7 @@ class Store:
             row = self.get(legacy) if legacy else None
             from .match import annotate
 
-            disp = (
-                annotate({"err": row.err, "fp": row.fp, "eco": row.eco, "rt": row.rt, "dep": row.dep}, row, 1.0).get("disposition")
-                if row
-                else None
-            )
+            disp = annotate({"err": row.err, "fp": row.fp, "eco": row.eco, "rt": row.rt, "dep": row.dep}, row, 1.0).get("disposition") if row else None
             rid = rem.get("id") or ""
             if rid:
                 remedy_ids.append(str(rid))

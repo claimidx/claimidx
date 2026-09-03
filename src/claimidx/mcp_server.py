@@ -417,9 +417,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             "fp": fp,
             "cls": cls,
             "err": normalize_error(err),
-            "claims": [
-                hit_compact(q, c, s) for c, s in hits
-            ],
+            "claims": [hit_compact(q, c, s) for c, s in hits],
         }
         if not hits:
             from .query import miss_enrichment
