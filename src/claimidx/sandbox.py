@@ -81,7 +81,7 @@ class ReplayResult:
         }
 
     def is_hint(self) -> bool:
-        """true/false builtins and unmet trees cannot mint nc."""
+        """true/false builtins, version tautologies, and unmet trees cannot mint nc."""
         r = self.reason or ""
         return r == "builtin" or r.startswith("eval-precondition")
 
@@ -228,6 +228,10 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
         rc = 0 if _norm_head(parts[0]) == "true" else 1
         held = rc == expect
         return ReplayResult(True, True, rc, expect, held, "builtin")
+    from .public import eval_is_proof
+
+    if not eval_is_proof(cmd):
+        return ReplayResult(True, False, None, expect, False, "builtin")
     missing = _precondition(_norm_head(parts[0]), cwd, cmd)
     if missing:
         return ReplayResult(True, False, None, expect, False, missing)

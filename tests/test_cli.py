@@ -529,7 +529,48 @@ def test_confirm_replay_json(tmp_path: Path, capsys):
     assert '"recorded": false' in out
     assert '"builtin"' in out
     assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
-    assert '"nc": 0' in capsys.readouterr().out
+    shown = capsys.readouterr().out
+    assert '"nc": 0' in shown
+    assert '"nr": 0' in shown
+
+
+def test_confirm_replay_version_banner_does_not_mint_nr(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    rt = _py_rt()
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'ver_banner'",
+                "--eco",
+                "py",
+                "--rt",
+                rt,
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "ok",
+                "--eval",
+                "python --version",
+            ]
+        )
+        == 0
+    )
+    cid = capsys.readouterr().out.strip()
+    rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", cid])
+    assert rc == 2
+    out = json.loads(capsys.readouterr().out)
+    assert out["recorded"] is False
+    assert out["held"] is False
+    assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
+    shown = json.loads(capsys.readouterr().out)
+    assert shown["nc"] == 0
+    assert shown["nr"] == 0
 
 
 def test_confirm_replay_logs_eval_ms(tmp_path: Path, capsys):
