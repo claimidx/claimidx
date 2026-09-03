@@ -548,10 +548,12 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                 }
         confirm_detail = None
         if args.get("replay") or args.get("trust_domain") or args.get("sensor_plane"):
+            # `result` exists only when replay ran; never touch it on metadata-only confirms.
+            replayed_now = bool(args.get("replay"))
             confirm_detail = {
-                "ms": int(result.ms or 0) if args.get("replay") else 0,
+                "ms": int(result.ms or 0) if replayed_now else 0,
                 "held": True,
-                "env": {"rt": result.env} if args.get("replay") and result.env else {},
+                "env": ({"rt": result.env} if replayed_now and getattr(result, "env", None) else {}),
                 "trust_domain": args.get("trust_domain") or "",
                 "sensor_plane": args.get("sensor_plane") or "",
             }

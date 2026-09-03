@@ -136,7 +136,7 @@ Default `CLAIMIDX_HOME` is the raw GitHub file:
 
 `https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl`
 
-Pulled claims are tagged `src=home` and arrive **proposed**, never confirmed. Confirm requires `confirm --replay`.
+Pulled claims are tagged `src=home` and arrive **proposed**, never confirmed. Confirm requires `confirm --replay`. The first local confirm or fail graduates `src` to `local` and resets remote `nc`/`nf`/`nr` so hearsay cannot mint local proof (dropped counters land on the event as `home_graduate`).
 
 You do not have to publish proprietary fixes. **Ingest is the formalization step; share is opt-in.** Local index is private. A live home is the org plane. The public jsonl is a **projection** (same fingerprint; notes, paths, and project evals stripped) — that is the anonymized signature a company can contribute without shipping a tree. When `CLAIMIDX_HOME_API` is set, CLI ingest/confirm auto-share to **that home** unless `CLAIMIDX_SHARE=0`. The Python `ingest()` function does not share unless `share=True`.
 
@@ -210,7 +210,7 @@ Replay is the product. The ledger is not a verified knowledge base or an authori
 - Anonymous writes are refused. Set `CLAIMIDX_OWNER` to a DID (`did:claimidx:…`).
 - `fix.b` is data. Claimidx does not execute fixes. `confirm --replay` is opt-in and allowlisted.
 - Dropper-shaped payloads, packed blobs, and secrets are rejected at the door.
-- Home/remote claims stay quarantined (`src=home`) until a local replay. `src=seed` is corpus, not proof.
+- Home/remote claims stay quarantined (`src=home`) until a local replay; graduation wipes remote counters. `src=seed` is corpus, not proof.
 - Two fails above confirms → `contested`; contestation is sticky for that remedy. Later same-domain confirms remain observations but cannot vote it green.
 - There is no agent reputation tier. `nc`/`nf` are per-claim observation counts; `nr` counts held local replays, not independent witnesses.
 - V2 observations can declare `trust_domain` and `sensor_plane`. Claimidx records those claims but does not yet treat self-declared domains as cryptographic quorum or expose a `corroborated` status.
@@ -235,6 +235,7 @@ Every row in [`data/claims.jsonl`](https://raw.githubusercontent.com/claimidx/cl
 
 ## Changelog
 
+- v0.6.2 — home graduation wipes remote `nc`/`nf`/`nr` on first local confirm/fail so hearsay cannot mint local status or score (`home_graduate` on the event); MCP metadata-only confirm no longer touches a missing replay result.
 - v0.6.1 — documentation and discovery parity for the v2 CLI, HTTP, MCP, privacy-preview, proof, identity, plugin, and federation surfaces; refreshed claimidx.com product page.
 - v0.6.0 — compatible v2 graph with alternative remedies and immutable observations; FTS5 candidate retrieval; structured shell-free proofs; optional Ed25519 `did:key` signatures; cursor-based idempotent event exchange; additive feature plugins; public-projection preview; machine-readable CLI errors and `query` aliases; hardened public package boundary.
 - v0.5.9 — `share` keeps hint evals (`true`, `<tool> --version`) off the public ledger; ingest returns `eval_proof` + `warn`; `normalize_error` keeps error codes (`Errno 2` ≠ `Errno 13`); repo changelog claims and skeleton-key rows leave `data/claims.jsonl`; `scripts/ledger_report.py`, `scripts/sync_docs.py`; CI on 3.11–3.13 with ruff + mypy.

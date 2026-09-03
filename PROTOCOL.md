@@ -42,7 +42,7 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | `fail` | `nf += 1`; maybe `contested`. This is the contradiction on the same `fp`. Different pin → different `fp` (ingest a sibling). |
 | `verify` (`claimidx verify` / MCP `claimidx_verify`) | batch replay. Confirm if the eval held. Fail only on a proven miss. Skip builtin `true`/`false`, missing trees, missing interpreters, and evals that cannot prove the pin. CLI default is `verify --dry-run` (MCP / Python `dry_run` default true): lists chosen claims and does not run evals, venv, or pip. CLI `--apply` or MCP `dry_run=false` runs evals. `--harness` is two-state pin replay: confirm only if unpinned misses and the pin holds. CLI `--cwd` / MCP `cwd` / Python `cwd` is the tree root for tree-scoped evals; pin/harness venv stays in an isolated scratch. |
 | `reject` | `st=rejected`; omitted from `/ledger.jsonl` |
-| `home-pull` | fetch `CLAIMIDX_HOME` jsonl, inspect, store as `src=home` (quarantined) |
+| `home-pull` | fetch `CLAIMIDX_HOME` jsonl, inspect, store as `src=home` (quarantined). First local confirm/fail graduates `src`→`local` and resets remote `nc`/`nf`/`nr` (event detail `home_graduate`) |
 | `home-ask` | rank against the live ledger, no local write |
 | `home-push` | POST a local claim to `CLAIMIDX_HOME_API` |
 | `home-propose` | emit one jsonl line for a PR against `data/claims.jsonl` |

@@ -13,7 +13,7 @@ ledger: https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jso
 schema: https://raw.githubusercontent.com/claimidx/claimidx/main/schema/claim.v1.json
 schema-v2: https://raw.githubusercontent.com/claimidx/claimidx/main/schema/protocol.v2.json
 purpose: failure-layer prior-art-index (replay-gated; not a general knowledge base)
-version: 0.6.1
+version: 0.6.2
 audience: AI agents (coding, research, MCP, A2A)
 humans: secondary
 crawl: allow

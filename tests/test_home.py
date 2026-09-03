@@ -56,9 +56,77 @@ def test_pull_quarantines_confirmed(tmp_path: Path):
     assert stored is not None
     assert stored.src == "home"
     assert stored.st == "proposed"
+    # Ledger line carried remote nc=3; graduation must wipe hearsay so the
+    # local confirm is the only proof seed (nc=1), not nc=4.
+    assert stored.nc == 3
     graduated = store.confirm(stored.id, "did:claimidx:agent-a")
     assert graduated.src == "local"
     assert graduated.st == "confirmed"
+    assert graduated.nc == 1
+    assert graduated.nf == 0
+    assert int(getattr(graduated, "nr", 0) or 0) == 0
+    events = store.events(limit=5)
+    assert any(
+        e.get("kind") == "confirm" and (e.get("detail") or {}).get("home_graduate", {}).get("hearsay_nc") == 3
+        for e in events
+    )
+
+
+def test_home_fail_does_not_mint_confirmed_from_remote_nc(tmp_path: Path):
+    """One local fail on a home row must not promote remote nc into confirmed."""
+    store = Store(tmp_path / "ix.sqlite")
+    err = "TypeError: hearsay must not graduate"
+    c = Claim(
+        fp=fingerprint(err=err, eco="py", rt="py@3.12", dep=[]),
+        cls="other",
+        err=normalize_error(err),
+        eco="py",
+        rt="py@3.12",
+        fix=Fix(k="patch", b="await params"),
+        eval=EvalSpec(cmd="true"),
+        own="did:claimidx:remote",
+        src="home",
+        st="proposed",
+        nc=12,
+        nf=0,
+        nr=4,
+    )
+    store.put(c)
+    failed = store.fail(c.id, "did:claimidx:local", note="did not hold here")
+    assert failed.src == "local"
+    assert failed.nc == 0
+    assert failed.nf == 1
+    assert int(getattr(failed, "nr", 0) or 0) == 0
+    assert failed.st == "proposed"
+    # Score must not inherit the remote confirm mass.
+    assert failed.score() < 0.5
+
+
+def test_home_confirm_replay_starts_local_nr_at_one(tmp_path: Path):
+    store = Store(tmp_path / "ix.sqlite")
+    err = "ModuleNotFoundError: No module named 'graduate_nr'"
+    c = Claim(
+        fp=fingerprint(err=err, eco="py", rt="py@3.12", dep=[]),
+        cls="module_not_found",
+        err=normalize_error(err),
+        eco="py",
+        rt="py@3.12",
+        fix=Fix(k="pin", b="graduate-nr==1.0.0"),
+        eval=EvalSpec(cmd="true"),
+        own="did:claimidx:remote",
+        src="home",
+        st="proposed",
+        nc=5,
+        nf=2,
+        nr=9,
+    )
+    store.put(c)
+    ok = store.confirm(c.id, "did:claimidx:local", replayed=True)
+    assert ok.src == "local"
+    assert ok.nc == 1
+    assert ok.nf == 0
+    assert ok.nr == 1
+    assert ok.st == "confirmed"
 
 
 def test_pull_from_local_file(tmp_path: Path):

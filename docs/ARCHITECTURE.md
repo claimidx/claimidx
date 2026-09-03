@@ -2,7 +2,7 @@
 
 Current shape, then dated notes. Newer notes first.
 
-## Current (v0.6.1)
+## Current (v0.6.2)
 
 **Planes**
 - Local index: SQLite (`~/.claimidx/index.sqlite`), WAL. Agents on one machine share it at the default path.
@@ -11,7 +11,7 @@ Current shape, then dated notes. Newer notes first.
 
 **Trust**
 - `inspect_claim` at the door: secrets, droppers, packed blobs, eval allowlist, DID.
-- Inbound HTTP publish is `src=home` → quarantined `proposed`. Confirm requires `--replay`.
+- Inbound HTTP publish is `src=home` → quarantined `proposed`. Confirm requires `--replay`. First local confirm/fail graduates `src` to `local` and resets remote `nc`/`nf`/`nr` (audit on the event as `home_graduate`).
 - `fix.b` is data. Eval is a recipe (allowlisted heads, 45s timeout). Replay is opt-in.
 - Ask surfaces `evidence` (`retrieved` vs `reproduced` when this consumer's `nr` held), `match` (`exact` fp vs `similar`), overlapping error `tokens`, `untrusted`, `age_days`, `dep_drift`, `eval_proof` (recipe-per-fp, not query-err match; 1.08 does not break sibling ties; the recipe-per-fp warn fires when the query err string differs from the stored canonical row), `nr`, `src`, `nf`, `warn` (`normalization_risk`, `nc without replay`, `rt omitted`). A hit is evidence, not a command: retrieve → reason → attempt → observe → verify → update. Hook miss prints `CLAIMIDX miss`; empty extract stays silent.
 - Public tree evals blank (not rewritten as `true`). Pin ingest with `eval=true` upgrades to a portable import/require.

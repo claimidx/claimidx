@@ -84,7 +84,7 @@ def test_python_ask_miss_includes_near_and_dead_ends(tmp_path, monkeypatch):
     )
     store.put(contested)
 
-    # Query that misses default rank but may surface weak as near; dead_ends from same-fp family when querying dead_err with deps that zero similarity to dead? 
+    # Query that misses default rank but may surface weak as near; dead_ends from same-fp family when querying dead_err with deps that zero similarity to dead?
     # Query the dead_err with disjoint deps so primary rank misses, but dead_ends still find same-fp contested/wontfix via store fp lookup.
     out = ask(dead_err, eco="npm", dep=["unrelated@1.0.0"], db=db)
     assert out["hit"] is False

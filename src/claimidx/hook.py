@@ -13,6 +13,7 @@ import re
 import shlex
 import sys
 from pathlib import Path
+from typing import Any
 
 from .security import SecretError, reject_secrets
 
@@ -110,7 +111,7 @@ def sensor(store, raw: str, *, eco: str = "", rt: str = "", dep: list | None = N
     if not hits:
         from .query import miss_enrichment
 
-        miss = {
+        miss: dict[str, Any] = {
             "hit": False,
             "apply_fix": False,
             "event": event,

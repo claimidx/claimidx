@@ -316,10 +316,12 @@ def _seed_cmd_ok(cmd: str) -> bool:
 
 
 def quarantine(claim) -> None:
-    """Remote/home claims never arrive confirmed."""
+    """Remote/home claims never arrive confirmed.
+
+    Counters stay on the row as hearsay for rank-while-quarantined. The first
+    local confirm/fail (Store._graduate_home) wipes them so they cannot mint
+    local status or score after src flips to local.
+    """
     if getattr(claim, "src", "local") == "home":
         if claim.st in ("confirmed",):
             claim.st = "proposed"
-        if claim.nc or claim.nf:
-            # keep counters as hearsay but do not treat as local proof
-            pass

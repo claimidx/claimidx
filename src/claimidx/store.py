@@ -709,6 +709,39 @@ class Store:
         )
         self.add_observation(observation)
 
+    @staticmethod
+    def _graduate_home(claim: Claim) -> dict | None:
+        """First local observation on a home row: drop remote hearsay counters.
+
+        `src=home` means nc/nf/nr arrived from another trust domain. Flipping
+        src to local without wiping them lets one local fail mint `confirmed`
+        from remote nc, and one local confirm inherit an inflated score.
+        SECURITY.md: remote hearsay does not become local proof. Keep the
+        dropped counters in the returned audit dict for the event log.
+        """
+        if getattr(claim, "src", "local") != "home":
+            return None
+        audit = {
+            "from_src": "home",
+            "hearsay_nc": int(claim.nc or 0),
+            "hearsay_nf": int(claim.nf or 0),
+            "hearsay_nr": int(getattr(claim, "nr", 0) or 0),
+            "hearsay_st": claim.st,
+        }
+        claim.src = "local"
+        claim.nc = 0
+        claim.nf = 0
+        claim.nr = 0
+        return audit
+
+    @staticmethod
+    def _merge_event_detail(detail: dict | None, hearsay: dict | None) -> dict | None:
+        if not hearsay:
+            return detail
+        merged = dict(detail or {})
+        merged["home_graduate"] = hearsay
+        return merged
+
     def confirm(
         self,
         claim_id: str,
@@ -720,15 +753,16 @@ class Store:
         c = self.get(claim_id)
         if not c:
             raise KeyError(claim_id)
+        # Graduate before counting so the local observation is the sole proof seed.
+        hearsay = self._graduate_home(c)
         c.nc += 1
         if replayed:
             c.nr = int(getattr(c, "nr", 0) or 0) + 1
-        if getattr(c, "src", "local") == "home":
-            c.src = "local"
         c.refresh_status()
         self.put(c)
-        self._record_claim_observation(c, actor=actor, held=True, replayed=replayed, detail=detail)
-        self._event(claim_id, "confirm-replay" if replayed else "confirm", actor, detail)
+        event_detail = self._merge_event_detail(detail, hearsay)
+        self._record_claim_observation(c, actor=actor, held=True, replayed=replayed, detail=event_detail)
+        self._event(claim_id, "confirm-replay" if replayed else "confirm", actor, event_detail)
         from .session import session_id
 
         self.session_record(
@@ -736,7 +770,7 @@ class Store:
             kind="confirm-replay" if replayed else "confirm",
             fp=c.fp,
             claim_id=claim_id,
-            detail={"replayed": bool(replayed)},
+            detail={"replayed": bool(replayed), **({"home_graduate": hearsay} if hearsay else {})},
         )
         return c
 
@@ -761,16 +795,17 @@ class Store:
         c = self.get(claim_id)
         if not c:
             raise KeyError(claim_id)
+        # Graduate before counting so remote nc cannot mint confirmed on a local fail.
+        hearsay = self._graduate_home(c)
         c.nf += 1
         if note:
             extra = f"fail: {note.strip()}"
             c.note = (c.note + (" | " if c.note else "") + extra)[:240]
-        if getattr(c, "src", "local") == "home":
-            c.src = "local"
         c.refresh_status()
         self.put(c)
-        self._record_claim_observation(c, actor=actor, held=False, replayed=bool(detail), detail=detail)
-        self._event(claim_id, "fail", actor, detail)
+        event_detail = self._merge_event_detail(detail, hearsay)
+        self._record_claim_observation(c, actor=actor, held=False, replayed=bool(detail), detail=event_detail)
+        self._event(claim_id, "fail", actor, event_detail)
         against_id = (against or "").strip()
         if against_id:
             from .graph import Relation
