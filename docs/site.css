@@ -168,6 +168,16 @@ blockquote.not { margin: 44px 0; padding: 22px 28px; border: 0; border-left: 7px
 .freeband h2 { font-size: 28px; }
 .section-label { margin-top: 52px; }
 .addons td:nth-child(2) { white-space: nowrap; font-weight: 700; }
+.enterprise-offer { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(300px,.8fr); border-top: 3px solid var(--ink); border-bottom: 1px solid var(--ink); background: rgba(255,253,248,.62); }
+.enterprise-offer > div { padding: 28px; }
+.enterprise-offer > div + div { border-left: 1px solid var(--line); }
+.enterprise-offer h2, .enterprise-offer h3 { margin: 4px 0 12px; }
+.enterprise-offer h2 { font-size: 34px; }
+.enterprise-offer h3 { font-size: 28px; }
+.enterprise-offer ul { margin: 16px 0 0; padding-left: 20px; }
+.enterprise-offer li { margin: 7px 0; }
+.enterprise-contact { background: var(--blue-pale); }
+.enterprise-contact .btn { margin-top: 18px; }
 
 .site-footer { padding: 52px 0 28px; background: var(--paper-deep); border-top: 6px solid var(--ink); }
 .foot-grid { display: grid; grid-template-columns: minmax(240px,1.6fr) repeat(auto-fit,minmax(130px,1fr)); gap: 42px; }
@@ -225,7 +235,8 @@ body .warn-card, body .secret-block, body .wire-card, body .op-form input, body 
   .steps .card { grid-template-columns: 55px 150px 1fr; }
   .foot-grid { grid-template-columns: 1fr 1fr; }
   .freeband { grid-template-columns: 1fr; }
-  .op-grid, .plan-grid, .stat-grid, .split-2, .wiki-layout { grid-template-columns: 1fr; }
+  .op-grid, .plan-grid, .stat-grid, .split-2, .wiki-layout, .enterprise-offer { grid-template-columns: 1fr; }
+  .enterprise-offer > div + div { border-left: 0; border-top: 1px solid var(--line); }
   .wiki-toc { position: static; }
 }
 
