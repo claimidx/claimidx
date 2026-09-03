@@ -78,6 +78,45 @@ def test_exact_dep_pin_ranks_above_drifted_pin():
     assert [h[0].id for h in hits][0] == exact.id
 
 
+def test_annotate_includes_machine_readable_disposition():
+    from claimidx.match import annotate
+
+    err = "ModuleNotFoundError: No module named 'demo_disp'"
+    home = _claim(err, eco="py", dep=["demo@1"])
+    home.src = "home"
+    home.eval.cmd = 'python -c "import demo"'
+    q = {"err": err, "eco": "py", "dep": ["demo@1"], "rt": "py@3.12", "fp": home.fp}
+    meta = annotate(q, home, 0.9)
+    disp = meta["disposition"]
+    assert disp["action"] == "replay_before_apply"
+    assert "src=home" in disp["why"]
+    assert any("confirm" in s and "--replay" in s for s in disp["suggested"])
+
+    contested = _claim(err, eco="py", dep=["demo@1"])
+    contested.st = "contested"
+    contested.nf = 2
+    contested.eval.cmd = 'python -c "import demo"'
+    cmeta = annotate(q, contested, 0.9)
+    assert cmeta["disposition"]["action"] == "fail_or_alternative"
+    assert "st=contested" in cmeta["disposition"]["why"]
+
+    wont = _claim(err, eco="py", dep=["demo@1"])
+    wont.fix = Fix(k="wontfix", b="upstream bug; wait for release")
+    wont.eval.cmd = "true"
+    wmeta = annotate(q, wont, 0.9)
+    assert wmeta["disposition"]["action"] in {"skip", "reason_only"}
+
+    local = _claim(err, eco="py", dep=["demo@1"])
+    local.src = "local"
+    local.st = "confirmed"
+    local.nr = 2
+    local.nc = 2
+    local.eval.cmd = 'python -c "import demo"'
+    lmeta = annotate({**q, "rt": "py@3.12"}, local, 0.95)
+    assert lmeta["disposition"]["action"] == "apply_with_caution"
+    assert lmeta["evidence"] == "reproduced"
+
+
 def test_eval_proof_is_false_for_tautology_and_ranks_under_recipe():
     from claimidx.match import annotate, rank
     from claimidx.public import eval_is_proof, refine_eval

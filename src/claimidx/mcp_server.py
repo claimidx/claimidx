@@ -97,6 +97,7 @@ TOOLS = [
                 "id": {"type": "string"},
                 "own": {"type": "string"},
                 "note": {"type": "string", "description": "why the eval missed (appended to claim.note)"},
+                "against": {"type": "string", "description": "optional claim/remedy id to mark as contradicts"},
             },
         },
     },
@@ -217,7 +218,39 @@ TOOLS = [
     {
         "name": "claimidx_doctor",
         "description": "Check that this agent is wired and the index/home loop works.",
-        "inputSchema": {"type": "object", "properties": {}},
+        "inputSchema": {
+            "type": "object",
+            "properties": {"cwd": {"type": "string", "description": "optional tree path for marker awareness"}},
+        },
+    },
+    {
+        "name": "claimidx_session",
+        "description": "Local session summary (asks/ingests/fails). Soft must_ask gate. Not shared.",
+        "inputSchema": {"type": "object", "properties": {"fp": {"type": "string"}}},
+    },
+    {
+        "name": "claimidx_alternatives",
+        "description": "List remedies for a claim id or fingerprint, including contested and alternatives.",
+        "inputSchema": {"type": "object", "properties": {"target": {"type": "string"}}, "required": ["target"]},
+    },
+    {
+        "name": "claimidx_ingest_draft",
+        "description": "Stash or promote a local ingest draft. Does not write a claim until promote.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "err": {"type": "string"},
+                "fix_k": {"type": "string"},
+                "fix_b": {"type": "string"},
+                "eval": {"type": "string"},
+                "eco": {"type": "string"},
+                "rt": {"type": "string"},
+                "dep": {"type": "array", "items": {"type": "string"}},
+                "note": {"type": "string"},
+                "own": {"type": "string"},
+                "promote": {"type": "string", "description": "draft id to promote"},
+            },
+        },
     },
 ]
 
@@ -273,8 +306,9 @@ def _prompt(name: str | None, args: dict) -> dict | None:
             "If warn, dep_drift, nf>0, or st=contested, replay before applying. src=seed is not proof. "
             "Batch replay: call claimidx_verify (dry_run defaults true; no evals/venv/pip), or claimidx verify --dry-run then claimidx verify --apply --runnable --harness -k 8. "
             "Held → claimidx_confirm (replay=true for home claims). Eval miss → claimidx_fail (that is the contradiction). "
+            "Prefer disposition.action on each hit (advice only). Miss may include near/dead_ends; check claimidx_session.must_ask. "
             "If you already failed this err twice this session, you must ask before a third try. "
-            "Miss → solve once, then after_fix."
+            "Miss → solve once, then after_fix (or claimidx_ingest_draft then promote)."
         )
     elif name == "after_fix":
         text = (
@@ -377,16 +411,21 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         from .query import retrieve
 
         q = {"err": err, "cls": cls, "eco": args.get("eco") or "", "rt": args.get("rt") or "", "dep": dep, "fp": fp}
-        hits = retrieve(store, q, k=int(args.get("k") or 5))
-        return {
+        hits, candidates = retrieve(store, q, k=int(args.get("k") or 5))
+        payload = {
             "hit": bool(hits),
             "fp": fp,
             "cls": cls,
             "err": normalize_error(err),
             "claims": [
-                hit_compact({"err": err, "cls": cls, "eco": args.get("eco") or "", "rt": args.get("rt") or "", "dep": dep, "fp": fp}, c, s) for c, s in hits
+                hit_compact(q, c, s) for c, s in hits
             ],
         }
+        if not hits:
+            from .query import miss_enrichment
+
+            payload.update(miss_enrichment(store, q, candidates, k=int(args.get("k") or 5)))
+        return payload
     if name == "claimidx_hook":
         from .hook import sensor
 
@@ -530,7 +569,12 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             out["share"] = shared
         return out
     if name == "claimidx_fail":
-        c = store.fail(args["id"], resolve_owner(args.get("own")), note=args.get("note") or "")
+        c = store.fail(
+            args["id"],
+            resolve_owner(args.get("own")),
+            note=args.get("note") or "",
+            against=(args.get("against") or "") or None,
+        )
         return {"id": c.id, "st": c.st, "nc": c.nc, "nf": c.nf, "own": resolve_owner(args.get("own"))}
     if name == "claimidx_verify":
         from .replay import run
@@ -630,14 +674,47 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         from .home import api_url, ledger_url
 
         me = team_whoami()
-        return {
+        out = {
             "version": __version__,
             "whoami": me,
             "stats": store.stats(),
             "home": ledger_url(),
             "home_api": api_url() or None,
+            "session": store.session_summary(),
             "ok": me["did"] not in ("did:claimidx:anon", "anon"),
         }
+        cwd = (args.get("cwd") or "").strip()
+        if cwd:
+            from pathlib import Path as _Path
+
+            from .sandbox import _TREE_MARKERS
+
+            root = _Path(cwd)
+            markers = sorted({name for names in _TREE_MARKERS.values() for name in names if (root / name).exists()})
+            out["tree"] = {"cwd": str(root), "markers": markers, "exists": root.is_dir()}
+        return out
+    if name == "claimidx_session":
+        return store.session_summary(fp=args.get("fp") or "")
+    if name == "claimidx_alternatives":
+        return store.alternatives(args.get("target") or "")
+    if name == "claimidx_ingest_draft":
+        from .drafts import promote_draft, stash_draft
+
+        promote = (args.get("promote") or "").strip()
+        if promote:
+            return promote_draft(store, promote, own=resolve_owner(args.get("own")))
+        return stash_draft(
+            store,
+            err=args.get("err") or "",
+            fix_k=args.get("fix_k") or "constraint",
+            fix_b=args.get("fix_b") or "",
+            eval_cmd=args.get("eval") or "true",
+            eco=args.get("eco") or "other",
+            rt=args.get("rt") or "",
+            dep=list(args.get("dep") or []),
+            note=args.get("note") or "",
+            own=resolve_owner(args.get("own")),
+        )
     raise ValueError(f"unknown tool {name}")
 
 

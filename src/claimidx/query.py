@@ -11,14 +11,14 @@ import time
 from typing import Any
 
 from .fingerprint import classify, fingerprint, normalize_error
-from .match import hit_row, rank
+from .match import dead_end_claims, hit_compact, hit_row, rank, rank_near, similarity
 from .models import Claim, EvalSpec, Fix
 from .store import DEFAULT_DB, Store, force_reset_emits, force_reset_from
 from .team import resolve_owner
 
 
 def retrieve(store: Store, q: dict[str, Any], *, k: int = 5, actor: str | None = None, kind: str = "ask"):
-    """Rank and log hit/n/ms. Does not store the raw err."""
+    """Rank and log hit/n/ms. Does not store the raw err. Returns (hits, candidates)."""
     t0 = time.monotonic()
     candidates = store.candidates(
         fp=str(q.get("fp") or ""),
@@ -28,7 +28,32 @@ def retrieve(store: Store, q: dict[str, Any], *, k: int = 5, actor: str | None =
     hits = rank(q, candidates, k=k)
     ms = int((time.monotonic() - t0) * 1000)
     store.log_ask(actor or resolve_owner(None), hits, ms=ms, q=q, kind=kind)
-    return hits
+    return hits, candidates
+
+
+def miss_enrichment(store: Store, q: dict[str, Any], candidates: list[Claim], *, k: int = 5) -> dict[str, Any]:
+    """Near neighbors + contested/wontfix family rows. Never promoted into claims[]."""
+    near_hits = rank_near(q, candidates, k=min(3, k))
+    pool: list[Claim] = []
+    seen: set[str] = set()
+    for c in list(candidates) + (store.by_fp(str(q.get("fp") or "")) if q.get("fp") else []):
+        if c.id in seen:
+            continue
+        seen.add(c.id)
+        pool.append(c)
+    ends = dead_end_claims(q, pool, k=min(5, k))
+    near_why: list[str] = []
+    if near_hits:
+        near_why.append("below_threshold")
+    else:
+        near_why.append("no_near_neighbors")
+    if ends:
+        near_why.append("dead_end")
+    return {
+        "near": [hit_compact(q, c, s) for c, s in near_hits],
+        "near_why": near_why,
+        "dead_ends": [hit_compact(q, c, float(similarity(q, c) or 0.0)) for c in ends],
+    }
 
 
 def ask(
@@ -47,9 +72,20 @@ def ask(
     cls = classify(err)
     q: dict[str, Any] = {"err": err, "cls": cls, "eco": eco or "", "rt": rt or "", "dep": dep}
     q["fp"] = fingerprint(err=err, cls=cls, eco=eco or "", rt=rt or "", dep=dep)
-    hits = retrieve(store, q, k=k)
+    hits, candidates = retrieve(store, q, k=k)
+    session = store.session_summary(fp=q["fp"])
     if not hits:
-        return {"hit": False, "fp": q["fp"], "cls": cls, "err": normalize_error(err), "n": 0, "claims": []}
+        miss = {
+            "hit": False,
+            "fp": q["fp"],
+            "cls": cls,
+            "err": normalize_error(err),
+            "n": 0,
+            "claims": [],
+            "session": session,
+        }
+        miss.update(miss_enrichment(store, q, candidates, k=k))
+        return miss
     return {
         "hit": True,
         "fp": q["fp"],
@@ -57,6 +93,7 @@ def ask(
         "err": normalize_error(err),
         "n": len(hits),
         "claims": [hit_row(q, c, s) for c, s in hits],
+        "session": session,
     }
 
 

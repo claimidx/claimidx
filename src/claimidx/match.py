@@ -178,6 +178,97 @@ def untrusted(query: Claim | dict, claim: Claim, *, nr: int) -> list[str]:
     return codes
 
 
+def disposition_for(query: Claim | dict, claim: Claim, ann: dict) -> dict:
+    """Machine-readable next action. Advice only — never execute fix.b from this."""
+    why: list[str] = []
+    untrusted_codes = list(ann.get("untrusted") or [])
+    tokens = list(ann.get("tokens") or [])
+    evidence = ann.get("evidence") or "retrieved"
+    match = ann.get("match") or "similar"
+    fix_k = getattr(getattr(claim, "fix", None), "k", "") or ""
+    cid = claim.id
+
+    if fix_k == "wontfix":
+        why.append("fix.k=wontfix")
+        return {
+            "action": "skip",
+            "why": why,
+            "suggested": [f"claimidx alternatives {claim.fp}", "record an alternative remedy if a real fix exists"],
+        }
+    if claim.st == "contested" or "st=contested" in untrusted_codes:
+        why.append("st=contested")
+        if int(claim.nf or 0) >= 1:
+            why.append(f"nf={claim.nf}")
+        return {
+            "action": "fail_or_alternative",
+            "why": why,
+            "suggested": [
+                f"claimidx alternatives {claim.fp}",
+                f"claimidx fail {cid}",
+                "claimidx ingest … --alternative",
+            ],
+        }
+    if int(claim.nf or 0) >= 1:
+        why.append(f"nf={claim.nf}")
+        return {
+            "action": "fail_or_alternative",
+            "why": why,
+            "suggested": [f"claimidx confirm --replay {cid}", f"claimidx fail {cid}"],
+        }
+
+    replay_codes = {
+        "src=home",
+        "src=seed",
+        "dep_drift",
+        "rt_drift",
+        "eval_hint",
+        "nc without replay",
+        "normalization_risk",
+    }
+    for code in untrusted_codes:
+        if code in replay_codes or code.startswith("dep_drift") or code.startswith("rt_drift"):
+            why.append(code)
+    if why:
+        return {
+            "action": "replay_before_apply",
+            "why": why,
+            "suggested": [f"claimidx confirm --replay {cid}", "do not apply fix.b until replay holds"],
+        }
+
+    if match == "similar" and len(tokens) < 1:
+        why.append("match=similar")
+        why.append("token_overlap=0")
+        return {
+            "action": "reason_only",
+            "why": why,
+            "suggested": ["compare err tokens before applying", f"claimidx explain {cid}"],
+        }
+
+    if evidence == "reproduced" and not untrusted_codes:
+        why.append("evidence=reproduced")
+        return {
+            "action": "apply_with_caution",
+            "why": why,
+            "suggested": [f"reason over fix.b then apply; claimidx explain {cid}"],
+        }
+
+    if match == "similar":
+        why.append("match=similar")
+        why.append(f"token_overlap={len(tokens)}")
+        return {
+            "action": "reason_only",
+            "why": why,
+            "suggested": [f"claimidx explain {cid}", f"claimidx confirm --replay {cid}"],
+        }
+
+    why.append("evidence=retrieved")
+    return {
+        "action": "replay_before_apply",
+        "why": why,
+        "suggested": [f"claimidx confirm --replay {cid}"],
+    }
+
+
 def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
     qdep = query.dep if isinstance(query, Claim) else (query.get("dep") or [])
     qrt = (query.rt if isinstance(query, Claim) else (query.get("rt") or "")).strip()
@@ -185,7 +276,7 @@ def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
     stored_nr = int(getattr(claim, "nr", 0) or 0)
     nr = stored_nr if hold_applies(qrt, claim.rt) else 0
     exact = _query_fp(query) == claim.fp
-    return {
+    ann = {
         "sim": round(sim, 4),
         "score": round(claim.score(), 4),
         "age_days": round(age_days(claim), 1),
@@ -199,6 +290,8 @@ def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
         "tokens": match_tokens(qerr, claim.err),
         "untrusted": untrusted(query, claim, nr=nr),
     }
+    ann["disposition"] = disposition_for(query, claim, ann)
+    return ann
 
 
 _ERR_BOILER = {
@@ -329,6 +422,53 @@ def rank(query: Claim | dict, claims: list[Claim], *, k: int = 5, min_sim: float
         scored.append((c, sim * (0.5 + 0.5 * c.score())))
     scored.sort(key=lambda x: x[1], reverse=True)
     return scored[:k]
+
+
+NEAR_FLOOR = 0.12
+HIT_MIN_SIM = 0.28
+
+
+def rank_near(
+    query: Claim | dict,
+    claims: list[Claim],
+    *,
+    k: int = 3,
+    floor: float = NEAR_FLOOR,
+    ceiling: float = HIT_MIN_SIM,
+) -> list[tuple[Claim, float]]:
+    """Below-hit-threshold cousins. Never promoted into claims[]."""
+    scored: list[tuple[Claim, float]] = []
+    for c in claims:
+        sim = similarity(query, c)
+        if sim < floor or sim >= ceiling:
+            continue
+        scored.append((c, sim))
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return scored[:k]
+
+
+def dead_end_claims(query: Claim | dict, claims: list[Claim], *, k: int = 5) -> list[Claim]:
+    """Contested / wontfix rows in the same err family — useful on miss."""
+    qerr = normalize_error((query.err if isinstance(query, Claim) else (query.get("err") or "")) or "")
+    qeco = (query.eco if isinstance(query, Claim) else (query.get("eco") or "")).strip()
+    qfp = _query_fp(query)
+    out: list[Claim] = []
+    seen: set[str] = set()
+    for c in claims:
+        if c.id in seen:
+            continue
+        if c.st != "contested" and getattr(c.fix, "k", "") != "wontfix":
+            continue
+        same_fp = c.fp == qfp
+        same_err = (c.err or "") == qerr
+        token_hit = bool(match_tokens(qerr, c.err or ""))
+        eco_ok = not qeco or not c.eco or c.eco == qeco
+        if same_fp or (eco_ok and (same_err or token_hit)):
+            seen.add(c.id)
+            out.append(c)
+        if len(out) >= k:
+            break
+    return out
 
 
 def hit_row(query: Claim | dict, claim: Claim, sim: float) -> dict:

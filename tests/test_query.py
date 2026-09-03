@@ -23,6 +23,75 @@ def test_python_ask_miss(tmp_path):
     assert out["hit"] is False
     assert out["n"] == 0
     assert out["claims"] == []
+    assert out.get("near") == []
+    assert isinstance(out.get("near_why"), list)
+    assert out.get("dead_ends") == []
+
+
+def test_python_ask_miss_includes_near_and_dead_ends(tmp_path, monkeypatch):
+    from claimidx.fingerprint import fingerprint, normalize_error
+    from claimidx.models import Claim, EvalSpec, Fix
+    from claimidx.store import Store
+
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:test")
+    db = tmp_path / "ix.sqlite"
+    store = Store(db)
+    err_near = "TypeError: widget is a Promise"
+    # Same eco/class-ish shape as a next/params claim but different enough to miss at default threshold
+    # when ranked against a below-threshold cousin — seed a weak cousin + a dead end on another fp.
+    weak = Claim(
+        fp=fingerprint(err=err_near, cls="async_api", eco="npm", rt="node@20", dep=["next@14.0.0"]),
+        cls="async_api",
+        err=normalize_error(err_near),
+        eco="npm",
+        rt="node@20",
+        dep=["next@14.0.0"],
+        fix=Fix(k="patch", b="await widget"),
+        eval=EvalSpec(cmd="npx tsc --noEmit"),
+        own="did:claimidx:test",
+        st="proposed",
+        src="local",
+    )
+    store.put(weak)
+    dead_err = "TypeError: params is a Promise"
+    dead = Claim(
+        fp=fingerprint(err=dead_err, cls="async_api", eco="npm", rt="node@20", dep=["next@15.0.0"]),
+        cls="async_api",
+        err=normalize_error(dead_err),
+        eco="npm",
+        rt="node@20",
+        dep=["next@15.0.0"],
+        fix=Fix(k="wontfix", b="upstream; wait for next major"),
+        eval=EvalSpec(cmd="true"),
+        own="did:claimidx:test",
+        st="confirmed",
+        src="local",
+    )
+    store.put(dead)
+    contested = Claim(
+        fp=dead.fp,
+        cls="async_api",
+        err=normalize_error(dead_err),
+        eco="npm",
+        rt="node@20",
+        dep=["next@15.0.0"],
+        fix=Fix(k="patch", b="await params"),
+        eval=EvalSpec(cmd="npx tsc --noEmit"),
+        own="did:claimidx:test",
+        st="contested",
+        nf=2,
+        src="local",
+    )
+    store.put(contested)
+
+    # Query that misses default rank but may surface weak as near; dead_ends from same-fp family when querying dead_err with deps that zero similarity to dead? 
+    # Query the dead_err with disjoint deps so primary rank misses, but dead_ends still find same-fp contested/wontfix via store fp lookup.
+    out = ask(dead_err, eco="npm", dep=["unrelated@1.0.0"], db=db)
+    assert out["hit"] is False
+    assert out["claims"] == []
+    ends = out.get("dead_ends") or []
+    assert any(row.get("fix", {}).get("k") == "wontfix" or row.get("st") == "contested" for row in ends)
+    assert "dead_end" in (out.get("near_why") or []) or ends
 
 
 def test_python_ask_logs_hit_miss_and_ms(tmp_path, monkeypatch):

@@ -106,9 +106,11 @@ def sensor(store, raw: str, *, eco: str = "", rt: str = "", dep: list | None = N
     q = {"err": err, "cls": cls, "eco": eco, "rt": rt, "dep": dep, "fp": fp}
     from .query import retrieve
 
-    hits = retrieve(store, q, k=int(k or 5), kind="hook")
+    hits, candidates = retrieve(store, q, k=int(k or 5), kind="hook")
     if not hits:
-        return {
+        from .query import miss_enrichment
+
+        miss = {
             "hit": False,
             "apply_fix": False,
             "event": event,
@@ -118,6 +120,8 @@ def sensor(store, raw: str, *, eco: str = "", rt: str = "", dep: list | None = N
             "claims": [],
             "note": note,
         }
+        miss.update(miss_enrichment(store, q, candidates, k=int(k or 5)))
+        return miss
     chosen = hits
     if event:
         chosen = hits[:2] if len(hits) > 1 and near_tie(hits[0][1], hits[1][1]) else hits[:1]

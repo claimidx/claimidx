@@ -244,8 +244,8 @@ def create_app(db: str | None = None) -> FastAPI:
         from .query import retrieve
 
         caller = (payload.own or "").strip() or "did:claimidx:anon"
-        hits = retrieve(store, q, k=payload.k, actor=caller)
-        return {
+        hits, candidates = retrieve(store, q, k=payload.k, actor=caller)
+        out = {
             "hit": bool(hits),
             "fp": fp,
             "cls": cls,
@@ -253,6 +253,11 @@ def create_app(db: str | None = None) -> FastAPI:
             "n": len(hits),
             "claims": [hit_row(q, c, s) for c, s in hits],
         }
+        if not hits:
+            from .query import miss_enrichment
+
+            out.update(miss_enrichment(store, q, candidates, k=payload.k))
+        return out
 
     @app.post("/api/publish")
     def publish(payload: PublishBody, _auth: str = Depends(require_write)):

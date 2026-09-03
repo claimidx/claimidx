@@ -68,6 +68,27 @@ class Store:
                 )
                 """
             )
+            con.execute(
+                """
+                CREATE TABLE IF NOT EXISTS session_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    ts TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    fp TEXT,
+                    claim_id TEXT,
+                    detail TEXT
+                )
+                """
+            )
+            con.execute("CREATE INDEX IF NOT EXISTS idx_session_id ON session_events(session_id)")
+            con.execute(
+                """
+                CREATE TABLE IF NOT EXISTS drafts (
+                    id TEXT PRIMARY KEY, fp TEXT, json TEXT NOT NULL, ts TEXT NOT NULL
+                )
+                """
+            )
             self._migrate_events_detail(con)
             self._init_v2(con)
 
@@ -708,6 +729,15 @@ class Store:
         self.put(c)
         self._record_claim_observation(c, actor=actor, held=True, replayed=replayed, detail=detail)
         self._event(claim_id, "confirm-replay" if replayed else "confirm", actor, detail)
+        from .session import session_id
+
+        self.session_record(
+            session_id(),
+            kind="confirm-replay" if replayed else "confirm",
+            fp=c.fp,
+            claim_id=claim_id,
+            detail={"replayed": bool(replayed)},
+        )
         return c
 
     def reject(self, claim_id: str, actor: str = "did:claimidx:anon") -> Claim:
@@ -719,7 +749,15 @@ class Store:
         self._event(claim_id, "reject", actor)
         return c
 
-    def fail(self, claim_id: str, actor: str = "did:claimidx:anon", note: str = "", detail: dict | None = None) -> Claim:
+    def fail(
+        self,
+        claim_id: str,
+        actor: str = "did:claimidx:anon",
+        note: str = "",
+        detail: dict | None = None,
+        *,
+        against: str | None = None,
+    ) -> Claim:
         c = self.get(claim_id)
         if not c:
             raise KeyError(claim_id)
@@ -733,7 +771,100 @@ class Store:
         self.put(c)
         self._record_claim_observation(c, actor=actor, held=False, replayed=bool(detail), detail=detail)
         self._event(claim_id, "fail", actor, detail)
+        against_id = (against or "").strip()
+        if against_id:
+            from .graph import Relation
+
+            src_graph = self.graph(claim_id)
+            tgt_graph = self.graph(against_id)
+            if not tgt_graph and len(against_id) == 64:
+                # allow against a fingerprint: pick first remedy on that failure
+                fg = self.failure_graph(against_id)
+                if fg and fg.get("remedies"):
+                    tgt_graph = {"remedy": fg["remedies"][0]}
+            if src_graph and tgt_graph:
+                self.add_relation(
+                    Relation(
+                        source_id=src_graph["remedy"]["id"],
+                        target_id=tgt_graph["remedy"]["id"],
+                        kind="contradicts",
+                        actor=actor,
+                    )
+                )
+        from .session import session_id
+
+        self.session_record(
+            session_id(),
+            kind="fail",
+            fp=c.fp,
+            claim_id=claim_id,
+            detail={"nf": c.nf, "against": against_id or None},
+        )
         return c
+
+    def alternatives(self, target: str) -> dict:
+        """List remedies for a claim id or fp_v1. Additive browse over failure_graph."""
+        target = (target or "").strip()
+        if not target:
+            return {"target": target, "remedies": [], "relations": []}
+        claim = self.get(target)
+        fp = claim.fp if claim else (target if len(target) == 64 else "")
+        if not fp and claim is None:
+            return {"target": target, "remedies": [], "relations": [], "error": "missing"}
+        if not fp and claim is not None:
+            fp = claim.fp
+        graph = self.failure_graph(fp) if fp else None
+        relations: list[dict] = []
+        if not graph:
+            one = self.graph(target) if claim else None
+            if not one:
+                return {"target": target, "fp": fp, "remedies": [], "relations": []}
+            graph = {
+                "failure": one.get("failure"),
+                "remedies": [one["remedy"]] if one.get("remedy") else [],
+            }
+            relations = list(one.get("relations") or [])
+        remedies = []
+        remedy_ids: list[str] = []
+        for rem in graph.get("remedies") or []:
+            legacy = rem.get("legacy_claim_id") or ""
+            row = self.get(legacy) if legacy else None
+            from .match import annotate
+
+            disp = (
+                annotate({"err": row.err, "fp": row.fp, "eco": row.eco, "rt": row.rt, "dep": row.dep}, row, 1.0).get("disposition")
+                if row
+                else None
+            )
+            rid = rem.get("id") or ""
+            if rid:
+                remedy_ids.append(str(rid))
+            remedies.append(
+                {
+                    "id": rid,
+                    "legacy_claim_id": legacy,
+                    "status": rem.get("status") or (row.st if row else ""),
+                    "fix": rem.get("fix") or (row.fix.model_dump() if row else {}),
+                    "nc": getattr(row, "nc", 0) if row else 0,
+                    "nf": getattr(row, "nf", 0) if row else 0,
+                    "nr": getattr(row, "nr", 0) if row else 0,
+                    "disposition": disp,
+                }
+            )
+        if remedy_ids and not relations:
+            with self._conn() as con:
+                placeholders = ",".join("?" * len(remedy_ids))
+                rows = con.execute(
+                    f"SELECT json FROM relations_v2 WHERE source_id IN ({placeholders}) OR target_id IN ({placeholders})",
+                    (*remedy_ids, *remedy_ids),
+                ).fetchall()
+            relations = [json.loads(r["json"]) for r in rows]
+        return {
+            "target": target,
+            "fp": fp,
+            "remedies": remedies,
+            "relations": relations,
+        }
 
     def stats(self) -> dict:
         claims = self.all()
@@ -826,6 +957,91 @@ class Store:
                 if val:
                     detail[key] = val
         self.log(kind, actor, cid, detail=detail)
+        from .session import session_id
+
+        self.session_record(
+            session_id(),
+            kind=kind,
+            fp=str((q or {}).get("fp") or "") or None,
+            claim_id=cid or None,
+            detail=detail,
+        )
+
+    def session_record(
+        self,
+        sid: str,
+        *,
+        kind: str,
+        fp: str | None = None,
+        claim_id: str | None = None,
+        detail: dict | None = None,
+    ) -> None:
+        """Append a local session event. Never stores secrets or raw stderr blobs."""
+        from .session import utc_ts
+
+        sid = (sid or "").strip()
+        if not sid:
+            return
+        blob = json.dumps(detail or {}, ensure_ascii=False, default=str)[:2000]
+        with self._conn() as con:
+            con.execute(
+                "INSERT INTO session_events(session_id, ts, kind, fp, claim_id, detail) VALUES (?,?,?,?,?,?)",
+                (sid[:120], utc_ts(), (kind or "")[:40], (fp or "")[:80] or None, (claim_id or "")[:64] or None, blob),
+            )
+
+    def session_summary(self, sid: str | None = None, *, fp: str | None = None) -> dict:
+        """Compact view for agents: asks, ingests, fails, must_ask soft gate."""
+        from .session import session_id as current_session
+
+        sid = (sid or current_session()).strip()
+        with self._conn() as con:
+            rows = con.execute(
+                "SELECT kind, fp, claim_id, detail, ts FROM session_events WHERE session_id=? ORDER BY id ASC",
+                (sid,),
+            ).fetchall()
+        asks = 0
+        asks_by_fp: dict[str, int] = {}
+        fails_by_fp: dict[str, int] = {}
+        ingests: list[dict] = []
+        drafts: list[dict] = []
+        last_disposition = None
+        for r in rows:
+            kind = r["kind"] or ""
+            row_fp = r["fp"] or ""
+            if kind in ("ask", "hook"):
+                asks += 1
+                if row_fp:
+                    asks_by_fp[row_fp] = asks_by_fp.get(row_fp, 0) + 1
+                try:
+                    detail = json.loads(r["detail"] or "{}")
+                except json.JSONDecodeError:
+                    detail = {}
+                if isinstance(detail, dict) and detail.get("disposition"):
+                    last_disposition = detail.get("disposition")
+            elif kind == "ingest":
+                ingests.append({"claim_id": r["claim_id"], "fp": row_fp, "ts": r["ts"]})
+            elif kind == "draft":
+                drafts.append({"draft_id": r["claim_id"], "fp": row_fp, "ts": r["ts"]})
+            elif kind == "fail" and row_fp:
+                fails_by_fp[row_fp] = fails_by_fp.get(row_fp, 0) + 1
+        focus = (fp or "").strip()
+        fails_focus = fails_by_fp.get(focus, 0) if focus else (max(fails_by_fp.values()) if fails_by_fp else 0)
+        asks_focus = asks_by_fp.get(focus, 0) if focus else 0
+        # Soft gate: same fp failed twice this session — ask before a third try.
+        must_ask = bool(focus and fails_focus >= 2) or (not focus and any(v >= 2 for v in fails_by_fp.values()))
+        return {
+            "session_id": sid,
+            "asks": asks,
+            "asks_by_fp": asks_by_fp,
+            "fails_by_fp": fails_by_fp,
+            "ingests": ingests[-10:],
+            "drafts": drafts[-10:],
+            "last_disposition": last_disposition,
+            "must_ask": must_ask,
+            "focus_fp": focus or None,
+            "asks_focus": asks_focus,
+            "fails_focus": fails_focus,
+        }
 
     def log(self, kind: str, actor: str, claim_id: str = "", detail: dict | None = None) -> None:
         self._event(claim_id, kind, actor, detail)
@@ -848,6 +1064,9 @@ class Store:
                 self._insert_event(con, claim.id, "force_reset", actor, reset)
             self._upsert(con, claim)
             self._insert_event(con, claim.id, "publish", actor)
+        from .session import session_id
+
+        self.session_record(session_id(), kind="ingest", fp=claim.fp, claim_id=claim.id, detail={"st": claim.st})
         return claim
 
     def has_event(self, claim_id: str, kinds: tuple[str, ...] = ()) -> bool:

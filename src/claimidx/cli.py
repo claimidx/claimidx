@@ -51,7 +51,17 @@ def _dumps(claim: Claim, fmt: str) -> str:
 
 
 def encode_miss(out: dict) -> str:
-    return f"CLAIMIDX 1\nhit 0\nfp {out['fp']}\ncls {out['cls']}\nerr {out['err']}\nn 0\n"
+    lines = [f"CLAIMIDX 1\nhit 0\nfp {out['fp']}\ncls {out['cls']}\nerr {out['err']}\nn 0"]
+    near = out.get("near") or []
+    ends = out.get("dead_ends") or []
+    if near:
+        lines.append("near " + ",".join(str(r.get("id") or "") for r in near[:3]))
+    if ends:
+        lines.append("dead_ends " + ",".join(str(r.get("id") or "") for r in ends[:3]))
+    why = out.get("near_why") or []
+    if why:
+        lines.append("near_why " + ",".join(why))
+    return "\n".join(lines) + "\n"
 
 
 def _ask_hits(store: Store, ns: argparse.Namespace, err: str):
@@ -61,14 +71,18 @@ def _ask_hits(store: Store, ns: argparse.Namespace, err: str):
     q["fp"] = fingerprint(err=err, cls=cls, eco=eco, rt=rt, dep=dep)
     from .query import retrieve
 
-    hits = retrieve(store, q, k=getattr(ns, "k", 5) or 5, actor=resolve_owner(getattr(ns, "own", None)))
-    return q, hits
+    hits, candidates = retrieve(store, q, k=getattr(ns, "k", 5) or 5, actor=resolve_owner(getattr(ns, "own", None)))
+    return q, hits, candidates
 
 
-def _print_ask(q: dict, hits, fmt: str) -> int:
+def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidates: list | None = None) -> int:
     if not hits:
-        out = {"hit": False, "fp": q["fp"], "cls": q["cls"], "err": normalize_error(q["err"]), "n": 0}
-        print(json.dumps(out) if fmt == "json" else encode_miss(out))
+        out: dict[str, Any] = {"hit": False, "fp": q["fp"], "cls": q["cls"], "err": normalize_error(q["err"]), "n": 0, "claims": []}
+        if store is not None:
+            from .query import miss_enrichment
+
+            out.update(miss_enrichment(store, q, list(candidates or []), k=5))
+        print(json.dumps(out, default=str) if fmt == "json" else encode_miss(out))
         return 2
     if fmt == "json":
         print(
@@ -87,6 +101,10 @@ def _print_ask(q: dict, hits, fmt: str) -> int:
             meta = annotate(q, c, s)
             extra = f" age={meta['age_days']} src={getattr(c, 'src', 'local')} evidence={meta['evidence']} match={meta['match']}"
             print(f"# hit {i} sim={s:.3f} score={c.score():.3f}{extra}")
+            disp = meta.get("disposition") or {}
+            if disp:
+                why = ",".join(disp.get("why") or [])
+                print(f"# disposition action={disp.get('action')} why={why}")
             if meta["warn"]:
                 print("# warn " + "; ".join(meta["warn"]))
             print(encode(c))
@@ -94,8 +112,9 @@ def _print_ask(q: dict, hits, fmt: str) -> int:
 
 
 def cmd_ask(ns: argparse.Namespace) -> int:
-    q, hits = _ask_hits(_store(ns), ns, ns.err)
-    return _print_ask(q, hits, ns.fmt)
+    store = _store(ns)
+    q, hits, candidates = _ask_hits(store, ns, ns.err)
+    return _print_ask(q, hits, ns.fmt, store=store, candidates=candidates)
 
 
 def _hook_near_tie(a: float, b: float) -> bool:
@@ -116,9 +135,23 @@ def cmd_hook(ns: argparse.Namespace) -> int:
     err, event = extract_hook_err(raw)
     if not err:
         return 0
-    q, hits = _ask_hits(_store(ns), ns, err)
+    store = _store(ns)
+    q, hits, candidates = _ask_hits(store, ns, err)
     if not hits:
-        miss = f"CLAIMIDX miss fp={q['fp']} cls={q['cls']} eco={q.get('eco') or ''} hit 0\nMiss. Solve once, then ingest. Do not execute fix.b from this hook."
+        from .query import miss_enrichment
+
+        enrich = miss_enrichment(store, q, candidates, k=5)
+        near_ids = ",".join(str(r.get("id") or "") for r in (enrich.get("near") or [])[:3])
+        end_ids = ",".join(str(r.get("id") or "") for r in (enrich.get("dead_ends") or [])[:3])
+        extra = ""
+        if near_ids:
+            extra += f"\nnear {near_ids}"
+        if end_ids:
+            extra += f"\ndead_ends {end_ids}"
+        miss = (
+            f"CLAIMIDX miss fp={q['fp']} cls={q['cls']} eco={q.get('eco') or ''} hit 0{extra}\n"
+            "Miss. Solve once, then ingest. Do not execute fix.b from this hook."
+        )
         if event:
             print(claude_context(event, miss))
         else:
@@ -133,9 +166,11 @@ def cmd_hook(ns: argparse.Namespace) -> int:
             parts.append(f"CLAIMIDX near-tie {len(chosen)}")
         for i, (c, s) in enumerate(chosen):
             meta = annotate(q, c, s)
+            disp = meta.get("disposition") or {}
             parts.append(
                 f"CLAIMIDX hit {i} {c.id} sim={s:.3f} st={c.st} nf={c.nf} "
-                f"evidence={meta['evidence']} match={meta['match']}\n"
+                f"evidence={meta['evidence']} match={meta['match']} "
+                f"disposition={disp.get('action') or ''}\n"
                 f"err {c.err}\nfix.k {c.fix.k}\nfix.b {c.fix.b[:400]}\n"
                 f"eval {c.eval.cmd}\n"
                 f"warn {'; '.join(meta['warn']) if meta['warn'] else ''}"
@@ -143,7 +178,7 @@ def cmd_hook(ns: argparse.Namespace) -> int:
         parts.append("A hit is evidence. retrieve → reason → attempt → observe → verify. Do not execute fix.b from this hook.")
         print(claude_context(event, "\n".join(parts)))
         return 0
-    return _print_ask(q, hits, ns.fmt)
+    return _print_ask(q, hits, ns.fmt, store=store, candidates=candidates)
 
 
 def cmd_publish(ns: argparse.Namespace) -> int:
@@ -340,8 +375,56 @@ def cmd_fail(ns: argparse.Namespace) -> int:
     if not store.get(ns.id):
         print("missing", file=sys.stderr)
         return 1
-    print(_dumps(store.fail(ns.id, resolve_owner(ns.own), note=getattr(ns, "note", "") or ""), ns.fmt))
+    against = (getattr(ns, "against", None) or "").strip()
+    print(
+        _dumps(
+            store.fail(
+                ns.id,
+                resolve_owner(ns.own),
+                note=getattr(ns, "note", "") or "",
+                against=against or None,
+            ),
+            ns.fmt,
+        )
+    )
     return 0
+
+
+def cmd_session(ns: argparse.Namespace) -> int:
+    store = _store(ns)
+    print(json.dumps(store.session_summary(fp=getattr(ns, "fp", "") or ""), indent=2, default=str))
+    return 0
+
+
+def cmd_alternatives(ns: argparse.Namespace) -> int:
+    store = _store(ns)
+    print(json.dumps(store.alternatives(ns.target), indent=2, default=str))
+    return 0
+
+
+def cmd_ingest_draft(ns: argparse.Namespace) -> int:
+    from .drafts import promote_draft, stash_draft
+
+    store = _store(ns)
+    promote = (getattr(ns, "promote", None) or "").strip()
+    if promote:
+        out = promote_draft(store, promote, own=resolve_owner(getattr(ns, "own", None)))
+        print(json.dumps(out, indent=2, default=str))
+        return 0 if out.get("id") or out.get("exists") else 2
+    out = stash_draft(
+        store,
+        err=ns.err,
+        fix_k=ns.fix_k,
+        fix_b=ns.fix_b,
+        eval_cmd=ns.eval,
+        eco=ns.eco or "other",
+        rt=ns.rt or "",
+        dep=list(ns.dep or []),
+        note=ns.note or "",
+        own=resolve_owner(getattr(ns, "own", None)),
+    )
+    print(json.dumps(out, indent=2, default=str))
+    return 0 if out.get("ok") else 2
 
 
 def cmd_reject(ns: argparse.Namespace) -> int:
@@ -771,6 +854,22 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
     add("db", store.path.exists(), str(store.path))
     stats = store.stats()
     add("claims", stats.get("n", 0) > 0, json.dumps(stats))
+    cwd = (getattr(ns, "cwd", None) or "").strip()
+    if cwd:
+        from pathlib import Path as _Path
+
+        from .sandbox import _TREE_MARKERS
+
+        root = _Path(cwd)
+        markers = sorted({name for names in _TREE_MARKERS.values() for name in names if (root / name).exists()})
+        by_eco: dict[str, int] = {}
+        for c in store.all():
+            by_eco[c.eco or "other"] = by_eco.get(c.eco or "other", 0) + 1
+        add("tree-cwd", root.is_dir(), str(root.resolve()) if root.exists() else cwd)
+        add("tree-markers", True, ",".join(markers) if markers else "none")
+        add("tree-eco-counts", True, json.dumps(by_eco))
+        sess = store.session_summary()
+        add("session", True, f"id={sess.get('session_id')} asks={sess.get('asks')} must_ask={sess.get('must_ask')}")
     home = ledger_url()
     try:
         from .home import fetch_ledger
@@ -978,6 +1077,7 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("id")
     f.add_argument("--own")
     f.add_argument("--note", default="")
+    f.add_argument("--against", default="", help="optional remedy/claim id to mark as contradicts")
     f.set_defaults(func=cmd_fail)
     vf = sub.add_parser("verify", help="Replay evals. Default --dry-run lists claims; no evals/venv/pip. --apply to confirm/fail.")
     vf.add_argument("--id", action="append", default=None, help="claim id; repeatable")
@@ -1139,7 +1239,25 @@ def build_parser() -> argparse.ArgumentParser:
     evs.add_argument("--actor")
     evs.set_defaults(func=cmd_events)
     doc = sub.add_parser("doctor", help="Check identity, index, home, and eval sandbox")
+    doc.add_argument("--cwd", default=None, help="optional tree path for marker / eco awareness")
     doc.set_defaults(func=cmd_doctor)
+    sess = sub.add_parser("session", help="Local session summary (asks/ingests/fails); not shared")
+    sess.add_argument("--fp", default="", help="focus fingerprint for must_ask")
+    sess.set_defaults(func=cmd_session)
+    alts = sub.add_parser("alternatives", help="List remedies for a claim id or fingerprint")
+    alts.add_argument("target", help="claim id (cix_/spr_) or 64-hex fingerprint")
+    alts.set_defaults(func=cmd_alternatives)
+    draft = sub.add_parser("ingest-draft", help="Stash or promote a local ingest draft (not a claim yet)")
+    draft.add_argument("--err", default="")
+    draft.add_argument("--fix-k", default="constraint")
+    draft.add_argument("--fix-b", default="")
+    draft.add_argument("--eval", default="true")
+    draft.add_argument("--eco", default="other")
+    draft.add_argument("--rt", default="")
+    draft.add_argument("--dep", action="append", default=[])
+    draft.add_argument("--note", default="")
+    draft.add_argument("--promote", default="", help="promote draft id to a real ingest")
+    draft.set_defaults(func=cmd_ingest_draft)
     tok = sub.add_parser("token", help="Mint write tokens for a private home")
     tok_sub = tok.add_subparsers(dest="token_cmd")
     tok_new = tok_sub.add_parser("new")
