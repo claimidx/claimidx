@@ -151,8 +151,32 @@ blockquote.not { margin: 44px 0; padding: 22px 28px; border: 0; border-left: 7px
 #bill-mo:checked ~ .compare-wrap .for-mo, #bill-mo:checked ~ * .for-mo { display: table-row !important; }
 #bill-mo:checked ~ .compare-wrap a.for-mo, #bill-mo:checked ~ * a.for-mo { display: inline-flex !important; }
 #bill-mo:checked ~ .compare-wrap .for-yr, #bill-mo:checked ~ * .for-yr { display: none !important; }
+#bill-mo:checked ~ .pricing-grid .for-mo { display: block !important; }
+#bill-mo:checked ~ .pricing-grid a.for-mo { display: inline-flex !important; }
+#bill-mo:checked ~ .pricing-grid .for-yr { display: none !important; }
 .trust { display: flex; flex-wrap: wrap; gap: 0; margin: 22px 0; border: 1px solid var(--line); background: var(--surface); }
 .trust span { flex: 1 1 180px; padding: 10px 14px; border-right: 1px solid var(--line); font: 700 11px/1.4 var(--mono); text-align: center; text-transform: uppercase; }
+.pricing-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); align-items: stretch; border-top: 3px solid var(--ink); border-left: 1px solid var(--line); }
+.pricing-card { position: relative; display: flex; min-width: 0; flex-direction: column; padding: 28px 26px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--ink); background: rgba(255,253,248,.62); }
+.pricing-card.featured { background: var(--blue-pale); }
+.plan-badge { position: absolute; top: 0; right: 0; margin: 0; padding: 7px 10px; background: var(--ink); color: white; font: 700 10px/1 var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+.plan-name { margin: 0 0 18px; color: var(--accent); font: 700 12px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.pricing-card h2 { min-height: 68px; margin: 0; font-size: 29px; line-height: 1.08; }
+.plan-for { min-height: 76px; margin: 12px 0 22px; color: var(--ink-soft); }
+.plan-price { min-height: 96px; padding: 18px 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); }
+.plan-price strong { font: 500 40px/1 var(--serif); }
+.plan-price span { color: var(--muted); font-size: 13px; }
+.plan-price small { display: block; margin-top: 8px; color: var(--muted); font: 11px/1.4 var(--sans); }
+.includes { margin: 20px 0 8px; font: 700 11px/1.4 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+.plan-features { margin: 0; padding: 0; list-style: none; }
+.plan-features li { position: relative; margin: 0; padding: 10px 0 10px 17px; border-top: 1px solid var(--line); color: var(--ink-soft); }
+.plan-features li::before { position: absolute; left: 0; content: "—"; color: var(--accent); }
+.plan-features strong { color: var(--ink); }
+.plan-actions { margin-top: auto; padding-top: 24px; }
+.plan-actions .btn { width: 100%; justify-content: center; }
+.plan-actions .pay-note { text-align: center; }
+.usage-note { margin: 18px 0 0; padding: 14px 16px; border-left: 4px solid var(--accent); background: var(--surface); color: var(--ink-soft); }
+.usage-note strong { color: var(--ink); }
 .compare-wrap { overflow-x: auto; border-top: 3px solid var(--ink); }
 .rates, .addons { width: 100%; min-width: 760px; border-collapse: collapse; background: rgba(255,253,248,.62); }
 .rates th, .rates td, .addons th, .addons td { padding: 14px 16px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
@@ -235,7 +259,8 @@ body .warn-card, body .secret-block, body .wire-card, body .op-form input, body 
   .steps .card { grid-template-columns: 55px 150px 1fr; }
   .foot-grid { grid-template-columns: 1fr 1fr; }
   .freeband { grid-template-columns: 1fr; }
-  .op-grid, .plan-grid, .stat-grid, .split-2, .wiki-layout, .enterprise-offer { grid-template-columns: 1fr; }
+  .op-grid, .plan-grid, .stat-grid, .split-2, .wiki-layout, .enterprise-offer, .pricing-grid { grid-template-columns: 1fr; }
+  .pricing-card h2, .plan-for { min-height: 0; }
   .enterprise-offer > div + div { border-left: 0; border-top: 1px solid var(--line); }
   .wiki-toc { position: static; }
 }
