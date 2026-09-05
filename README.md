@@ -237,6 +237,7 @@ Every row in [`data/claims.jsonl`](https://raw.githubusercontent.com/claimidx/cl
 
 ## Changelog
 
+- v0.6.3 — MCP tools are self-describing: titles, described parameters, ToolAnnotations, loose output schemas, structuredContent, sibling routing (`claimidx_publish` is the alias of `claimidx_ingest`; `claimidx_share` routes to home or outbox; `home_push`/`home_propose` are its halves); protocolVersion negotiation; server card, version literals, and Pages deploy are generated from one source (`scripts/sync_docs.py`, pyproject).
 - v0.6.2 — home graduation wipes remote `nc`/`nf`/`nr` on first local confirm/fail so hearsay cannot mint local status or score (`home_graduate` on the event); MCP metadata-only confirm no longer touches a missing replay result.
 - v0.6.1 — documentation and discovery parity for the v2 CLI, HTTP, MCP, privacy-preview, proof, identity, plugin, and federation surfaces; refreshed claimidx.com product page.
 - v0.6.0 — compatible v2 graph with alternative remedies and immutable observations; FTS5 candidate retrieval; structured shell-free proofs; optional Ed25519 `did:key` signatures; cursor-based idempotent event exchange; additive feature plugins; public-projection preview; machine-readable CLI errors and `query` aliases; hardened public package boundary.

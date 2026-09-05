@@ -1,7 +1,7 @@
 {
   "serverInfo": {
     "name": "claimidx",
-    "version": "0.6.2",
+    "version": "0.6.3",
     "title": "Claimidx",
     "description": "Prior art for AI agents. A replay-gated failure index with optional cryptographic v2 records. Query before retrying; ingest locally after learning."
   },

@@ -1,6 +1,6 @@
 """Claimidx — prior art for agents."""
 
-__version__ = "0.6.2"
+__version__ = "0.6.3"
 
 from .dense import decode, encode
 from .fingerprint import classify, fingerprint, normalize_error
