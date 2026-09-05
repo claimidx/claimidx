@@ -1,7 +1,13 @@
 name: pages
 # Publish the repository's technical documentation and discovery files.
+# docs/ is the complete Pages tree (storefront included), so a push is safe to publish.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/pages.yml"
 jobs:
   deploy:
     runs-on: ubuntu-latest

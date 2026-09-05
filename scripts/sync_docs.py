@@ -7,11 +7,16 @@ Sources of truth: AGENTS.md, skills/claimidx/SKILL.md, PROTOCOL.md, README.md,
 llms.txt, ai.txt, server.json, and root well-known discovery files.
 Everything else here is a copy: the harness skill drops (.claude/, .cursor/, …),
 docs/AGENTS.md, docs/llms.txt, and the llms-full.txt dumps crawlers fetch.
+
+The release version has one source, ``pyproject.toml``. ``VERSION_STAMPS`` lists
+every file that must carry a literal copy of it (``__version__``, A2A/MCP cards,
+ai.txt, llms.txt); this script rewrites them so a release is a one-line bump.
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -41,6 +46,7 @@ COPIES = {
     "server.json": ("docs/server.json",),
     ".well-known/agent-card.json": ("docs/.well-known/agent-card.json",),
     ".well-known/agent.json": ("docs/.well-known/agent.json",),
+    ".well-known/agents.json": ("docs/.well-known/agents.json",),
     ".well-known/mcp.json": ("docs/.well-known/mcp.json",),
     ".well-known/mcp/server-card.json": ("docs/.well-known/mcp/server-card.json",),
     ".well-known/api-catalog": ("docs/.well-known/api-catalog",),
@@ -51,9 +57,54 @@ COPIES = {
 
 FULL_TARGETS = ("llms-full.txt", "docs/llms-full.txt")
 
+PYPROJECT_VERSION = re.compile(r'(?m)^version = "([^"]+)"')
+
+# (path, pattern) — group 1 is the version literal to rewrite. Every match in the
+# file is stamped, so server.json's two `"version"` keys move together.
+# `"version":` does not match `"protocolVersion":` (the quote is required).
+_JSON_VERSION = r'"version": "([^"]+)"'
+VERSION_STAMPS: tuple[tuple[str, str], ...] = (
+    ("src/claimidx/__init__.py", r'(?m)^__version__ = "([^"]+)"'),
+    ("server.json", _JSON_VERSION),
+    (".well-known/agent-card.json", _JSON_VERSION),
+    (".well-known/agent.json", _JSON_VERSION),
+    (".well-known/agents.json", _JSON_VERSION),
+    (".well-known/mcp.json", _JSON_VERSION),
+    (".well-known/mcp/server-card.json", _JSON_VERSION),
+    ("a2a/agent-card.json", _JSON_VERSION),
+    ("ai.txt", r"(?m)^version: (\S+)$"),
+    ("llms.txt", r"Use (\d+\.\d+\.\d+)\+"),
+    ("docs/ARCHITECTURE.md", r"(?m)^## Current \(v([^)]+)\)"),
+)
+
 
 def _read(rel: str) -> str:
     return (ROOT / rel).read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
+def package_version() -> str:
+    m = PYPROJECT_VERSION.search(_read("pyproject.toml"))
+    if not m:
+        raise SystemExit("pyproject.toml: version missing")
+    return m.group(1)
+
+
+def stamped() -> dict[str, str]:
+    """Each VERSION_STAMPS file with every version literal set to the pyproject version."""
+    version = package_version()
+    out: dict[str, str] = {}
+    for rel, pattern in VERSION_STAMPS:
+        body = _read(rel)
+        if not re.search(pattern, body):
+            raise SystemExit(f"{rel}: no version literal matches {pattern!r}")
+
+        def _sub(m: re.Match[str]) -> str:
+            head = m.group(0)[: m.start(1) - m.start(0)]
+            tail = m.group(0)[m.end(1) - m.start(0) :]
+            return head + version + tail
+
+        out[rel] = re.sub(pattern, _sub, body)
+    return out
 
 
 def render_full() -> str:
@@ -61,9 +112,9 @@ def render_full() -> str:
 
 
 def expected() -> dict[str, str]:
-    out: dict[str, str] = {}
+    out: dict[str, str] = dict(stamped())
     for src, targets in COPIES.items():
-        body = _read(src)
+        body = out.get(src) or _read(src)
         for t in targets:
             out[t] = body
     full = render_full()

@@ -714,12 +714,14 @@ def test_discovery_cards_match_package_version():
     cards = (
         (ROOT / ".well-known" / "agent-card.json", ("version",)),
         (ROOT / ".well-known" / "agent.json", ("version",)),
+        (ROOT / ".well-known" / "agents.json", ("version",)),
         (ROOT / "a2a" / "agent-card.json", ("version",)),
         (ROOT / ".well-known" / "mcp.json", ("version",)),
         (ROOT / ".well-known" / "mcp" / "server-card.json", ("serverInfo", "version")),
         (ROOT / "server.json", ("version",)),
         (ROOT / "docs" / ".well-known" / "agent-card.json", ("version",)),
         (ROOT / "docs" / ".well-known" / "agent.json", ("version",)),
+        (ROOT / "docs" / ".well-known" / "agents.json", ("version",)),
         (ROOT / "docs" / ".well-known" / "mcp.json", ("version",)),
         (ROOT / "docs" / ".well-known" / "mcp" / "server-card.json", ("serverInfo", "version")),
         (ROOT / "docs" / "server.json", ("version",)),
@@ -738,6 +740,33 @@ def test_discovery_cards_match_package_version():
     assert "https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl" in site
     assert 'claim.st === "confirmed"' in site
     assert 'claim.src !== "seed"' in site
+
+
+def test_sync_docs_stamps_every_version_literal():
+    """scripts/sync_docs.py owns the version copies; a bump in pyproject must be enough."""
+    import importlib.util
+    from claimidx import __version__
+    from claimidx.discovery import ROOT
+
+    spec = importlib.util.spec_from_file_location("sync_docs", ROOT / "scripts" / "sync_docs.py")
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.package_version() == __version__
+    stamped = {rel for rel, _ in mod.VERSION_STAMPS}
+    for rel in (
+        "src/claimidx/__init__.py",
+        "server.json",
+        ".well-known/agents.json",
+        ".well-known/mcp/server-card.json",
+        "a2a/agent-card.json",
+        "ai.txt",
+        "llms.txt",
+    ):
+        assert rel in stamped, rel
+    for rel, body in mod.stamped().items():
+        cur = (ROOT / rel).read_text(encoding="utf-8").replace("\r\n", "\n")
+        assert cur == body, f"stale version: {rel}"
 
 
 def test_mcp_force_keeps_stored_cls(tmp_path, monkeypatch):
