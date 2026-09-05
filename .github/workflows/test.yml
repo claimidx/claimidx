@@ -25,7 +25,6 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[server,dev]"
-      - run: ruff check .
-      - run: ruff format --check src tests scripts
-      - run: mypy
-      - run: python scripts/sync_docs.py --check
+      # Same stages as .githooks/pre-commit and pre-push (minus pytest, which the matrix above runs):
+      # sanitize, docs, lint, mcp. See CONTRIBUTING.md "Ship gates".
+      - run: python scripts/gate.py ci

@@ -62,6 +62,30 @@ A comment, a review note, or a new assertion that only encodes taste is **not a 
 
 This is the same shape as a claim: name the failure, write the eval, confirm only if replay holds. `tests/test_fix_gate.py` fails if this section disappears.
 
+## Ship gates
+
+Nothing red leaves the machine. `scripts/gate.py` is the one pipeline; git hooks, CI, and the release all call it.
+
+```
+python scripts/gate.py install-hooks   # once per clone: core.hooksPath -> .githooks
+```
+
+| When | Runs | Stages |
+|---|---|---|
+| `git commit` | `.githooks/pre-commit` → `python scripts/gate.py pre-commit` | sanitize (staged paths), docs, lint |
+| commit message | `.githooks/commit-msg` → `python scripts/gate.py commit-msg` | subject ≤ 72 chars, imperative, no chat narration |
+| `git push` | `.githooks/pre-push` → `python scripts/gate.py pre-push` | sanitize (tracked tree), docs, verify, mcp |
+| release | `python scripts/gate.py release`, then `twine upload`, then tag `vX.Y.Z` | pre-push + build |
+| CI | `python scripts/gate.py ci` in `.github/workflows/test.yml` | sanitize, docs, lint, mcp; pytest runs in the 3.11–3.13 matrix |
+
+- **sanitize** — no tracked path that `.gitignore` or `.git/info/exclude` would ignore (private trees stay private), no scratch paths (`tmp/`, `.tmp*`, `_tick_bodies/`, `build/`, `dist/`, `*.sqlite`, `.env`, `uv.lock`), no secret-shaped tokens (`# gate: allow-secret` marks a deliberate fixture), no private business text or stray email addresses, nothing over 1 MiB.
+- **docs** — `python scripts/sync_docs.py --check` (version stamps, server card, skill drops, `llms-full.txt`) and `python scripts/export_v2_schema.py --check`.
+- **lint** — `ruff check .`, `ruff format --check src tests scripts`, `mypy`. **verify** — lint + `python -m pytest -q`.
+- **mcp** — a real stdio session against the MCP server: `initialize` echoes the protocol version and the pyproject version; every tool is titled, described, annotated, and has described parameters; `tools/list`, `prompts/list`, `resources/list` match `.well-known/mcp/server-card.json`; `server.json` versions match; `claimidx_doctor` answers.
+- **build** — `python -m build`, `twine check`, `python scripts/audit_artifacts.py` on the wheel and sdist.
+
+`--no-verify` is not a workflow. A gate that is wrong gets fixed in `scripts/gate.py` with a test in `tests/test_gate.py`, not bypassed.
+
 ## The loop
 
 ```

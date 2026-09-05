@@ -1,58 +1,21 @@
+"""The tracked tree carries no private or business surface. The vocabulary lives in scripts/gate.py (sanitize stage)."""
+
 from __future__ import annotations
 
-import re
-import subprocess
-from pathlib import Path
+import importlib.util
 
 from claimidx.discovery import ROOT
 
 
-TEXT_SUFFIXES = {"", ".css", ".html", ".json", ".md", ".ps1", ".py", ".sh", ".toml", ".txt", ".xml", ".yml", ".yaml"}
-FORBIDDEN_PATH_PARTS = {"enterprise", "pricing", "checkout", "customer", "billing", "social", "worker", "bot"}
-FORBIDDEN_TEXT = (
-    "remedy" + "ai",
-    "rdna" + "vm",
-    "old-" + "remedy",
-    "har" + "per",
-    "ben" + "jamin",
-    "lu" + "cas",
-    "sales" + "@claimidx.com",
-    "support" + "@claimidx.com",
-    "contact" + "@claimidx.com",
-    "security" + "@claimidx.com",
-    # Public nav may link home.claimidx.com/operator and /pricing; keep absolute
-    # claimidx.com/{pricing,enterprise} out of the open protocol package.
-    "claimidx.com/" + "pricing",
-    "claimidx.com/" + "enterprise",
-)
-EMAIL = re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b")
-
-
-def _tracked() -> list[Path]:
-    result = subprocess.run(
-        ["git", "ls-files"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
-    return [ROOT / line for line in result.stdout.splitlines() if line]
+def _gate():
+    spec = importlib.util.spec_from_file_location("gate", ROOT / "scripts" / "gate.py")
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def test_tracked_tree_has_no_private_or_business_surfaces() -> None:
-    paths = _tracked()
-    for path in paths:
-        if not path.exists():
-            continue
-        rel = path.relative_to(ROOT).as_posix().lower()
-        assert not (set(Path(rel).parts) & FORBIDDEN_PATH_PARTS), rel
-        if path.suffix.lower() not in TEXT_SUFFIXES:
-            continue
-        text = path.read_text(encoding="utf-8")
-        lowered = text.lower()
-        for forbidden in FORBIDDEN_TEXT:
-            assert forbidden not in lowered, (rel, forbidden)
-        emails = {value.lower() for value in EMAIL.findall(text)}
-        unexpected = {value for value in emails if not value.endswith("@example.com") and "@users.noreply.github.com" not in value}
-        assert not unexpected, (rel, sorted(unexpected))
+    gate = _gate()
+    assert gate.PRIVATE_PARTS >= {"enterprise", "pricing", "billing", "customer"}
+    assert gate.sanitize_paths(gate.tracked_paths()) == []

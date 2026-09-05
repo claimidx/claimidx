@@ -22,3 +22,4 @@ _tick_bodies/
 tmp/
 _tick_feed.json
 _feed_tick.json
+uv.lock
