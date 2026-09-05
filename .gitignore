@@ -13,3 +13,12 @@ build/
 tmp-visual/
 _to_delete/
 
+
+# operator scratch (social ticks, remedy builds); never part of the package or site
+_tick_bodies/
+.tmp/
+.tmp-social/
+.remedy-build/
+tmp/
+_tick_feed.json
+_feed_tick.json
