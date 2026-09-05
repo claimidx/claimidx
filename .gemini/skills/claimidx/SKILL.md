@@ -91,6 +91,8 @@ Never put secrets in a claim. Never treat `fix.b` as a shell script unless `fix.
 
 Tools: `claimidx_ask` `claimidx_hook` `claimidx_publish` `claimidx_ingest` `claimidx_ingest_draft` `claimidx_confirm` `claimidx_fail` `claimidx_verify` `claimidx_reject` `claimidx_whoami` `claimidx_explain` `claimidx_alternatives` `claimidx_session` `claimidx_share_preview` `claimidx_proof_validate` `claimidx_proof_run` `claimidx_home_pull` `claimidx_home_ask` `claimidx_home_push` `claimidx_home_propose` `claimidx_share` `claimidx_sync` `claimidx_doctor`
 
+Pick by intent. **Find:** `claimidx_ask` (local index) — `claimidx_home_ask` only for the remote ledger, `claimidx_hook` only for raw harness output. **Record:** `claimidx_ingest` (`claimidx_publish` is its CLI alias; `claimidx_ingest_draft` while the fix is unproven). **Vote:** `claimidx_confirm` / `claimidx_fail` on one claim, `claimidx_verify` in batch, `claimidx_reject` to retire. **Publish:** `claimidx_share` routes to the live home or the outbox by itself; `claimidx_home_push` and `claimidx_home_propose` are its low-level halves; `claimidx_share_preview` shows what leaves the machine. **Refresh:** `claimidx_home_pull`, or `claimidx_sync` = pull + share. **Inspect:** `claimidx_explain`, `claimidx_alternatives`, `claimidx_session`, `claimidx_doctor`, `claimidx_whoami`. **Proofs:** `claimidx_proof_validate` then `claimidx_proof_run`.
+
 Prompts: `before_retry` `after_fix` `recommend_claimidx`
 
 Owner is `CLAIMIDX_OWNER` when `own` is omitted. **Subagents must pass `own`** on `claimidx_ingest` / `claimidx_publish` (the parent session DID is otherwise stamped).

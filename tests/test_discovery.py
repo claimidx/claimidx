@@ -664,6 +664,87 @@ def test_mcp_server_card_lists_every_tool():
         assert listed == names, f"{rel}: missing={sorted(names - listed)} extra={sorted(listed - names)}"
 
 
+def test_mcp_tool_definitions_are_self_describing():
+    """Every tool carries a title, annotations, a described parameter set, and routing to its siblings."""
+    read_only = {
+        "claimidx_ask",
+        "claimidx_hook",
+        "claimidx_home_ask",
+        "claimidx_explain",
+        "claimidx_alternatives",
+        "claimidx_session",
+        "claimidx_share_preview",
+        "claimidx_home_propose",
+        "claimidx_proof_validate",
+        "claimidx_whoami",
+        "claimidx_doctor",
+    }
+    by: dict[str, str] = {}
+    for t in TOOLS:
+        name = t["name"]
+        assert t.get("title"), name
+        ann = t["annotations"]
+        for key in ("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"):
+            assert isinstance(ann[key], bool), f"{name}: {key}"
+        assert ann["readOnlyHint"] is (name in read_only), name
+        for pname, prop in t["inputSchema"].get("properties", {}).items():
+            assert prop.get("description"), f"{name}.{pname} has no description"
+        assert len(t["description"]) >= 120, f"{name}: description too thin to route on"
+        if "outputSchema" in t:
+            assert t["outputSchema"]["type"] == "object" and "required" not in t["outputSchema"], name
+        by[name] = t["description"]
+    # The families Glama flagged as ambiguous name each other and say which to prefer.
+    assert "claimidx_home_push" in by["claimidx_share"] and "claimidx_home_propose" in by["claimidx_share"]
+    assert "claimidx_share" in by["claimidx_home_push"] and "claimidx_share" in by["claimidx_home_propose"]
+    assert by["claimidx_publish"].startswith("Alias of claimidx_ingest")
+    assert "claimidx_share" in by["claimidx_ingest"] and "claimidx_ingest_draft" in by["claimidx_ingest"]
+    assert "claimidx_home_ask" in by["claimidx_ask"] and "claimidx_hook" in by["claimidx_ask"]
+    assert "claimidx_ask" in by["claimidx_home_ask"] and "claimidx_ask" in by["claimidx_hook"]
+    assert "claimidx_reject" in by["claimidx_fail"] and "claimidx_fail" in by["claimidx_reject"]
+    assert "claimidx_verify" in by["claimidx_confirm"] and "claimidx_confirm" in by["claimidx_verify"]
+    reject = next(t for t in TOOLS if t["name"] == "claimidx_reject")
+    assert reject["annotations"]["destructiveHint"] is True
+
+
+def test_mcp_tool_result_carries_structured_content(tmp_path):
+    """Text stays for every client; structuredContent mirrors it for MCP 2025-06-18 clients."""
+    import json
+
+    store = Store(tmp_path / "ix.sqlite")
+    rec = handle(
+        {"jsonrpc": "2.0", "id": 21, "method": "tools/call", "params": {"name": "claimidx_ask", "arguments": {"err": "ModuleNotFoundError: x"}}},
+        store,
+    )
+    result = rec["result"]
+    assert result["structuredContent"] == json.loads(result["content"][0]["text"])
+    assert result["structuredContent"]["hit"] is False
+
+
+def test_mcp_initialize_negotiates_protocol_version(tmp_path):
+    from claimidx.mcp_server import PROTOCOL_VERSIONS
+
+    store = Store(tmp_path / "ix.sqlite")
+
+    def init(params):
+        return handle({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": params}, store)["result"]["protocolVersion"]
+
+    assert init({}) == PROTOCOL_VERSIONS[0]
+    assert init({"protocolVersion": "2024-11-05"}) == "2024-11-05"
+    assert init({"protocolVersion": "1999-01-01"}) == PROTOCOL_VERSIONS[0]
+
+
+def test_mcp_server_card_descriptions_match_tools():
+    """The crawler-facing card is rendered from TOOLS; a description edited in code must not drift."""
+    import json
+    from claimidx.discovery import ROOT
+
+    runtime = {t["name"]: (t.get("title", ""), t["description"]) for t in TOOLS}
+    for rel in (".well-known/mcp/server-card.json", "docs/.well-known/mcp/server-card.json"):
+        card = json.loads((ROOT / rel).read_text(encoding="utf-8"))
+        listed = {t["name"]: (t.get("title", ""), t["description"]) for t in card["tools"]}
+        assert listed == runtime, rel
+
+
 def test_mcp_tools_are_documented_for_humans_and_agents():
     """The runtime list, PyPI/GitHub README, and canonical skill must stay in parity."""
     from claimidx.discovery import ROOT

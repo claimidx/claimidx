@@ -11,16 +11,25 @@ docs/AGENTS.md, docs/llms.txt, and the llms-full.txt dumps crawlers fetch.
 The release version has one source, ``pyproject.toml``. ``VERSION_STAMPS`` lists
 every file that must carry a literal copy of it (``__version__``, A2A/MCP cards,
 ai.txt, llms.txt); this script rewrites them so a release is a one-line bump.
+
+The MCP server card's ``tools`` / ``prompts`` / ``resources`` arrays are rendered
+from ``claimidx.mcp_server`` (``TOOLS``, ``PROMPTS``, ``RESOURCES``), so a tool
+description edited in code reaches crawlers without a second hand edit.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
+
+SERVER_CARD = ".well-known/mcp/server-card.json"
 
 SKILL = "skills/claimidx/SKILL.md"
 FULL_SOURCES = ("AGENTS.md", SKILL, "PROTOCOL.md", "README.md")
@@ -111,8 +120,20 @@ def render_full() -> str:
     return "\n\n".join(f"# FILE {rel}\n\n{_read(rel).rstrip()}" for rel in FULL_SOURCES) + "\n"
 
 
+def render_server_card(current: str) -> str:
+    """server-card.json with tools/prompts/resources taken from the MCP runtime lists."""
+    from claimidx.mcp_server import PROMPTS, RESOURCES, TOOLS
+
+    card = json.loads(current)
+    card["tools"] = [{"name": t["name"], "title": t.get("title", ""), "description": t["description"]} for t in TOOLS]
+    card["prompts"] = [{"name": p["name"], "description": p["description"]} for p in PROMPTS]
+    card["resources"] = [{"uri": r["uri"], "name": r["name"], "description": r["description"]} for r in RESOURCES]
+    return json.dumps(card, indent=2, ensure_ascii=False) + "\n"
+
+
 def expected() -> dict[str, str]:
     out: dict[str, str] = dict(stamped())
+    out[SERVER_CARD] = render_server_card(out.get(SERVER_CARD) or _read(SERVER_CARD))
     for src, targets in COPIES.items():
         body = out.get(src) or _read(src)
         for t in targets:
