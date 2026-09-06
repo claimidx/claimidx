@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -32,16 +33,39 @@ from .target import claim_target, suggest_eval
 def upgrade_eval(claim: Claim) -> tuple[str, str]:
     """(eval_cmd, how): how is kept | refined | target | hint."""
     ev = (claim.eval.cmd or "").strip() or "true"
-    if _proof(ev):
+    if _proof(ev) and _observes_failure(claim, ev):
         return ev, "kept"
     refined = refine_eval(ev, fix_k=claim.fix.k, fix_b=claim.fix.b, dep=list(claim.dep or []), eco=claim.eco)
-    if _proof(refined):
+    if _proof(refined) and _observes_failure(claim, refined):
         return refined, "refined"
     target = claim_target(cls=claim.cls or classify(claim.err), err=claim.err, dep=list(claim.dep or []))
     suggested = suggest_eval(target, claim.eco) if target else ""
     if suggested and _proof(suggested):
         return suggested, "target"
     return ev, "hint"
+
+
+def _observes_failure(claim: Claim, refined: str) -> bool:
+    """A refined eval must be about the failure, not merely about a package the claim mentions.
+
+    An exact pin's version check proves the pin, whatever the failure class. A bare
+    import proves presence, which is the failure only for a missing-dependency class;
+    `import torch` says nothing about an out-of-memory remedy.
+    """
+    from .public import _exact_pin
+    from .target import _TARGET_CLASSES
+
+    if _VERSION_CHECK.search(refined):
+        return claim.fix.k == "pin" and _exact_pin(claim.fix.b) is not None
+    if _BARE_PRESENCE.match(refined):
+        return claim.cls in _TARGET_CLASSES
+    return True  # a build, test, or tree recipe: the claim's own author chose what it observes
+
+
+_BARE_PRESENCE = re.compile(
+    r"""^(?:python3?\s+-c\s+["']import\s+[A-Za-z_][\w.]*["']|node\s+-e\s+["']require\(['"][^'"]+['"]\)["']|go\s+list\s+\S+|cargo\s+pkgid\s+\S+)$"""
+)
+_VERSION_CHECK = re.compile(r"importlib\.metadata import version|package\.json['\"]?\)\.version|\.version\s*!==")
 
 
 def _proof(cmd: str) -> bool:

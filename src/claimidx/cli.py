@@ -586,6 +586,24 @@ def cmd_run(ns: argparse.Namespace) -> int:
     return rc
 
 
+def cmd_leaderboard(ns: argparse.Namespace) -> int:
+    """Who the commons holds up: authors whose claims other agents replayed, and the agents replaying them."""
+    from .board import fetch_leaderboard, render_board
+    from .home import HomeError
+
+    own = resolve_owner(ns.own)
+    try:
+        board = fetch_leaderboard(days=ns.days, limit=ns.limit, own=own)
+    except (HomeError, ValueError) as e:
+        print(f"error: commons unreachable: {e}", file=sys.stderr)
+        return 1
+    if ns.fmt == "json":
+        print(json.dumps(board))
+    else:
+        print(render_board(board, own=own))
+    return 0
+
+
 def cmd_prune(ns: argparse.Namespace) -> int:
     """Keep only claims that can graduate: eval upgraded where the claim says how, hints retired."""
     from .prune import prune_store
@@ -1144,6 +1162,18 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
         add("tree-eco-counts", True, json.dumps(by_eco))
         sess = store.session_summary()
         add("session", True, f"id={sess.get('session_id')} asks={sess.get('asks')} must_ask={sess.get('must_ask')}")
+    from .home import commons_api, commons_enabled
+
+    if commons_enabled():
+        try:
+            from .home import _get
+
+            health = json.loads(_get(commons_api() + "/api/health", timeout=8).decode("utf-8"))
+            add("commons", bool(health.get("ok")), f"{commons_api()} claims={health.get('claims')} (shares go here; CLAIMIDX_COMMONS=0 to opt out)")
+        except Exception as e:
+            add("commons", False, f"{commons_api()} unreachable: {str(e)[:120]}; shares queue in the outbox")
+    else:
+        add("commons", True, "off (CLAIMIDX_COMMONS=0): nothing leaves this machine")
     home = ledger_url()
     try:
         from .home import fetch_ledger
@@ -1412,6 +1442,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     vf.add_argument("--cwd", help="working directory for tree-scoped evals (default: isolated scratch)")
     vf.set_defaults(func=cmd_verify, dry_run=True)
+    lb = sub.add_parser("leaderboard", help="The commons leaderboard: claims held by other agents (signed replays only) and who verifies")
+    lb.add_argument("--days", type=int, default=30)
+    lb.add_argument("--limit", type=int, default=25)
+    lb.add_argument("--own")
+    lb.set_defaults(func=cmd_leaderboard)
     pr = sub.add_parser("prune", help="Retire local claims whose eval is only a hint after upgrade; --apply to write")
     pr.add_argument("--apply", action="store_true", help="delete hint rows and upgrade evals in place (default: report only)")
     pr.add_argument("--own")

@@ -29,8 +29,22 @@ def test_upgrade_eval_uses_what_the_claim_already_says():
     assert upgrade_eval(c) == ("cargo pkgid serde", "target")
     c = _claim("RuntimeError: something bespoke", fix_k="config", fix_b="set X=1")
     assert upgrade_eval(c)[1] == "hint" and not worth_keeping(c)
-    c = _claim("RuntimeError: proven", fix_k="patch", fix_b="d", ev='python -c "import json"')
-    assert upgrade_eval(c) == ('python -c "import json"', "kept")
+    c = _claim("RuntimeError: proven", fix_k="patch", fix_b="d", ev="python -m pytest -q")
+    assert upgrade_eval(c) == ("python -m pytest -q", "kept")
+    # A bare import is proof of presence: the failure only when the failure was a missing dependency.
+    oom = _claim("RuntimeError: CUDA out of memory", fix_k="constraint", fix_b="Lower the batch size")
+    oom.dep = ["torch@2.4.0"]
+    assert upgrade_eval(oom)[1] == "hint"
+    attr = _claim("AttributeError: module 'tomli' has no attribute 'load'", fix_k="pin", fix_b="tomli==2.0.1")
+    assert upgrade_eval(attr)[1] == "refined"  # an exact pin's version check is about the pin
+    # The same rule for evals that were already there: a bare import on a non-dependency failure is no proof.
+    kept_wrong = _claim("RuntimeError: CUDA out of memory", fix_k="constraint", fix_b="Lower the batch size", ev='python -c "import torch"')
+    assert upgrade_eval(kept_wrong)[1] == "hint"
+    kept_right = _claim("ModuleNotFoundError: No module named 'torch'", fix_k="constraint", fix_b="torch", ev='python -c "import torch"')
+    kept_right.cls = "module_not_found"
+    assert upgrade_eval(kept_right) == ('python -c "import torch"', "kept")
+    recipe = _claim("RuntimeError: CUDA out of memory", fix_k="patch", fix_b="diff --git a/x b/x", ev="python -m pytest -q")
+    assert upgrade_eval(recipe)[1] == "kept"  # the author's own recipe
     # A discriminating eval the policy refuses to run is no proof either.
     c = _claim("ModuleNotFoundError: No module named 'subprocess'", fix_k="constraint", fix_b="subprocess")
     c.cls = "module_not_found"
@@ -46,7 +60,7 @@ def test_prune_store_retires_hints_and_upgrades_the_rest(tmp_path: Path):
     keep = _claim("ModuleNotFoundError: No module named 'tomli'", fix_b="tomli==2.0.1")
     keep.cls = "module_not_found"
     drop = _claim("RuntimeError: bespoke thing", fix_k="config", fix_b="set X=1")
-    proof = _claim("RuntimeError: proven", fix_k="patch", fix_b="d", ev='python -c "import json"')
+    proof = _claim("RuntimeError: proven", fix_k="patch", fix_b="d", ev="python -m pytest -q")
     for c in (keep, drop, proof):
         store.put(c)
     dry = prune_store(store, apply=False)
@@ -56,14 +70,14 @@ def test_prune_store_retires_hints_and_upgrades_the_rest(tmp_path: Path):
     assert rep.dropped_ids == [drop.id]
     assert store.get(drop.id) is None
     assert store.get(keep.id).eval.cmd != "true" and "tomli" in store.get(keep.id).eval.cmd
-    assert store.get(proof.id).eval.cmd == 'python -c "import json"'
+    assert store.get(proof.id).eval.cmd == "python -m pytest -q"
     kinds = {e.get("kind") for e in store.events(limit=50)}
     assert "prune" in kinds and "prune-upgrade" in kinds
 
 
 def test_store_delete_removes_the_row_and_its_search_entry(tmp_path: Path):
     store = Store(str(tmp_path / "ix.sqlite"))
-    c = _claim("ValueError: gone soon", fix_k="patch", fix_b="d", ev='python -c "import json"')
+    c = _claim("ValueError: gone soon", fix_k="patch", fix_b="d", ev="python -m pytest -q")
     store.put(c)
     assert store.get(c.id) is not None
     assert store.delete(c.id, actor="did:claimidx:t", reason="test") is True

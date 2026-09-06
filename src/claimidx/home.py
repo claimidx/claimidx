@@ -486,20 +486,36 @@ def share_observation(store, claim: Claim, *, held: bool, actor: str, replayed: 
     """
     if not share_enabled() or not replayed:
         return None
-    base = api_url()
-    token = api_token()
-    if not base and commons_enabled() and commons_shared(store, claim.id):
-        base, token = commons_api(), ""  # the commons counts replays too; that is how a claim earns its standing
-    if not base:
-        return None
-    verb = "confirm" if held else "fail"
     from urllib.parse import quote
 
-    url = f"{base}/api/claims/{quote(claim.id)}/{verb}?own={quote(actor)}" + ("&replay=true" if held else "")
-    try:
-        result = _post(url, {}, token=token)
-    except HomeError as e:
-        return {"status": "error", "id": claim.id, "error": str(e)}
-    store.log("home-" + verb, actor, claim.id, {"replayed": True})
-    row = result.get("claim", result) if isinstance(result, dict) else {}
-    return {"status": verb, "id": claim.id, "home": {k: row.get(k) for k in ("nc", "nf", "nr", "st") if isinstance(row, dict) and k in row}}
+    verb = "confirm" if held else "fail"
+    out: dict[str, Any] = {"status": verb, "id": claim.id}
+    base = api_url()
+    if base:
+        url = f"{base}/api/claims/{quote(claim.id)}/{verb}?own={quote(actor)}" + ("&replay=true" if held else "")
+        try:
+            result = _post(url, {}, token=api_token())
+        except HomeError as e:
+            out["home"] = {"status": "error", "error": str(e)[:200]}
+        else:
+            store.log("home-" + verb, actor, claim.id, {"replayed": True})
+            row = result.get("claim", result) if isinstance(result, dict) else {}
+            out["home"] = {k: row.get(k) for k in ("nc", "nf", "nr", "st") if isinstance(row, dict) and k in row}
+    if commons_enabled() and (commons_shared(store, claim.id) or getattr(claim, "src", "local") in ("home", "seed")):
+        # A claim this machine pushed, one it pulled from the commons, or a bundled seed (the commons carries them
+        # too): either way the commons wants the replay.
+        # The commons counts a replay only when it is signed: that is how a claim earns standing there.
+        from .board import signed_observation
+
+        try:
+            record = signed_observation(claim.id, held=held, replayed=True, own=actor)
+            result = _post(f"{commons_api()}/api/claims/{quote(claim.id)}/{verb}", record)
+        except (HomeError, OSError, ValueError) as e:
+            out["commons"] = {"status": "error", "error": str(e)[:200]}
+        else:
+            store.log("commons-" + ("hold" if held else "fail"), actor, claim.id, {"replayed": True})
+            row = result.get("claim", result) if isinstance(result, dict) else {}
+            out["commons"] = {k: row.get(k) for k in ("nc", "nf", "nr", "st") if isinstance(row, dict) and k in row}
+    if "home" not in out and "commons" not in out:
+        return None
+    return out

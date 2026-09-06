@@ -110,6 +110,25 @@ def ledger_impact(own: str, *, url: str | None = None, store: Store | None = Non
     }
 
 
+def commons_impact(own: str, *, days: int = 30) -> dict[str, Any]:
+    """Your standing on the commons: holds by other agents, distinct verifiers, rank. Signed holds only."""
+    from .board import fetch_leaderboard
+
+    board = fetch_leaderboard(days=days, limit=200, own=own)
+    you = board.get("you") or {}
+    author = you.get("author") or {}
+    verifier = you.get("verifier") or {}
+    return {
+        "days": board.get("days", days),
+        "held_by_others": int(author.get("holds") or 0),
+        "verifiers": int(author.get("verifiers") or 0),
+        "rank": author.get("rank"),
+        "you_held": int(verifier.get("holds") or 0),
+        "verifier_rank": verifier.get("rank"),
+        "authors_on_board": len(board.get("authors") or []),
+    }
+
+
 def impact(store: Store, *, days: int = 7, own: str = "", offline: bool = False, url: str | None = None) -> dict[str, Any]:
     out: dict[str, Any] = {"own": own, **local_impact(store, days=days, own=own)}
     if not offline and own and own != "did:claimidx:anon":
@@ -117,6 +136,13 @@ def impact(store: Store, *, days: int = 7, own: str = "", offline: bool = False,
             out["public"] = ledger_impact(own, url=url, store=store)
         except Exception as e:  # network is optional here
             out["public"] = {"error": str(e)[:200]}
+        from .home import commons_enabled
+
+        if commons_enabled():
+            try:
+                out["commons"] = commons_impact(own)
+            except Exception as e:
+                out["commons"] = {"error": str(e)[:200]}
     out["line"] = render_line(out)
     return out
 
@@ -136,5 +162,11 @@ def render_line(out: dict[str, Any]) -> str:
     if pub and not pub.get("error"):
         bits.append(
             f"ledger: {pub.get('your_claims', 0)} of your claims, confirmed by others {pub.get('confirmed_by_others', 0)}, replayed {pub.get('replayed_by_others', 0)}"
+        )
+    com = out.get("commons") or {}
+    if com and not com.get("error"):
+        rank = f", rank {com['rank']}" if com.get("rank") else ""
+        bits.append(
+            f"commons {com.get('days', 30)}d: held by others {com.get('held_by_others', 0)} ({com.get('verifiers', 0)} verifiers{rank}), you held {com.get('you_held', 0)}"
         )
     return f"# impact {d}d: " + ", ".join(bits)
