@@ -75,6 +75,15 @@ _CWD = {
     "type": "string",
     "description": "Working directory for tree-scoped evals (CLI --cwd). Pin and harness venvs stay in an isolated scratch.",
 }
+_TRUST_EVAL = {
+    "type": "boolean",
+    "default": False,
+    "description": (
+        "Run the eval even though the claim was not published on this machine. Pulled and seed claims only replay the portable "
+        "proof grammar (imports, version checks, build/test recipes on your own tree); anything else skips with eval-untrusted. "
+        "Read eval.cmd before setting this: it is running someone else's code."
+    ),
+}
 _URL = {
     "type": "string",
     "description": "Ledger to read: HTTP(S) URL, file: URL, or local jsonl path. Defaults to CLAIMIDX_HOME (the public GitHub ledger).",
@@ -378,7 +387,9 @@ TOOLS: list[dict[str, Any]] = [
             "confirm. Without replay it is a metadata-only confirm. If the replay misses, the claim is failed instead (nf += 1). "
             "Auto-shares like claimidx_ingest when a live home is configured. trust_domain and sensor_plane are recorded as declared "
             "provenance, not attested. Use after a hit from claimidx_ask worked for you; use claimidx_verify to replay many claims. "
-            "Returns id, st, held, and nc, nf, own when recorded; replay adds replay detail, or recorded=false with reason."
+            "Evals from claims not published on this machine only run when they fit the portable proof grammar; otherwise "
+            "recorded=false with reason eval-untrusted and suggest, and trust_eval=true runs them deliberately. "
+            "Returns id, st, held, and nc, nf, own when recorded; replay adds replay detail, or recorded=false with reason and suggest."
         ),
         "inputSchema": {
             "type": "object",
@@ -391,6 +402,7 @@ TOOLS: list[dict[str, Any]] = [
                     "description": "Run the claim's eval in the sandbox before recording. Required for claims with src=home. Default false.",
                 },
                 "cwd": _CWD,
+                "trust_eval": _TRUST_EVAL,
                 "trust_domain": {
                     "type": "string",
                     "description": "Declared trust domain of this observation (e.g. ci, laptop). Provenance only; not attested.",
@@ -440,6 +452,7 @@ TOOLS: list[dict[str, Any]] = [
         "title": "Batch replay",
         "description": (
             "Batch replay of local claims. Default dry_run=true only lists the claims it would replay and runs no evals, venvs, or pip. "
+            "Claims not published here replay only the portable proof grammar and never install their pins unless trust_eval=true. "
             "dry_run=false (CLI --apply) runs each eval: confirm when it holds, fail only on a proven miss, and skip hints, missing trees, "
             "and missing interpreters. Use for periodic maintenance or after a runtime upgrade; use claimidx_confirm for one claim. "
             "Returns n, dry_run, counts {confirm, fail, skip}, results [{action, id, st, reason}]."
@@ -461,6 +474,7 @@ TOOLS: list[dict[str, Any]] = [
                 "runnable": {"type": "boolean", "description": "Only self-contained python -c evals that need no tree or install."},
                 "harness": {"type": "boolean", "description": "Two-state pin replay: confirm only if the unpinned eval misses and the pinned eval holds."},
                 "cwd": _CWD,
+                "trust_eval": _TRUST_EVAL,
                 "own": _OWN,
             },
         },
@@ -931,10 +945,12 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         if getattr(current, "src", "local") == "home" and not args.get("replay"):
             raise ValueError("quarantine: home claims require confirm with replay=true")
         if args.get("replay"):
+            from .evaltrust import eval_trust
             from .gate import graduation_gate
             from .sandbox import replay
 
-            result = replay(current.eval.cmd, current.eval.expect, cwd=args.get("cwd"))
+            trust = eval_trust(store, current, override=bool(args.get("trust_eval")))
+            result = replay(current.eval.cmd, current.eval.expect, cwd=args.get("cwd"), trust=trust)
             eval_detail = {
                 "ms": int(result.ms or 0),
                 "held": bool(result.held),
@@ -1016,6 +1032,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             runnable=bool(args.get("runnable")),
             harness_mode=bool(args.get("harness")),
             cwd=args.get("cwd"),
+            trust_eval=bool(args.get("trust_eval")),
         )
     if name == "claimidx_reject":
         c = store.reject(args["id"], resolve_owner(args.get("own")))

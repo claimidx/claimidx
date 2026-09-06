@@ -26,7 +26,9 @@ class Fix(BaseModel):
     @classmethod
     def no_secrets(cls, v: str) -> str:
         from .policy import reject_payload
+        from .security import strip_control
 
+        v = strip_control(v)
         reject_payload(v, "fix")
         return v
 
@@ -39,7 +41,9 @@ class EvalSpec(BaseModel):
     @classmethod
     def eval_policy(cls, v: str) -> str:
         from .policy import reject_eval
+        from .security import strip_control
 
+        v = strip_control(v)
         reject_eval(v)
         return v
 
@@ -88,8 +92,9 @@ class Claim(BaseModel):
     @field_validator("err", "note", "model", "own", "rt", "cls")
     @classmethod
     def strip_secrets(cls, v: str) -> str:
-        from .security import reject_secrets
+        from .security import reject_secrets, strip_control
 
+        v = strip_control(v)
         reject_secrets(v)
         return v
 

@@ -441,11 +441,30 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
     return {"action": "skip", "reason": result.reason, "id": c.id, "replay": result.as_dict()}
 
 
-def decide(c: Claim, *, scratch: Path) -> dict:
+def decide(c: Claim, *, scratch: Path, trust: str = "local") -> dict:
     cmd = c.eval.cmd
     ok, reason = eval_allowed(cmd)
     if not ok:
         return {"action": "skip", "reason": reason, "id": c.id}
+    if trust != "local":
+        from .evaltrust import untrusted_reason
+
+        why = untrusted_reason(cmd, str(scratch))
+        if why:
+            return {
+                "action": "skip",
+                "reason": f"eval-untrusted: {why}",
+                "id": c.id,
+                "suggest": {"hint": "verify --trust-eval to run evals from claims not published here"},
+            }
+        if c.fix.k == "pin":
+            # Two-state pin replay installs the claim's package into a venv and imports it: that is running its code.
+            return {
+                "action": "skip",
+                "reason": "eval-untrusted: pin install from a claim not published here",
+                "id": c.id,
+                "suggest": {"hint": "verify --trust-eval to install and replay pins from pulled claims"},
+            }
     head = _head(cmd)
     if head in {"true", "false"}:
         return {"action": "skip", "reason": "builtin-eval", "id": c.id}
@@ -525,7 +544,10 @@ def run(
     runnable: bool = False,
     harness_mode: bool = False,
     cwd: str | os.PathLike[str] | None = None,
+    trust_eval: bool = False,
 ) -> dict:
+    from .evaltrust import eval_trust
+
     actor = resolve_owner(own)
     seen_st = load_seen()
     day = _today()
@@ -557,7 +579,14 @@ def run(
             work.mkdir()
             # Pin/harness venv stays in the isolated scratch. Tree recipes replay at --cwd.
             replay_root = tree if tree and not harness_mode else work
-            decision = harness(c, work) if harness_mode else decide(c, scratch=replay_root)
+            trust = eval_trust(store, c, override=trust_eval)
+            if trust_eval:
+                print(f"# --trust-eval: running eval from {c.own} ({c.src}): {c.eval.cmd}", file=sys.stderr)
+            decision: dict
+            if harness_mode and trust != "local":
+                decision = {"action": "skip", "reason": "eval-untrusted: harness installs pins from a claim not published here", "id": c.id}
+            else:
+                decision = harness(c, work) if harness_mode else decide(c, scratch=replay_root, trust=trust)
             action = decision["action"]
             if not dry_run:
                 if action == "confirm":

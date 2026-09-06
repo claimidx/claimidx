@@ -83,7 +83,7 @@ class ReplayResult:
     def is_hint(self) -> bool:
         """true/false builtins, version tautologies, and unmet trees cannot mint nc."""
         r = self.reason or ""
-        return r == "builtin" or r.startswith("eval-precondition")
+        return r == "builtin" or r.startswith("eval-precondition") or r.startswith("eval-untrusted")
 
 
 _TREE_MARKERS = {
@@ -214,12 +214,19 @@ def _precondition(head: str, cwd: str | None, cmd: str = "") -> str | None:
     return f"eval-precondition: no {'/'.join(markers)} in cwd"
 
 
-def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = None) -> ReplayResult:
+def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = None, *, trust: str = "local") -> ReplayResult:
+    """Run eval.cmd. `trust="untrusted"` (a pulled or seed claim) only runs the portable proof grammar."""
     if not (cmd or "").strip():
         return ReplayResult(True, False, None, expect, False, "builtin")
     ok, reason = eval_allowed(cmd)
     if not ok:
         return ReplayResult(False, False, None, expect, False, reason)
+    if trust != "local":
+        from .evaltrust import untrusted_reason
+
+        why = untrusted_reason(cmd, cwd)
+        if why:
+            return ReplayResult(True, False, None, expect, False, f"eval-untrusted: {why}")
     try:
         extra_env, parts = split_eval(cmd)
     except ValueError as e:

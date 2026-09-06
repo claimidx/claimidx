@@ -78,7 +78,7 @@
     {
       "name": "claimidx_confirm",
       "title": "Confirm a claim held",
-      "description": "Record that a claim's remedy held: nc += 1 and the claim may become confirmed. Set replay=true to run its eval first in the allowlisted sandbox; claims pulled from a home (src=home) require replay=true and graduate to local on first confirm. Without replay it is a metadata-only confirm. If the replay misses, the claim is failed instead (nf += 1). Auto-shares like claimidx_ingest when a live home is configured. trust_domain and sensor_plane are recorded as declared provenance, not attested. Use after a hit from claimidx_ask worked for you; use claimidx_verify to replay many claims. Returns id, st, held, and nc, nf, own when recorded; replay adds replay detail, or recorded=false with reason."
+      "description": "Record that a claim's remedy held: nc += 1 and the claim may become confirmed. Set replay=true to run its eval first in the allowlisted sandbox; claims pulled from a home (src=home) require replay=true and graduate to local on first confirm. Without replay it is a metadata-only confirm. If the replay misses, the claim is failed instead (nf += 1). Auto-shares like claimidx_ingest when a live home is configured. trust_domain and sensor_plane are recorded as declared provenance, not attested. Use after a hit from claimidx_ask worked for you; use claimidx_verify to replay many claims. Evals from claims not published on this machine only run when they fit the portable proof grammar; otherwise recorded=false with reason eval-untrusted and suggest, and trust_eval=true runs them deliberately. Returns id, st, held, and nc, nf, own when recorded; replay adds replay detail, or recorded=false with reason and suggest."
     },
     {
       "name": "claimidx_fail",
@@ -93,7 +93,7 @@
     {
       "name": "claimidx_verify",
       "title": "Batch replay",
-      "description": "Batch replay of local claims. Default dry_run=true only lists the claims it would replay and runs no evals, venvs, or pip. dry_run=false (CLI --apply) runs each eval: confirm when it holds, fail only on a proven miss, and skip hints, missing trees, and missing interpreters. Use for periodic maintenance or after a runtime upgrade; use claimidx_confirm for one claim. Returns n, dry_run, counts {confirm, fail, skip}, results [{action, id, st, reason}]."
+      "description": "Batch replay of local claims. Default dry_run=true only lists the claims it would replay and runs no evals, venvs, or pip. Claims not published here replay only the portable proof grammar and never install their pins unless trust_eval=true. dry_run=false (CLI --apply) runs each eval: confirm when it holds, fail only on a proven miss, and skip hints, missing trees, and missing interpreters. Use for periodic maintenance or after a runtime upgrade; use claimidx_confirm for one claim. Returns n, dry_run, counts {confirm, fail, skip}, results [{action, id, st, reason}]."
     },
     {
       "name": "claimidx_share",

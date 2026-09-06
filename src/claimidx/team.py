@@ -60,16 +60,10 @@ def resolve_owner(explicit: str | None = None) -> str:
 
 
 def default_agent_name() -> str:
-    """`<user>-<host>`: unique enough per machine, readable in a ledger, never a secret."""
-    import getpass
-    import socket
+    """`agent-<6 hex>`: unique enough, and carries no username or hostname into a public ledger."""
+    import secrets
 
-    try:
-        user = getpass.getuser()
-    except Exception:
-        user = "agent"
-    host = (socket.gethostname() or "").split(".")[0]
-    return agent_slug(f"{user}-{host}" if host else user)
+    return f"agent-{secrets.token_hex(3)}"
 
 
 def auto_identity(*, quiet: bool = False) -> dict | None:

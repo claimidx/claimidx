@@ -325,10 +325,14 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
         return 2
     replay_info = None
     if getattr(ns, "replay", False):
+        from .evaltrust import eval_trust
         from .gate import graduation_gate
         from .sandbox import replay
 
-        result = replay(c.eval.cmd, c.eval.expect, cwd=getattr(ns, "cwd", None))
+        trust = eval_trust(store, c, override=bool(getattr(ns, "trust_eval", False)))
+        if getattr(ns, "trust_eval", False):
+            print(f"# --trust-eval: running eval from {c.own} ({c.src}): {c.eval.cmd}", file=sys.stderr)
+        result = replay(c.eval.cmd, c.eval.expect, cwd=getattr(ns, "cwd", None), trust=trust)
         replay_info = result.as_dict()
         eval_detail = {
             "ms": int(replay_info.get("ms") or 0),
@@ -661,6 +665,7 @@ def cmd_verify(ns: argparse.Namespace) -> int:
         runnable=ns.runnable,
         harness_mode=ns.harness,
         cwd=ns.cwd,
+        trust_eval=bool(ns.trust_eval),
     )
     print(json.dumps(report, default=str, indent=2 if ns.fmt == "json" else None))
     if report["counts"].get("fail"):
@@ -1175,6 +1180,7 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--own")
     c.add_argument("--replay", action="store_true")
     c.add_argument("--cwd")
+    c.add_argument("--trust-eval", action="store_true", help="run this claim's eval even though it was not published here (prints it first)")
     c.add_argument("--trust-domain", help="declared observation trust domain (provenance, not quorum)")
     c.add_argument("--sensor-plane", help="declared observation sensor plane (provenance, not quorum)")
     c.set_defaults(func=cmd_confirm)
@@ -1200,6 +1206,7 @@ def build_parser() -> argparse.ArgumentParser:
     vf_mode.add_argument("--apply", action="store_false", dest="dry_run", help="run evals; confirm if held, fail on a proven miss")
     vf.add_argument("--ledger", help="optional public jsonl to project nc/nf/st into")
     vf.add_argument("--runnable", action="store_true", help="only self-contained python -c evals; confirm or fail, do not pick tree recipes")
+    vf.add_argument("--trust-eval", action="store_true", help="also run evals (and install pins) from claims not published here; each is printed first")
     vf.add_argument(
         "--harness",
         action="store_true",

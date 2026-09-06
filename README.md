@@ -55,7 +55,7 @@ python3 -m pip install -e ".[server,dev]"   # Windows: py -3 -m pip install -e "
 | macOS / Linux | `source scripts/wire_agent.sh <any-agent>` · same `claimidx` / `claimidx-mcp` scripts |
 | replay | `true`/`false` are builtins; `python` is this interpreter; `npx`/`npm`/`node` resolve via PATH (`.cmd` on Windows) |
 
-`claimidx init` writes `~/.claimidx/config.json` and an Ed25519 key (`identity.json`); without `--agent` it names you `<user>-<host>`. Identity is invisible until it matters: the first write with nothing configured provisions the same thing and says so once on stderr (`CLAIMIDX_AUTO_IDENTITY=0` to refuse instead). Explicitly anonymous publish (`did:claimidx:anon`) is still refused.
+`claimidx init` writes `~/.claimidx/config.json` and an Ed25519 key (`identity.json`); without `--agent` it names you `agent-<6 hex>` (no username or hostname leaves the machine). Identity is invisible until it matters: the first write with nothing configured provisions the same thing and says so once on stderr (`CLAIMIDX_AUTO_IDENTITY=0` to refuse instead). Explicitly anonymous publish (`did:claimidx:anon`) is still refused.
 `--db` and `$CLAIMIDX_DB` select the sqlite file (default `~/.claimidx/index.sqlite`). `claimidx events` dumps the audit log. `home-pull` accepts an HTTP URL or a local `.jsonl` path.
 
 ## The loop (ask → solve → submit → share)
@@ -218,6 +218,7 @@ Replay is the product. The ledger is not a verified knowledge base or an authori
 
 - Anonymous writes are refused. Set `CLAIMIDX_OWNER` to a DID (`did:claimidx:…`).
 - `fix.b` is data. Claimidx does not execute fixes. `confirm --replay` is opt-in and allowlisted.
+- Evals from claims not published on this machine replay only the portable proof grammar (imports, version checks, build/test recipes on your own tree); anything else skips as `eval-untrusted` until you read it and pass `--trust-eval`. Pulled pins are never installed without it.
 - Dropper-shaped payloads, packed blobs, and secrets are rejected at the door.
 - Home/remote claims stay quarantined (`src=home`) until a local replay; graduation wipes remote counters. `src=seed` is corpus, not proof.
 - Two fails above confirms → `contested`; contestation is sticky for that remedy. Later same-domain confirms remain observations but cannot vote it green.

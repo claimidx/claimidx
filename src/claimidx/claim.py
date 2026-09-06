@@ -66,16 +66,39 @@ def infer_fix_kind(fix_b: str) -> str:
     return "patch"
 
 
+_DIFF_EXCLUDE = [
+    ":(exclude,glob)**/.env*",
+    ":(exclude,glob)**/*.pem",
+    ":(exclude,glob)**/*.key",
+    ":(exclude,glob)**/*secret*",
+    ":(exclude,glob)**/*credential*",
+    ":(exclude,glob)**/*.p12",
+    ":(exclude,glob)**/*.pfx",
+]
+
+
 def _git_diff(cwd: str) -> str:
-    """Working-tree diff, stat first, truncated to fit fix.b. Empty when no repo or no changes."""
+    """Working-tree diff, stat first, truncated to fit fix.b. Empty when no repo or no changes.
+
+    Secret-shaped files are excluded by path, and if the remaining hunks still
+    trip the secret scan only the stat survives: a claim is public by intent.
+    """
+    from .security import SecretError, reject_secrets, strip_control
+
     try:
-        stat = subprocess.run(["git", "diff", "--stat"], cwd=cwd, capture_output=True, text=True, timeout=10, check=False)
+        stat = subprocess.run(["git", "diff", "--stat", "--", ".", *_DIFF_EXCLUDE], cwd=cwd, capture_output=True, text=True, timeout=10, check=False)
         if stat.returncode != 0 or not (stat.stdout or "").strip():
             return ""
-        full = subprocess.run(["git", "diff", "--no-color"], cwd=cwd, capture_output=True, text=True, timeout=10, check=False)
+        full = subprocess.run(["git", "diff", "--no-color", "--", ".", *_DIFF_EXCLUDE], cwd=cwd, capture_output=True, text=True, timeout=10, check=False)
     except (OSError, subprocess.TimeoutExpired):
         return ""
-    body = (stat.stdout or "").strip() + "\n" + (full.stdout or "")
+    stat_text = strip_control((stat.stdout or "").strip())
+    hunks = strip_control(full.stdout or "")
+    try:
+        reject_secrets(hunks)
+    except SecretError:
+        return stat_text + "\n(diff hunks withheld: secret-shaped token; describe the change with --fix)"
+    body = stat_text + "\n" + hunks
     if len(body) > _DIFF_LIMIT:
         body = body[:_DIFF_LIMIT].rstrip() + "\n... (truncated)"
     return body

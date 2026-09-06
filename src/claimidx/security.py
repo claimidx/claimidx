@@ -30,6 +30,22 @@ class SecretError(ValueError):
     pass
 
 
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-Z\\-_]|\x9b[0-9;?]*[ -/]*[@-~]")
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]")
+
+
+def strip_control(text: str | None) -> str:
+    """Drop ANSI escapes, C0 controls, and bidi/zero-width characters.
+
+    Claim text is shown to agents and humans in terminals and hook context;
+    an escape sequence or a right-to-left override can hide or rewrite what
+    they see. Newlines and tabs survive; everything else invisible does not.
+    """
+    if not text:
+        return text or ""
+    return _CONTROL.sub("", _ANSI.sub("", text))
+
+
 def reject_secrets(text: str | None) -> None:
     if not text:
         return

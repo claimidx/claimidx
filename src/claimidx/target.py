@@ -8,7 +8,6 @@ and the gate does not judge — no heuristics for `other`.
 
 from __future__ import annotations
 
-import json
 import re
 
 _NO_MODULE = re.compile(
@@ -84,7 +83,7 @@ def suggest_eval(target: str, eco: str = "") -> str:
         return ""
     eco = (eco or "").lower()
     if eco in {"npm", "node"} or target.startswith("@") or "/" in target:
-        return 'node -e "require(' + json.dumps(target) + ')"'
+        return "node -e \"require('" + target.replace("'", "") + "')\""
     mod = target.split("/")[0].replace("-", "_")
     if re.match(r"^[A-Za-z_][A-Za-z0-9_.]*$", mod):
         return f'python -c "import {mod}"'

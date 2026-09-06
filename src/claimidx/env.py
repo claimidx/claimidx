@@ -113,9 +113,16 @@ def last_failure_path() -> Path:
 
 
 def remember_failure(err: str, *, command: str = "", cwd: str = "", eco: str = "", rt: str = "", event: str = "", fp: str = "") -> dict[str, Any]:
+    from .security import SecretError, reject_secrets, strip_control
+
+    command = strip_control(command or "")
+    try:
+        reject_secrets(command)
+    except SecretError:
+        command = ""  # a curl -H "Authorization: Bearer …" must not land on disk
     rec = {
-        "err": (err or "")[:280],
-        "command": (command or "")[:400],
+        "err": strip_control(err or "")[:280],
+        "command": command[:400],
         "cwd": cwd or os.getcwd(),
         "eco": eco or "",
         "rt": rt or "",

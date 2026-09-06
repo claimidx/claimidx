@@ -79,7 +79,13 @@ def hint_refusal(claim: Claim, result: ReplayResult, *, cwd: str | None = None) 
     reason = result.reason or "eval is a hint"
     out: dict = {"reason": reason}
     suggest: dict[str, str] = {}
-    if reason.startswith("eval-precondition"):
+    if reason.startswith("eval-untrusted"):
+        suggest["hint"] = (
+            "this claim was not published here; its eval is outside the portable proof grammar (imports, version checks, "
+            "build/test recipes on your own tree). Read eval.cmd, then confirm --replay --trust-eval to run it deliberately"
+        )
+        suggest["eval"] = claim.eval.cmd
+    elif reason.startswith("eval-precondition"):
         want = reason.split("no ", 1)[-1].split(" in cwd")[0] if "no " in reason else ""
         suggest["hint"] = f"run confirm --replay --cwd <tree with {want or 'the project markers'}>"
         if cwd:

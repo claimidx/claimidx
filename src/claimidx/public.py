@@ -311,10 +311,10 @@ def refine_eval(
     if exact:
         name, ver = exact
         if eco in {"npm", "node"} or name.startswith("@"):
-            import json as _json
-
-            req = _json.dumps(name + "/package.json")
-            return f'node -e "if(require({req}).version!=={_json.dumps(ver)}) process.exit(1)"'
+            # Single quotes inside: the recipe is shlex-split before exec, and inner
+            # double quotes would be eaten (node then sees a bare path and a numeric literal).
+            req = "'" + (name + "/package.json").replace("'", "") + "'"
+            return f"node -e \"if(require({req}).version!=='{ver.replace(chr(39), '')}') process.exit(1)\""
         if re.match(r"^[A-Za-z0-9._-]+$", name):
             return f'python -c "from importlib.metadata import version; raise SystemExit(version({name!r})!={ver!r})"'
     rng = _range_pin(pin_src) if pin_src else None
@@ -338,9 +338,7 @@ def refine_eval(
     if not token:
         return raw
     if eco in {"npm", "node"} or token.startswith("@"):
-        import json as _json
-
-        return 'node -e "require(' + _json.dumps(token) + ')"'
+        return "node -e \"require('" + token.replace("'", "") + "')\""
     mod = token.replace("-", "_")
     if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", mod):
         return f'python -c "import {mod}"'

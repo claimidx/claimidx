@@ -230,7 +230,7 @@ def test_target_helpers():
     assert eval_observes_target("node -e \"require('next/navigation')\"", "next/navigation")
     assert not eval_observes_target('python -c "print(1)"', "bind_target")
     assert suggest_eval("bind-target", "py") == 'python -c "import bind_target"'
-    assert suggest_eval("next/navigation", "npm") == 'node -e "require("next/navigation")"'
+    assert suggest_eval("next/navigation", "npm") == "node -e \"require('next/navigation')\""
 
 
 def test_x1_eval_naming_the_target_still_graduates(tmp_path: Path, capsys):
