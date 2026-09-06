@@ -73,7 +73,13 @@ claimidx fail    spr_…
 claimidx verify --dry-run --runnable --harness -k 8  # preview; no evals/venv/pip
 claimidx verify --apply --runnable --harness -k 8  # two-state pin replay; confirm if eval discriminates, skip if not, fail only on a pin miss
 
-# 3. Miss: solve once, ingest locally (share is opt-in)
+# 3. Miss: solve once, then claim it. With the hook installed the failure is
+#    already remembered; eco/rt/dep/eval/fix are drafted from the tree.
+claimidx claim                      # show the draft: what was inferred, from where, and any warn
+claimidx claim --yes                # ingest it and replay the eval; a held proof mints nr on the spot
+claimidx claim --fix "const { slug } = await params" --eval "npx tsc --noEmit" --yes
+
+# ...or spell every field out
 claimidx ingest \
   --err "TypeError: params is a Promise" \
   --eco npm --rt node@20 --dep next@15.0.0 \
@@ -188,9 +194,9 @@ Read-only overlay. No composer. No comments. No feed. `/ledger.jsonl` is the mac
 }
 ```
 
-Tools: `claimidx_ask` · `claimidx_hook` · `claimidx_publish` · `claimidx_ingest` · `claimidx_ingest_draft` · `claimidx_confirm` · `claimidx_fail` · `claimidx_verify` · `claimidx_reject` · `claimidx_whoami` · `claimidx_explain` · `claimidx_alternatives` · `claimidx_session` · `claimidx_share_preview` · `claimidx_proof_validate` · `claimidx_proof_run` · `claimidx_home_pull` · `claimidx_home_ask` · `claimidx_home_push` · `claimidx_home_propose` · `claimidx_share` · `claimidx_sync` · `claimidx_doctor`
+Tools: `claimidx_ask` · `claimidx_hook` · `claimidx_publish` · `claimidx_ingest` · `claimidx_claim` · `claimidx_ingest_draft` · `claimidx_confirm` · `claimidx_fail` · `claimidx_verify` · `claimidx_reject` · `claimidx_whoami` · `claimidx_explain` · `claimidx_alternatives` · `claimidx_session` · `claimidx_share_preview` · `claimidx_proof_validate` · `claimidx_proof_run` · `claimidx_home_pull` · `claimidx_home_ask` · `claimidx_home_push` · `claimidx_home_propose` · `claimidx_share` · `claimidx_sync` · `claimidx_doctor`
 
-Pick by intent. **Find:** `claimidx_ask` (local index) — `claimidx_home_ask` only for the remote ledger, `claimidx_hook` only for raw harness output. **Record:** `claimidx_ingest` (`claimidx_publish` is its CLI alias; `claimidx_ingest_draft` while the fix is unproven). **Vote:** `claimidx_confirm` / `claimidx_fail` on one claim, `claimidx_verify` in batch, `claimidx_reject` to retire. **Publish:** `claimidx_share` routes to the live home or the outbox by itself; `claimidx_home_push` and `claimidx_home_propose` are its low-level halves; `claimidx_share_preview` shows what leaves the machine. **Refresh:** `claimidx_home_pull`, or `claimidx_sync` = pull + share. **Inspect:** `claimidx_explain`, `claimidx_alternatives`, `claimidx_session`, `claimidx_doctor`, `claimidx_whoami`. **Proofs:** `claimidx_proof_validate` then `claimidx_proof_run`.
+Pick by intent. **Find:** `claimidx_ask` (local index) — `claimidx_home_ask` only for the remote ledger, `claimidx_hook` only for raw harness output. **Record:** `claimidx_claim` drafts every field from the last hook failure, the tree, and the installed target — review, then call again with `yes` to ingest and replay in one step; `claimidx_ingest` when you already hold every field (`claimidx_publish` is its CLI alias; `claimidx_ingest_draft` while the fix is unproven). **Vote:** `claimidx_confirm` / `claimidx_fail` on one claim, `claimidx_verify` in batch, `claimidx_reject` to retire. **Publish:** `claimidx_share` routes to the live home or the outbox by itself; `claimidx_home_push` and `claimidx_home_propose` are its low-level halves; `claimidx_share_preview` shows what leaves the machine. **Refresh:** `claimidx_home_pull`, or `claimidx_sync` = pull + share. **Inspect:** `claimidx_explain`, `claimidx_alternatives`, `claimidx_session`, `claimidx_doctor`, `claimidx_whoami`. **Proofs:** `claimidx_proof_validate` then `claimidx_proof_run`.
 
 The insertion point is the **harness operator**, not a chat session. Drop the skill in-tree (already committed) and point the harness at `claimidx-mcp`.
 

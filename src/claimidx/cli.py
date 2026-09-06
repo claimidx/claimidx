@@ -67,6 +67,12 @@ def encode_miss(out: dict) -> str:
 def _ask_hits(store: Store, ns: argparse.Namespace, err: str):
     cls = getattr(ns, "cls", None) or classify(err)
     eco, rt, dep = ns.eco or "", ns.rt or "", list(ns.dep or [])
+    if not eco or not rt:
+        from .env import infer_env
+
+        guess = infer_env(getattr(ns, "cwd", None), err=err)
+        eco = eco or guess["eco"]
+        rt = rt or (guess["rt"] if guess["eco"] == (eco or guess["eco"]) else "")
     q: dict[str, Any] = {"err": err, "cls": cls, "eco": eco, "rt": rt, "dep": dep}
     q["fp"] = fingerprint(err=err, cls=cls, eco=eco, rt=rt, dep=dep)
     from .query import retrieve
@@ -137,6 +143,11 @@ def cmd_hook(ns: argparse.Namespace) -> int:
         return 0
     store = _store(ns)
     q, hits, candidates = _ask_hits(store, ns, err)
+    from .env import remember_failure
+    from .hook import extract_hook_context
+
+    ctx = extract_hook_context(raw)
+    remember_failure(err, command=ctx.get("command", ""), cwd=ctx.get("cwd", ""), eco=q["eco"], rt=q["rt"], event=event or "", fp=q["fp"])
     if not hits:
         from .query import miss_enrichment
 
@@ -403,6 +414,45 @@ def cmd_alternatives(ns: argparse.Namespace) -> int:
     store = _store(ns)
     print(json.dumps(store.alternatives(ns.target), indent=2, default=str))
     return 0
+
+
+def cmd_claim(ns: argparse.Namespace) -> int:
+    """Draft a claim from the last failure + the tree; publish on --yes."""
+    from .claim import draft_claim, publish_draft, render_draft
+
+    draft = draft_claim(
+        err=ns.err or "",
+        fix=ns.fix or "",
+        fix_k=ns.fix_k or "",
+        eval_cmd=ns.eval or "",
+        eco=ns.eco or "",
+        rt=ns.rt or "",
+        dep=list(ns.dep or []),
+        cwd=ns.cwd or "",
+        note=ns.note or "",
+        use_diff=not ns.no_diff,
+    )
+    if not draft.get("ok"):
+        print(json.dumps(draft) if ns.fmt == "json" else f"error: {draft.get('error')}", file=sys.stderr)
+        return 2
+    if not ns.yes:
+        print(json.dumps(draft, default=str) if ns.fmt == "json" else render_draft(draft))
+        return 0
+    out = publish_draft(draft, db=_db_path(ns), own=resolve_owner(ns.own), replay=not ns.no_replay)
+    if ns.fmt == "json":
+        print(json.dumps(out, default=str))
+    else:
+        if not out.get("ok"):
+            print(f"error: {out.get('error')}", file=sys.stderr)
+        elif out.get("exists"):
+            print(f"exists {out['id']} st={out.get('st')}")
+        else:
+            rp = out.get("replay") or {}
+            tail = f" nr={rp.get('nr')}" if rp.get("recorded") else (f" not recorded: {rp.get('reason')}" if rp else "")
+            print(f"{out['id']} {out.get('fp', '')[:16]}{tail}")
+            if rp.get("suggest", {}).get("eval"):
+                print(f"suggest eval: {rp['suggest']['eval']}", file=sys.stderr)
+    return 0 if out.get("ok") else 2
 
 
 def cmd_ingest_draft(ns: argparse.Namespace) -> int:
@@ -1042,6 +1092,21 @@ def build_parser() -> argparse.ArgumentParser:
     hk.add_argument("-k", type=int, default=5)
     hk.add_argument("--install", action="store_true", help="Write Claude Code PostToolUseFailure into settings.json")
     hk.set_defaults(func=cmd_hook)
+    cl = sub.add_parser("claim", help="Draft a claim from the last failure and this tree; --yes publishes and replays it")
+    cl.add_argument("--err", help="failure text; defaults to the last failure the hook saw")
+    cl.add_argument("--fix", help="what you changed, in one line or a diff; defaults to the working-tree diff or the install command")
+    cl.add_argument("--fix-k", choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"], help="defaults from the fix text")
+    cl.add_argument("--eval", help="discriminating eval; defaults from the claim target or dependency pin")
+    cl.add_argument("--eco")
+    cl.add_argument("--rt")
+    cl.add_argument("--dep", action=_AppendCsv, default=None)
+    cl.add_argument("--cwd", help="tree the fix lives in; defaults to the remembered failure's cwd, then the current directory")
+    cl.add_argument("--note")
+    cl.add_argument("--own")
+    cl.add_argument("--yes", "-y", action="store_true", help="publish the draft and replay its eval")
+    cl.add_argument("--no-diff", action="store_true", help="never read git diff for fix.b")
+    cl.add_argument("--no-replay", action="store_true", help="publish without replaying the eval")
+    cl.set_defaults(func=cmd_claim)
     pub = sub.add_parser("publish")
     pub.add_argument("--err", required=True)
     pub.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"])

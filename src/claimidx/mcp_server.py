@@ -276,6 +276,67 @@ TOOLS: list[dict[str, Any]] = [
         "annotations": _ann(read_only=False, destructive=False, idempotent=True, open_world=True),
     },
     {
+        "name": "claimidx_claim",
+        "title": "Draft a claim from the last failure; yes publishes it",
+        "description": (
+            "The near-zero-argument path from a fix to a claim. Drafts every claimidx_ingest field from what the machine "
+            "already knows: err from the last failure claimidx_hook saw (or the err you pass), eco and rt from the tree and "
+            "interpreter under cwd, dep from the installed version of the claimed module, eval from the claim target "
+            '(python -c "import x") or dependency pin, and fix_b from the text you pass, else the working-tree git diff, else the '
+            "install command for the claimed target. Returns the draft with `inferred` (which field came from where), `warn`, "
+            "and `publish_argv` (the equivalent claimidx publish command) without writing anything. Call again with yes=true "
+            "to ingest the draft and replay its eval under cwd; a held, target-observing replay mints nr on the spot and "
+            "`replay` says so, otherwise `replay.reason` and `replay.suggest` say what to fix. Review the draft before yes: "
+            "a wrong fix_b is worse than none."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "err": {**_ERR, "description": "Failure text. Omit to use the last failure claimidx_hook remembered."},
+                "fix": {
+                    "type": "string",
+                    "description": "What you changed: one line, a command, or a diff. Omit to draft from git diff / the install command.",
+                },
+                "fix_k": {**_FIX_K, "description": _FIX_K["description"] + " Omit to infer from the fix text."},
+                "eval": {**_EVAL, "description": "Discriminating eval. Omit to draft from the claim target or dependency pin."},
+                "eco": _ECO,
+                "rt": _RT,
+                "dep": _DEP,
+                "cwd": {
+                    "type": "string",
+                    "description": "Tree the fix lives in. Defaults to the remembered failure's cwd, then the server's working directory.",
+                },
+                "note": _NOTE,
+                "own": _OWN,
+                "yes": {"type": "boolean", "default": False, "description": "Publish the draft and replay its eval. Default false: draft only."},
+                "no_diff": {"type": "boolean", "default": False, "description": "Never read git diff for fix_b."},
+            },
+        },
+        "outputSchema": _out(
+            ok=_B,
+            error=_S,
+            err=_S,
+            cls=_S,
+            eco=_S,
+            rt=_S,
+            dep=_A,
+            fix_k=_S,
+            fix_b=_S,
+            eval=_S,
+            eval_proof=_B,
+            target=_S,
+            fp=_S,
+            inferred=_O,
+            warn=_A,
+            publish_argv=_S,
+            exists=_B,
+            id=_S,
+            st=_S,
+            replay=_O,
+        ),
+        "annotations": _ann(read_only=False, destructive=False, idempotent=False),
+    },
+    {
         "name": "claimidx_ingest_draft",
         "title": "Stash or promote a draft",
         "description": (
@@ -1012,6 +1073,24 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         return store.session_summary(fp=args.get("fp") or "")
     if name == "claimidx_alternatives":
         return store.alternatives(args.get("target") or "")
+    if name == "claimidx_claim":
+        from .claim import draft_claim, publish_draft
+
+        draft = draft_claim(
+            err=args.get("err") or "",
+            fix=args.get("fix") or "",
+            fix_k=args.get("fix_k") or "",
+            eval_cmd=args.get("eval") or "",
+            eco=args.get("eco") or "",
+            rt=args.get("rt") or "",
+            dep=list(args.get("dep") or []),
+            cwd=args.get("cwd") or "",
+            note=args.get("note") or "",
+            use_diff=not args.get("no_diff"),
+        )
+        if not draft.get("ok") or not args.get("yes"):
+            return draft
+        return publish_draft(draft, db=store.path, own=resolve_owner(args.get("own")))
     if name == "claimidx_ingest_draft":
         from .drafts import promote_draft, stash_draft
 

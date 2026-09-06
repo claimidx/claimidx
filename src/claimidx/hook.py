@@ -65,6 +65,23 @@ def extract_hook_err(raw: str) -> tuple[str | None, str | None]:
     return err[:280], event
 
 
+def extract_hook_context(raw: str) -> dict[str, str]:
+    """Command and cwd from a Claude Code hook payload, when present. Empty otherwise."""
+    try:
+        obj = json.loads((raw or "").strip())
+    except (json.JSONDecodeError, ValueError):
+        return {}
+    if not isinstance(obj, dict):
+        return {}
+    out: dict[str, str] = {}
+    tool_input = obj.get("tool_input")
+    if isinstance(tool_input, dict) and isinstance(tool_input.get("command"), str):
+        out["command"] = tool_input["command"][:400]
+    if isinstance(obj.get("cwd"), str):
+        out["cwd"] = obj["cwd"]
+    return out
+
+
 def _first_err_line(body: str) -> str | None:
     fallback = None
     for line in body.splitlines():
