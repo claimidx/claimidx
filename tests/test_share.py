@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -410,7 +411,7 @@ def test_replayed_confirm_reports_the_observation_to_a_live_home(tmp_path: Path,
                 "--eco",
                 "py",
                 "--rt",
-                "py@3.12",
+                f"py@{sys.version_info.major}.{sys.version_info.minor}",
                 "--fix-k",
                 "constraint",
                 "--fix-b",
@@ -443,7 +444,7 @@ def test_replayed_confirm_reports_the_observation_to_a_live_home(tmp_path: Path,
                 "--eco",
                 "py",
                 "--rt",
-                "py@3.12",
+                f"py@{sys.version_info.major}.{sys.version_info.minor}",
                 "--fix-k",
                 "constraint",
                 "--fix-b",
