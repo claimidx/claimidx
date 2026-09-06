@@ -1028,9 +1028,11 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             replayed=bool(args.get("replay")),
             detail=confirm_detail,
         )
-        from .home import maybe_share
+        from .home import maybe_share, share_observation
 
         shared = maybe_share(store, c)
+        if args.get("replay") and (shared or {}).get("status") in {"already", "pushed"}:
+            shared = share_observation(store, c, held=True, actor=resolve_owner(args.get("own"))) or shared
         out = {"id": c.id, "st": c.st, "nc": c.nc, "nf": c.nf, "own": resolve_owner(args.get("own")), "held": True}
         if gate_warns:
             out["warn"] = gate_warns

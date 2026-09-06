@@ -155,11 +155,18 @@ def cmd_hook(ns: argparse.Namespace) -> int:
     if not err:
         return 0
     store = _store(ns)
-    q, hits, candidates = _ask_hits(store, ns, err)
-    from .env import remember_failure
+    from .env import deps_from_traceback, remember_failure
     from .hook import extract_hook_context
 
     ctx = extract_hook_context(raw)
+    if not ns.dep:
+        from .env import infer_env
+
+        eco_guess = ns.eco or infer_env(ctx.get("cwd") or None, err=err)["eco"]
+        inferred_dep = deps_from_traceback(ctx.get("body") or raw, ctx.get("cwd") or None, eco_guess)
+        if inferred_dep:
+            ns.dep = inferred_dep
+    q, hits, candidates = _ask_hits(store, ns, err)
     remember_failure(err, command=ctx.get("command", ""), cwd=ctx.get("cwd", ""), eco=q["eco"], rt=q["rt"], event=event or "", fp=q["fp"])
     if not hits:
         from .query import miss_enrichment
@@ -383,6 +390,10 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
                     print(f"suggest: {unapplied['suggest']['hint']}", file=sys.stderr)
                 return 2
             failed = store.fail(ns.id, resolve_owner(ns.own), detail=eval_detail)
+            from .home import already_shared, share_observation
+
+            if already_shared(store, failed.id) or getattr(c, "src", "local") == "home":
+                share_observation(store, failed, held=False, actor=resolve_owner(ns.own))
             if ns.fmt == "json":
                 print(json.dumps({"held": False, "replay": replay_info, "claim": json.loads(failed.model_dump_json())}, default=str))
             else:
@@ -422,9 +433,12 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
         replayed=bool(replay_info),
         detail=confirm_detail,
     )
-    from .home import maybe_share
+    from .home import maybe_share, share_observation
 
     shared = maybe_share(store, confirmed)
+    if replay_info and (shared or {}).get("status") in {"already", "pushed"}:
+        # The home has the row; what it needs is this replay, not the row again.
+        shared = share_observation(store, confirmed, held=True, actor=resolve_owner(ns.own)) or shared
     if ns.fmt == "json":
         body = json.loads(confirmed.model_dump_json())
         if replay_info:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 import time
@@ -79,6 +80,56 @@ def infer_env(cwd: str | os.PathLike[str] | None = None, *, err: str = "") -> di
     elif eco == "npm":
         rt = _node_rt()
     return {"eco": eco, "rt": rt, "cwd": str(root)}
+
+
+_SITE_FRAME = re.compile(r"""[\\/]site-packages[\\/]([A-Za-z0-9_]+)[\\/]""")
+_NODE_FRAME = re.compile(r"""[\\/]node_modules[\\/](@[A-Za-z0-9_.-]+[\\/][A-Za-z0-9_.-]+|[A-Za-z0-9_.-]+)[\\/]""")
+_RUNNER_PKGS = {"_pytest", "pytest", "pluggy", "unittest", "nose", "coverage", "pip", "setuptools", "importlib_metadata", "typing_extensions"}
+
+
+def deps_from_traceback(text: str, cwd: str | os.PathLike[str] | None = None, eco: str = "") -> list[str]:
+    """The package the deepest traceback frame lives in, as an installed `name@ver` pin.
+
+    Only the raising package: an error surfacing through pytest and pluggy
+    frames is not about pytest. Empty when no third-party frame raised.
+    """
+    if not text:
+        return []
+    root = Path(cwd or os.getcwd())
+    if eco in {"npm", "node"}:
+        names = [m.group(1) for m in _NODE_FRAME.finditer(text)]
+        for name in reversed(names):
+            pkg = root / "node_modules" / name / "package.json"
+            try:
+                ver = json.loads(pkg.read_text(encoding="utf-8")).get("version")
+            except (OSError, ValueError):
+                continue
+            if ver:
+                return [f"{name}@{ver}"]
+        return []
+    names = [m.group(1) for m in _SITE_FRAME.finditer(text) if m.group(1) not in _RUNNER_PKGS]
+    if not names:
+        return []
+    deepest = names[-1]
+    from .sandbox import project_python
+
+    py = project_python(root) or sys.executable
+    code = (
+        "import json,sys\nfrom importlib.metadata import packages_distributions, version\n"
+        "n=sys.argv[1]; out=''\n"
+        "for d in (packages_distributions().get(n) or []):\n"
+        "    try: out=d+'@'+version(d); break\n"
+        "    except Exception: pass\n"
+        "print(out)"
+    )
+    try:
+        import subprocess
+
+        proc = subprocess.run([py, "-c", code, deepest], capture_output=True, text=True, timeout=15, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    pin = (proc.stdout or "").strip()
+    return [pin] if proc.returncode == 0 and pin else []
 
 
 def tree_eval(cwd: str | os.PathLike[str] | None, eco: str = "") -> str:

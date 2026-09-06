@@ -334,3 +334,29 @@ def maybe_share(store, claim: Claim) -> dict[str, Any] | None:
         return share_claim(store, claim)
     except HomeError as e:
         return {"status": "error", "id": claim.id, "error": str(e)}
+
+
+def share_observation(store, claim: Claim, *, held: bool, actor: str, replayed: bool = True) -> dict[str, Any] | None:
+    """Report a replayed hold or miss on a claim the home already has, so its counters reflect other agents.
+
+    `share_claim` re-publishes a row; that is a no-op once the home has it.
+    The home's confirm/fail endpoints are what move nc/nf/nr there, and they
+    are what `impact` reads back. Live home only; the public jsonl is a
+    projection that only PR lines can change. Never raises.
+    """
+    if not share_enabled() or not replayed:
+        return None
+    base = api_url()
+    if not base:
+        return None
+    verb = "confirm" if held else "fail"
+    from urllib.parse import quote
+
+    url = f"{base}/api/claims/{quote(claim.id)}/{verb}?own={quote(actor)}" + ("&replay=true" if held else "")
+    try:
+        result = _post(url, {}, token=api_token())
+    except HomeError as e:
+        return {"status": "error", "id": claim.id, "error": str(e)}
+    store.log("home-" + verb, actor, claim.id, {"replayed": True})
+    row = result.get("claim", result) if isinstance(result, dict) else {}
+    return {"status": verb, "id": claim.id, "home": {k: row.get(k) for k in ("nc", "nf", "nr", "st") if isinstance(row, dict) and k in row}}

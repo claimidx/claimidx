@@ -74,6 +74,15 @@ def extract_hook_context(raw: str) -> dict[str, str]:
     if not isinstance(obj, dict):
         return {}
     out: dict[str, str] = {}
+    blobs: list[str] = []
+    for key in ("tool_response", "tool_result", "error", "stderr", "output", "message", "content", "result"):
+        val = obj.get(key)
+        if isinstance(val, str):
+            blobs.append(val)
+        elif isinstance(val, dict):
+            blobs.extend(str(v) for k, v in val.items() if k in ("stderr", "stdout", "output", "error", "content", "message") and isinstance(v, str))
+    if blobs:
+        out["body"] = "\n".join(blobs)[:20000]
     tool_input = obj.get("tool_input")
     if isinstance(tool_input, dict) and isinstance(tool_input.get("command"), str):
         out["command"] = tool_input["command"][:400]

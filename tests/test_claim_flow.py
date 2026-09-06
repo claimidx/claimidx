@@ -254,3 +254,47 @@ def test_project_bin_and_tree_eval(tmp_path: Path):
     assert resolve_argv(["pytest", "-q"], str(tree))[0] == str(fake)
     (tree / "tests").mkdir()
     assert tree_eval(tree, "py") == "python -m pytest -q"
+
+
+def test_deps_from_traceback_names_only_the_raising_package(tmp_path: Path):
+    from claimidx.env import deps_from_traceback
+
+    tb = (
+        'File "/x/app.py", line 3, in <module>\n'
+        'File "/x/.venv/lib/python3.12/site-packages/_pytest/runner.py", line 1, in x\n'
+        'File "/x/.venv/lib/python3.12/site-packages/pluggy/_hooks.py", line 1, in y\n'
+        'File "/x/.venv/lib/python3.12/site-packages/pydantic/main.py", line 253, in __init__\n'
+        "pydantic_core._pydantic_core.ValidationError: 1 validation error"
+    )
+    got = deps_from_traceback(tb, tmp_path)
+    assert got and got[0].startswith("pydantic@")
+    assert deps_from_traceback('File "/x/app.py", line 3\nTypeError: boom', tmp_path) == []
+    node = tmp_path / "node_modules" / "next"
+    node.mkdir(parents=True)
+    (node / "package.json").write_text('{"version":"15.0.0"}', encoding="utf-8")
+    assert deps_from_traceback("at /x/node_modules/next/dist/server.js:1:1", tmp_path, "npm") == ["next@15.0.0"]
+
+
+def test_hook_infers_dep_from_traceback_for_the_fingerprint(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    body = (
+        "Traceback (most recent call last):\n"
+        '  File "/x/.venv/lib/python3.12/site-packages/pydantic/main.py", line 253, in __init__\n'
+        "pydantic_core._pydantic_core.ValidationError: 1 validation error for Model\n"
+    )
+    payload = json.dumps({"hook_event_name": "PostToolUseFailure", "tool_response": {"stderr": body}, "cwd": str(tmp_path)})
+    assert main(["--db", db, "hook", "--err", payload]) == 0
+    capsys.readouterr()
+    from claimidx.env import last_failure
+
+    rec = last_failure()
+    assert rec is not None and rec["fp"]
+    from claimidx.fingerprint import classify, fingerprint
+
+    err = "pydantic_core._pydantic_core.ValidationError: 1 validation error for Model"
+    from importlib.metadata import version
+
+    with_dep = fingerprint(
+        err=err, cls=classify(err), eco="py", rt=f"py@{sys.version_info.major}.{sys.version_info.minor}", dep=[f"pydantic@{version('pydantic')}"]
+    )
+    assert rec["fp"] == with_dep

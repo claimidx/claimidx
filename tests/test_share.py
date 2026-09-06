@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -379,3 +380,82 @@ def test_true_replay_is_builtin():
     assert held.held and held.reason == "builtin"
     missed = replay("false", 0)
     assert missed.ran and not missed.held
+
+
+def test_replayed_confirm_reports_the_observation_to_a_live_home(tmp_path: Path, monkeypatch, capsys):
+    """Once the home has the row, a replayed confirm posts to its confirm endpoint instead of re-publishing."""
+    from claimidx.cli import main
+
+    calls: list[tuple[str, dict]] = []
+
+    def fake_post(url, payload, token="", timeout=20.0):
+        calls.append((url, payload))
+        if url.endswith("/api/publish"):
+            return {"exists": False, "claim": {"id": "x"}}
+        return {"held": True, "recorded": True, "claim": {"nc": 2, "nr": 2, "nf": 0, "st": "confirmed"}}
+
+    monkeypatch.setattr("claimidx.home._post", fake_post)
+    monkeypatch.setenv("CLAIMIDX_HOME_API", "http://home.test")
+    db = str(tmp_path / "ix.sqlite")
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "RuntimeError: home obs probe",
+                "--eco",
+                "py",
+                "--rt",
+                "py@3.12",
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "ok",
+                "--eval",
+                "true",
+            ]
+        )
+        == 0
+    )
+    cid = capsys.readouterr().out.strip()
+    assert calls[-1][0].endswith("/api/publish")
+    assert main(["--db", db, "--fmt", "json", "confirm", cid]) == 0  # metadata-only: no observation
+    capsys.readouterr()
+    assert calls[-1][0].endswith("/api/publish") and len(calls) == 1
+    rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", cid])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 2 or rc == 0  # `true` is a hint: not recorded, so nothing to report either
+    assert len(calls) == 1
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "RuntimeError: home obs probe 2",
+                "--eco",
+                "py",
+                "--rt",
+                "py@3.12",
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "ok",
+                "--eval",
+                'python -c "import json"',
+            ]
+        )
+        == 0
+    )
+    cid2 = capsys.readouterr().out.strip()
+    assert main(["--db", db, "--fmt", "json", "confirm", "--replay", "--cwd", str(tmp_path), cid2]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert calls[-1][0].endswith(f"/api/claims/{cid2}/confirm?own=did%3Aclaimidx%3Atest&replay=true")
+    assert out["share"]["status"] == "confirm" and out["share"]["home"]["nc"] == 2
