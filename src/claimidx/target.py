@@ -14,6 +14,16 @@ _NO_MODULE = re.compile(
     r"(?:no module named|cannot find module|module not found:?)\s*['\"]?([@A-Za-z0-9_./-]+)['\"]?",
     re.I,
 )
+# Compiler wording per ecosystem. A Java `package x.y does not exist` names a package, not an
+# artifact, so it is deliberately absent: nothing to attribute, the gate does not judge.
+_ECO_TARGETS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"no required module provides package\s+([A-Za-z0-9_./~-]+)", re.I),  # go
+    re.compile(r"cannot find package\s+['\"]?([A-Za-z0-9_./~-]+)['\"]?", re.I),  # go
+    re.compile(
+        r"(?:unresolved import|can't find crate for|use of undeclared crate or module|cannot find (?:module or )?crate)\s+`([A-Za-z0-9_]+)", re.I
+    ),  # rust
+    re.compile(r"could not find (?:artifact )?([A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+)(?::jar)?:[A-Za-z0-9_.+-]+", re.I),  # java
+)
 _TARGET_CLASSES = {"module_not_found", "browser_dep", "lockfile_drift"}
 _WORD = re.compile(r"[A-Za-z0-9_@./-]+")
 
@@ -29,6 +39,10 @@ def claim_target(*, cls: str, err: str, dep: list[str] | None = None) -> str:
     if cls not in _TARGET_CLASSES:
         return ""
     if cls == "module_not_found":
+        for pat in _ECO_TARGETS:
+            m = pat.search(err or "")
+            if m:
+                return m.group(1).strip().rstrip(".")
         m = _NO_MODULE.search(err or "")
         if m:
             name = m.group(1).strip().rstrip(".")
@@ -47,7 +61,10 @@ def _variants(target: str) -> set[str]:
     t = target.strip().lower()
     out = {t}
     # yaml.loader -> yaml ; next/navigation -> next ; @scope/pkg stays whole and also scope-less
-    if "." in t:
+    if ":" in t:
+        # org.apache.commons:commons-lang3 -> the artifact id is what a build tool names
+        out.add(t.rsplit(":", 1)[-1])
+    if "." in t and ":" not in t:
         out.add(t.split(".", 1)[0])
     if "/" in t:
         head = t.split("/", 1)[0]
@@ -86,6 +103,14 @@ def suggest_eval(target: str, eco: str = "") -> str:
     if not target:
         return ""
     eco = (eco or "").lower()
+    if eco == "go":
+        pkg = target.split("@", 1)[0]
+        return f"go list {pkg}" if re.match(r"^[A-Za-z0-9_][A-Za-z0-9_./~-]*$", pkg) else ""
+    if eco == "rust":
+        crate = target.split("@", 1)[0]
+        return f"cargo pkgid {crate}" if re.match(r"^[A-Za-z0-9_-]+$", crate) else ""
+    if eco == "java":
+        return ""  # no build-tool one-liner observes an artifact; the tree recipe (mvn/gradle compile) is the eval
     if eco in {"npm", "node"} or target.startswith("@") or "/" in target:
         return "node -e \"require('" + target.replace("'", "") + "')\""
     mod = target.split("/")[0].replace("-", "_")

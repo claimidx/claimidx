@@ -139,6 +139,9 @@ def _pkg_token(raw: str) -> str:
             if scope and name:
                 return "@" + scope + "/" + name
         return ""
+    m = re.fullmatch(r"([A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+):[A-Za-z0-9_.+-]+", s)
+    if m:
+        return m.group(1)  # group:artifact:version -> group:artifact
     for sep in ("==", ">=", "<=", "~=", ">", "<", "@", "["):
         if sep in s:
             s = s.split(sep, 1)[0]
@@ -150,7 +153,7 @@ def _pin_line(raw: str) -> str:
     s = (raw or "").strip().splitlines()[0] if raw else ""
     s = re.split(r"\s+#", s, maxsplit=1)[0].strip()
     return re.sub(
-        r"^(?:pip3?|uv|python3?\s+-m\s+pip)\s+install\s+",
+        r"^(?:(?:pip3?|uv|python3?\s+-m\s+pip)\s+install|go\s+get|cargo\s+add)\s+",
         "",
         s,
         count=1,
@@ -169,7 +172,10 @@ def _exact_pin(raw: str) -> tuple[str, str] | None:
     m = re.fullmatch(r"([A-Za-z0-9_.-]+)==([A-Za-z0-9_.+-]+)", s)
     if m:
         return m.group(1), m.group(2)
-    m = re.fullmatch(r"([A-Za-z0-9_.-]+)@([A-Za-z0-9_.+-]+)", s)
+    m = re.fullmatch(r"([A-Za-z0-9_./-]+)@([A-Za-z0-9_.+-]+)", s)
+    if m:
+        return m.group(1), m.group(2)
+    m = re.fullmatch(r"([A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+):([A-Za-z0-9_.+-]+)", s)
     if m:
         return m.group(1), m.group(2)
     return None
@@ -308,6 +314,18 @@ def refine_eval(
             if exact:
                 break
     eco = (eco or "").lower()
+    if eco in {"go", "rust", "java"}:
+        # No import to write: the ecosystem's own tool observes the package, or nothing does.
+        from .target import suggest_eval
+
+        token = _pkg_token(pin_src) if pin_src else ""
+        if not token:
+            for d in dep or []:
+                token = _pkg_token(d)
+                if token:
+                    break
+        ev = suggest_eval(token, eco) if token else ""
+        return ev or raw
     if exact:
         name, ver = exact
         if eco in {"npm", "node"} or name.startswith("@"):

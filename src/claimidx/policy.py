@@ -65,6 +65,12 @@ ALLOWED_EVAL_HEADS = {
     "cargo",
     "rustc",
     "docker",
+    "mvn",
+    "mvnw",
+    "gradle",
+    "gradlew",
+    "java",
+    "javac",
 }
 # cmd-kind fix.b is data, but naive agents may run it. Wider than eval; still no shell.
 ALLOWED_CMD_HEADS = ALLOWED_EVAL_HEADS | {
@@ -178,7 +184,7 @@ def _prep_eval(raw: str) -> str:
 
 def _norm_head(token: str) -> str:
     name = token.replace("\\", "/").rsplit("/", 1)[-1]
-    if name.lower().endswith(".exe"):
+    if name.lower().endswith((".exe", ".cmd", ".bat")):
         name = name[:-4]
     return name.lower()
 

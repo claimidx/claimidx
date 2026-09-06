@@ -30,6 +30,12 @@ _MANIFESTS = {
     "go": ("go.mod", "go.sum", "go.work"),
     "cargo": ("Cargo.toml", "Cargo.lock"),
     "rustc": ("Cargo.toml",),
+    "mvn": ("pom.xml",),
+    "mvnw": ("pom.xml",),
+    "gradle": ("build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "gradle.lockfile"),
+    "gradlew": ("build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "gradle.lockfile"),
+    "javac": (),
+    "java": (),
     "docker": ("Dockerfile", "docker-compose.yml", "compose.yml", "compose.yaml"),
     "uv": ("pyproject.toml", "uv.lock"),
     "make": ("Makefile", "makefile"),
@@ -37,13 +43,28 @@ _MANIFESTS = {
 }
 _REL = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./\\-]*$")
 _MAX_FILES = 2000
+_TEXT_MAX = 8 << 20  # files up to 8 MiB are read whole so line endings can be folded
 _SKIP_DIRS = {"__pycache__", ".git", "node_modules", ".venv", "venv", ".mypy_cache", ".pytest_cache", ".ruff_cache", "target", "dist", "build"}
 
 
 def sha256_path(path: Path) -> str | None:
-    """sha256 of a file's bytes, or of a directory's sorted (relpath, file sha256) list. None if missing."""
+    """sha256 of a file's bytes, or of a directory's sorted (relpath, file sha256) list. None if missing.
+
+    Text files are hashed with CRLF folded to LF: the same tree checked out under
+    autocrlf must bind to the same digest, and a line ending is not a mutation.
+    """
     if path.is_file():
         h = hashlib.sha256()
+        try:
+            small = path.stat().st_size <= _TEXT_MAX
+        except OSError:
+            return None
+        if small:
+            data = path.read_bytes()
+            if b"\0" not in data[:8192]:
+                data = data.replace(b"\r\n", b"\n")
+            h.update(data)
+            return h.hexdigest()
         with path.open("rb") as fh:
             for chunk in iter(lambda: fh.read(1 << 16), b""):
                 h.update(chunk)
@@ -97,6 +118,12 @@ def is_tree_scoped(cmd: str) -> bool:
         if args and args[0] == "-m" and args[1:2] and args[1] not in {"pytest", "unittest", "compileall", "py_compile"}:
             return False
         return True
+    if head == "cargo" and parts[1:2] == ["pkgid"]:
+        return False  # observes a package in the graph, as `import x` observes an env; the manifest is what a pin changes
+    if head == "go" and parts[1:2] == ["list"]:
+        args = [a for a in parts[2:] if not a.startswith("-")]
+        if args and not any(a.startswith(".") or a.endswith("...") for a in args):
+            return False  # `go list <module/path>`: a package observation, not a tree build
     return head in _MANIFESTS
 
 

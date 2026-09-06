@@ -40,6 +40,11 @@ def project_bin(head: str, cwd: str | os.PathLike[str] | None) -> str | None:
     root = Path(cwd)
     base = _norm_head(head)
     candidates = []
+    wrapper = {"gradle": "gradlew", "gradlew": "gradlew", "mvn": "mvnw", "mvnw": "mvnw"}.get(base)
+    if wrapper:
+        # A tree that ships gradlew/mvnw pins its own build tool; use it before anything on PATH.
+        ext = ".bat" if wrapper == "gradlew" else ".cmd"
+        candidates += [root / (wrapper + ext)] if os.name == "nt" else [root / wrapper]
     for venv in (".venv", "venv"):
         if os.name == "nt":
             candidates += [root / venv / "Scripts" / f"{base}.exe", root / venv / "Scripts" / f"{base}.cmd"]
@@ -142,7 +147,9 @@ _TREE_MARKERS = {
     "docker": ("Dockerfile", "docker-compose.yml", "compose.yml"),
     "pytest": ("pytest.ini", "pyproject.toml", "setup.cfg", "tests", "test", "conftest.py"),
     "mvn": ("pom.xml",),
+    "mvnw": ("pom.xml",),
     "gradle": ("build.gradle", "build.gradle.kts"),
+    "gradlew": ("build.gradle", "build.gradle.kts"),
     "composer": ("composer.json",),
     "bundle": ("Gemfile",),
     "bundler": ("Gemfile",),
@@ -244,7 +251,7 @@ def replay_records_hold(claim_rt: str, result: ReplayResult, cmd: str = "") -> t
     return True, "held"
 
 
-_NAMED_FILE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:py|js|mjs|cjs|ts|tsx|jsx|rs|go|sh|toml|json|ya?ml|txt|cfg|ini)$")
+_NAMED_FILE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:py|js|mjs|cjs|ts|tsx|jsx|rs|go|java|sh|toml|json|ya?ml|txt|cfg|ini)$")
 
 
 def _precondition(head: str, cwd: str | None, cmd: str = "") -> str | None:
@@ -255,7 +262,7 @@ def _precondition(head: str, cwd: str | None, cmd: str = "") -> str | None:
     except ValueError:
         parts = []
     tokens = {p.lower() for p in parts}
-    if head in {"python", "python3", "node", "rustc"}:
+    if head in {"python", "python3", "node", "rustc", "javac"}:
         # `python check.py` outside the tree is not a miss; it is a recipe with nothing to run against.
         for tok in parts[1:]:
             if tok.startswith("-"):

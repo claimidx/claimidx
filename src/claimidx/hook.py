@@ -92,6 +92,8 @@ def extract_hook_context(raw: str) -> dict[str, str]:
 
 
 _PYTEST_E = re.compile(r"^E\s+")
+# Maven prints headings before the line that says what failed; they are a last resort, not the error.
+_SECTION_HEADER = re.compile(r"^\[ERROR\]\s*(?:COMPILATION ERROR|BUILD FAILURE|Failed to execute goal)\b", re.I)
 
 
 def _first_err_line(body: str) -> str | None:
@@ -99,6 +101,10 @@ def _first_err_line(body: str) -> str | None:
     for line in body.splitlines():
         s = _PYTEST_E.sub("", line.strip())  # pytest's `E   TypeError: ...` is the same error as the bare traceback line
         if not s or s.lower().startswith("traceback"):
+            continue
+        if _SECTION_HEADER.match(s):
+            if fallback is None:
+                fallback = s
             continue
         if not _ERR_LINE.search(s):
             continue

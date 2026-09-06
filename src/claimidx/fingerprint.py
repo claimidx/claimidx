@@ -18,7 +18,16 @@ _WS = re.compile(r"\s+")
 
 _CLASS_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("async_api", re.compile(r"await|params (?:is|are) (?:a )?promise|searchparams (?:is|are) (?:a )?promise|sync.*async", re.I)),
-    ("module_not_found", re.compile(r"cannot find module|modulenotfounderror|no module named", re.I)),
+    (
+        "module_not_found",
+        re.compile(
+            r"cannot find module|modulenotfounderror|no module named"
+            r"|no required module provides package|cannot find package"  # go
+            r"|unresolved import|can't find crate|use of undeclared crate or module|cannot find (?:module or )?crate"  # rust
+            r"|package [A-Za-z0-9_.]+ does not exist|could not find artifact|could not find [A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:",  # java
+            re.I,
+        ),
+    ),
     ("schema_break", re.compile(r"pydantic|zod|validationerror|unexpected keyword", re.I)),
     ("lockfile_drift", re.compile(r"lockfile|peer dep|ERESOLVE|version conflict", re.I)),
     ("mcp_transport", re.compile(r"\bmcp\b|stdio transport|sse transport", re.I)),

@@ -28,7 +28,11 @@ and test recipes that only run the agent's own tree:
   npx <bin>  : only when node_modules/.bin/<bin> already exists (no download)
   npm test|run|ls ; node --check
   go build|vet|test|list ./... (no module@version arguments)
-  cargo check|build|test|clippy|run ; rustc <file>
+  cargo check|build|test|clippy|run|pkgid|tree|metadata ; rustc <file>
+  mvn [-q -B -o …] validate|compile|test-compile|test|verify|package|dependency:tree
+  gradle [-q --offline …] build|check|test|compileJava|dependencies|dependencyInsight …
+  gradlew / mvnw only when the wrapper exists under cwd
+  javac <existing .java files> [-d dir] [-cp path]
   uv run pytest|python …  (recursively checked)
   docker build … ; docker compose config|build
   true / false / test
@@ -302,8 +306,94 @@ def _check_go(parts: list[str]) -> None:
 
 def _check_cargo(parts: list[str]) -> None:
     sub = parts[1] if len(parts) > 1 else ""
-    if sub not in {"check", "build", "test", "clippy", "run", "fmt"}:
+    if sub not in {"check", "build", "test", "clippy", "run", "fmt", "pkgid", "tree", "metadata"}:
         raise Untrusted(f"cargo {sub or '?'} is not a check")
+
+
+_MVN_FLAGS = {"-q", "--quiet", "-B", "--batch-mode", "-e", "--errors", "-o", "--offline", "-ntp", "--no-transfer-progress", "-U", "--update-snapshots"}
+_MVN_GOALS = {"validate", "compile", "test-compile", "test", "verify", "package", "dependency:tree", "dependency:resolve", "dependency:analyze"}
+_GRADLE_FLAGS = {"-q", "--quiet", "--offline", "--no-daemon", "--console=plain", "--stacktrace", "--info", "--warning-mode=all", "--no-build-cache"}
+_GRADLE_VALUED = {"--configuration", "--dependency", "-x", "--exclude-task"}
+_GRADLE_TASKS = {
+    "build",
+    "assemble",
+    "check",
+    "test",
+    "classes",
+    "testClasses",
+    "compileJava",
+    "compileKotlin",
+    "compileTestJava",
+    "dependencies",
+    "dependencyInsight",
+    "help",
+    "tasks",
+}
+_PLAIN = re.compile(r"^[A-Za-z0-9_.:-]+$")
+_JAVAC_VALUED = {"-d", "-cp", "-classpath", "--class-path", "-sourcepath", "--source-path", "--release", "-source", "-target", "-encoding"}
+
+
+def _check_mvn(parts: list[str]) -> None:
+    """Build and dependency goals only. A settings file, property, or profile can point the build anywhere."""
+    goals = 0
+    for tok in parts[1:]:
+        if tok in _MVN_FLAGS:
+            continue
+        if tok in _MVN_GOALS:
+            goals += 1
+            continue
+        raise Untrusted(f"mvn {tok} is not a check")
+    if not goals:
+        raise Untrusted("mvn without a goal")
+
+
+def _check_gradle(parts: list[str], cwd: str | None) -> None:
+    """Build and dependency tasks only; no init scripts, build files, or project dirs."""
+    head = _norm_head(parts[0])
+    if head == "gradlew":
+        root = Path(cwd or os.getcwd())
+        if not ((root / "gradlew").is_file() or (root / "gradlew.bat").is_file()):
+            raise Untrusted("gradlew is not in cwd")
+    tasks = 0
+    rest = list(parts[1:])
+    while rest:
+        tok = rest.pop(0)
+        if tok in _GRADLE_FLAGS:
+            continue
+        if tok in _GRADLE_VALUED:
+            if not rest or not _PLAIN.match(rest[0]):
+                raise Untrusted(f"gradle {tok} needs a plain value")
+            rest.pop(0)
+            continue
+        task = tok.rsplit(":", 1)[-1] if tok.startswith(":") else tok
+        if task in _GRADLE_TASKS and _PLAIN.match(tok):
+            tasks += 1
+            continue
+        raise Untrusted(f"gradle {tok} is not a check")
+    if not tasks:
+        raise Untrusted("gradle without a task")
+
+
+def _check_javac(parts: list[str], cwd: str | None) -> None:
+    """Compile existing sources under cwd into a relative output dir."""
+    files = 0
+    rest = list(parts[1:])
+    while rest:
+        tok = rest.pop(0)
+        if tok in _JAVAC_VALUED:
+            val = rest.pop(0) if rest else ""
+            if not val or ".." in val.replace("\\", "/").split("/") or not re.match(r"^[A-Za-z0-9_./:;\\-]+$", val):
+                raise Untrusted(f"javac {tok} needs a relative value")
+            continue
+        if tok.startswith("-X") or tok in {"-g", "-nowarn", "-verbose", "-Werror", "-proc:none"}:
+            continue
+        if tok.startswith("-"):
+            raise Untrusted(f"javac {tok} is not allowed")
+        if not tok.endswith(".java") or not _rel_file_exists(tok, cwd):
+            raise Untrusted(f"javac {tok} is not an existing source under cwd")
+        files += 1
+    if not files:
+        raise Untrusted("javac without a source file")
 
 
 def _check_docker(parts: list[str]) -> None:
@@ -364,6 +454,16 @@ def check_untrusted(cmd: str, cwd: str | None = None) -> None:
         if len(files) == 1 and _rel_file_exists(files[0], cwd):
             return
         raise Untrusted("rustc needs one existing file")
+    if head in {"mvn", "mvnw"}:
+        if head == "mvnw":
+            root = Path(cwd or os.getcwd())
+            if not ((root / "mvnw").is_file() or (root / "mvnw.cmd").is_file()):
+                raise Untrusted("mvnw is not in cwd")
+        return _check_mvn(parts)
+    if head in {"gradle", "gradlew"}:
+        return _check_gradle(parts, cwd)
+    if head == "javac":
+        return _check_javac(parts, cwd)
     if head == "docker":
         return _check_docker(parts)
     if head == "uv":

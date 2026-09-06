@@ -27,7 +27,7 @@ from .target import claim_target, suggest_eval
 
 _INSTALL_HEAD = re.compile(r"^(?:pip3?|uv pip|uv|poetry|pipx|npm|pnpm|yarn|bun|cargo|go|gem|composer)\s+(?:install|add|get|i)\b", re.I)
 _CONFIG_HINT = re.compile(r"\b(?:export|set|setx)\s+[A-Z_]+=|\.env\b|\.(?:toml|ya?ml|json|ini|cfg)\b|config", re.I)
-_PIN_HINT = re.compile(r"(?:==|~=|>=|<=|@\d)")
+_PIN_HINT = re.compile(r"(?:==|~=|>=|<=|@v?\d|:\d+\.\d+)")  # pkg==1.2 / pkg@1.2 / mod@v1.2 / group:artifact:1.2
 _DIFF_LIMIT = 3900  # Fix.b caps at 4000; a diff that fits is applied verbatim by `claimidx apply`
 
 
@@ -182,15 +182,21 @@ def _install_fix(target: str, eco: str, dep: list[str], installed: str = "") -> 
     over the import name (`yaml` -> `PyYAML==6.0.3`) because pip installs
     distributions, not modules.
     """
-    name = target if target.startswith("@") else target.split(".")[0].split("/")[0]
+    eco = (eco or "").lower()
+    if eco in {"go", "rust", "java"}:
+        name = target.split("@", 1)[0]
+    else:
+        name = target if target.startswith("@") else target.split(".")[0].split("/")[0]
     pin = installed or next((d for d in dep if d.lower().startswith(name.lower() + "@")), "")
     if pin and "@" in pin.lstrip("@"):
         head, _, ver = pin.rpartition("@")
         name, ver = (head or name), ver
     else:
         ver = ""
-    if eco in {"npm", "node"} or target.startswith("@"):
+    if eco in {"npm", "node", "go", "rust"} or target.startswith("@"):
         return ("pin", f"{name}@{ver}") if ver else ("constraint", name)
+    if eco == "java":
+        return ("pin", f"{name}:{ver}") if ver else ("constraint", name)
     return ("pin", f"{name}=={ver}") if ver else ("constraint", name)
 
 
@@ -237,14 +243,20 @@ def draft_claim(
         inferred["rt"] = "interpreter"
     installed = ""
     if target:
-        installed = installed_version(target.split(".")[0].split("/")[0] if not target.startswith("@") else target, eco, cwd)
+        if eco in {"go", "rust", "java"} or target.startswith("@"):
+            lookup = target  # a Go package path, a crate, a group:artifact, or a scoped npm package is looked up whole
+        else:
+            lookup = target.split(".")[0].split("/")[0]
+        installed = installed_version(lookup, eco, cwd)
     if installed and not dep and cls != "module_not_found":
         # For a missing module the package was absent when it failed: the version is the fix (below), not the context.
         dep = [installed]
         inferred["dep"] = "installed"
 
     fix_b = (fix or "").strip()
-    if not fix_b and use_diff:
+    if not fix_b and use_diff and not (cls == "module_not_found" and installed):
+        # A missing package whose pin the tree resolves is claimed as that pin: `go get`, `cargo add`,
+        # or a coordinate rewrite the manifest, and that diff only applies to trees with the same bytes.
         fix_b = _git_diff(cwd)
         if fix_b:
             inferred["fix_b"] = "git diff"

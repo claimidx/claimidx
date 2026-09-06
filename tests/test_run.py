@@ -72,3 +72,30 @@ def test_run_never_uses_a_shell(tmp_path: Path, capsys):
     rc = main(["--db", db, "run", "--cwd", str(tmp_path), "--", "echo", "x;", "touch", str(marker)])
     capsys.readouterr()
     assert rc == 0 and not marker.exists()
+
+
+def test_run_resolves_the_head_like_a_shell_and_a_spawn_failure_is_not_a_tree_failure(tmp_path: Path, monkeypatch, capsys):
+    """`claimidx run -- gradle …` must find gradle.cmd on Windows; a command that cannot start is the wrapper's failure, not the tree's."""
+    import os
+
+    from claimidx.env import forget_failure
+
+    db = str(tmp_path / "ix.sqlite")
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    if os.name == "nt":
+        (bindir / "cixhello.cmd").write_text("@echo hello-from-cmd\r\n", encoding="utf-8")
+    else:
+        script = bindir / "cixhello"
+        script.write_text("#!/bin/sh\necho hello-from-cmd\n", encoding="utf-8")
+        script.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bindir) + os.pathsep + os.environ.get("PATH", ""))
+    forget_failure()
+    rc = main(["--db", db, "run", "--cwd", str(tmp_path), "--", "cixhello"])
+    captured = capsys.readouterr()
+    assert rc == 0 and "hello-from-cmd" in captured.out
+    rc = main(["--db", db, "run", "--cwd", str(tmp_path), "--", "no-such-command-cix-zz"])
+    captured = capsys.readouterr()
+    assert rc == 127 and "claimidx run:" in captured.err
+    assert "CLAIMIDX verdict" not in captured.err
+    assert last_failure() is None

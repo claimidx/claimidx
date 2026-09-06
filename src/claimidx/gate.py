@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from .binding import binding_drift, compute_binding, digest_drift, is_tree_scoped
+from .binding import _MANIFESTS, binding_drift, compute_binding, digest_drift, is_tree_scoped
 from .sandbox import ReplayResult, replay_records_hold
 from .target import claim_target, eval_observes_target, proof_observes_target, suggest_eval
 
@@ -186,6 +186,21 @@ def hint_refusal(claim: Claim, result: ReplayResult, *, cwd: str | None = None) 
     return out
 
 
+def _manifest_only_drift(cmd: str, drift: list[str]) -> bool:
+    """True when every drifted path is a manifest of the recipe's head (go.mod, Cargo.toml, pom.xml, build.gradle, ...)."""
+    from .policy import _norm_head, split_eval
+
+    try:
+        _env, parts = split_eval(cmd)
+    except ValueError:
+        return False
+    head = _norm_head(parts[0]) if parts else ""
+    if head in {"python", "python3"} and "pytest" in parts:
+        head = "pytest"
+    allowed = set(_MANIFESTS.get(head, ()))
+    return bool(drift) and bool(allowed) and all(p in allowed for p in drift)
+
+
 def graduation_gate(
     claim: Claim,
     result: ReplayResult,
@@ -220,6 +235,13 @@ def graduation_gate(
         cwd = cwd or os.getcwd()  # the replay ran there; bind to the same place
         if proof is not None and proof.binding is not None:
             drift = binding_drift(proof.binding, cwd)
+            if drift and claim.fix.k in {"pin", "constraint"} and _manifest_only_drift(claim.eval.cmd, drift):
+                # A pin rewrites the manifest the build recipe is bound to: go.mod after `go get`, pom.xml after
+                # the coordinate is written. That is the fix, not a mutated proof. Sources drifting still refuse.
+                # Not re-bound: proofs are shared by recipe, so a re-bind here would also loosen a patch
+                # claim with the same eval in this tree. The warning repeats instead.
+                warns.append("manifest drift under a pin: " + ", ".join(drift[:8]) + " (tolerated: a pin is expected to rewrite it)")
+                drift = []
             if drift:
                 if store is not None:
                     store.log("proof-drift", actor, claim.id, {"paths": drift})

@@ -33,7 +33,7 @@ fail → verdict (hook or `claimidx run`): apply? `claimidx apply <id> --cwd . -
                                           solve? fix it, then `claimidx claim --yes`   (drafted from the failure and your diff)
 ```
 
-The three commands an agent needs: `claimidx run -- <cmd>` (or the hooks), `claimidx apply <id> --yes`, `claimidx claim --yes`. Everything below is the long form.
+The three commands an agent needs: `claimidx run -- <cmd>` (or the hooks), `claimidx apply <id> --yes`, `claimidx claim --yes`. Everything below is the long form. `apply` installs pins with the tree's own manager for Python (`.venv` pip), Node (`npm install`), Go (`go get`), Rust (`cargo add`) and Java (the `group:artifact:version` coordinate written into pom.xml or build.gradle), and `git apply`s a `diff --git` patch anywhere; every other remedy kind is printed for you to apply by hand.
 
 ```
 ask → hit? reason, apply fix.b, run eval.cmd, confirm|fail

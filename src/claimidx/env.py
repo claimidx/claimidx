@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -27,10 +28,11 @@ _ECO_MARKERS: list[tuple[str, tuple[str, ...]]] = [
     ("ruby", ("Gemfile",)),
 ]
 _ECO_BY_ERR = {
-    "npm": ("npm err", "cannot find module", "node_modules", "eresolve", "typeerror: cannot read propert"),
+    "npm": ("npm err", "cannot find module '", "node_modules", "eresolve", "typeerror: cannot read propert"),  # node quotes the module
     "py": ("traceback (most recent call last)", "modulenotfounderror", "importerror", "pip "),
-    "go": ("go: ", "go.mod", "undefined:"),
-    "rust": ("cargo", "error[e"),
+    "go": ("go: ", "go.mod", "undefined:", "no required module provides package", "cannot find package"),
+    "rust": ("cargo", "error[e", "unresolved import", "can't find crate", "undeclared crate", "cannot find module or crate", "cannot find crate"),
+    "java": ("error: package ", "could not find artifact", "failed to execute goal", "could not resolve dependencies", "required by:", "gradle", "maven"),
 }
 
 
@@ -79,7 +81,37 @@ def infer_env(cwd: str | os.PathLike[str] | None = None, *, err: str = "") -> di
         rt = _py_rt()
     elif eco == "npm":
         rt = _node_rt()
+    elif eco == "go":
+        rt = _go_rt()
+    elif eco == "rust":
+        rt = _rust_rt()
+    elif eco == "java":
+        rt = _java_rt()
     return {"eco": eco, "rt": rt, "cwd": str(root)}
+
+
+def _tool_version(argv: list[str], pattern: str, label: str) -> str:
+    """`label@X.Y` from a toolchain's version banner (stdout or stderr), "" when absent."""
+    if not shutil.which(argv[0]):
+        return ""
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=10, check=False, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    m = re.search(pattern, (proc.stdout or "") + "\n" + (proc.stderr or ""))
+    return f"{label}@{m.group(1)}" if m else ""
+
+
+def _go_rt() -> str:
+    return _tool_version(["go", "version"], r"go(\d+\.\d+)", "go")
+
+
+def _rust_rt() -> str:
+    return _tool_version(["rustc", "--version"], r"rustc (\d+\.\d+)", "rust")
+
+
+def _java_rt() -> str:
+    return _tool_version(["java", "-version"], r"version \"(\d+)", "java")
 
 
 _SITE_FRAME = re.compile(r"""[\\/]site-packages[\\/]([A-Za-z0-9_]+)[\\/]""")
@@ -158,6 +190,10 @@ def tree_eval(cwd: str | os.PathLike[str] | None, eco: str = "") -> str:
         return "go build ./..."
     if (root / "Cargo.toml").exists():
         return "cargo check"
+    if (root / "pom.xml").exists():
+        return "mvn -q compile"
+    if (root / "build.gradle").exists() or (root / "build.gradle.kts").exists():
+        return "gradle -q compileJava"
     return ""
 
 
@@ -177,12 +213,16 @@ def installed_version(name: str, eco: str = "", cwd: str | os.PathLike[str] | No
         except (OSError, ValueError):
             return ""
         return f"{name}@{ver}" if ver else ""
+    if eco == "go":
+        return _go_module_version(name, root)
+    if eco == "rust":
+        return _cargo_lock_version(name, root)
+    if eco == "java":
+        return _java_coordinate_version(name, root)
     from .sandbox import project_python
 
     own = project_python(root)
     if own:
-        import subprocess
-
         try:
             proc = subprocess.run([own, "-c", _DIST_VERSION_CODE, name], capture_output=True, text=True, timeout=15, check=False)
         except (OSError, subprocess.TimeoutExpired):
@@ -190,6 +230,77 @@ def installed_version(name: str, eco: str = "", cwd: str | os.PathLike[str] | No
         if proc is not None and proc.returncode == 0 and proc.stdout.strip():
             return proc.stdout.strip()
     return _dist_version(name)
+
+
+def _go_module_version(pkg: str, root: Path) -> str:
+    """`module@version` providing a Go package path, via the tree's `go list`. "" when unknown or std."""
+    pkg = pkg.split("@", 1)[0]
+    if not shutil.which("go") or not re.match(r"^[A-Za-z0-9_][A-Za-z0-9_./~-]*$", pkg):
+        return ""
+    try:
+        proc = subprocess.run(
+            ["go", "list", "-f", "{{if .Module}}{{.Module.Path}}@{{.Module.Version}}{{end}}", pkg],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+            cwd=str(root),
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    out = (proc.stdout or "").strip()
+    return out if proc.returncode == 0 and "@" in out and not out.endswith("@") else ""
+
+
+def _cargo_lock_version(crate: str, root: Path) -> str:
+    """`crate@version` from Cargo.lock. "" when the lockfile lacks it."""
+    import tomllib
+
+    crate = crate.split("@", 1)[0]
+    try:
+        data = tomllib.loads((root / "Cargo.lock").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    for pkg in data.get("package") or []:
+        if isinstance(pkg, dict) and pkg.get("name") == crate and pkg.get("version"):
+            return f"{crate}@{pkg['version']}"
+    return ""
+
+
+_POM_DEP = re.compile(r"<dependency>(.*?)</dependency>", re.S)
+
+
+def _java_coordinate_version(coord: str, root: Path) -> str:
+    """`group:artifact@version` as pinned in pom.xml or build.gradle(.kts). "" when absent or a property."""
+    coord = coord.split("@", 1)[0]
+    if coord.count(":") != 1:
+        return ""
+    group, artifact = coord.split(":")
+    pom = root / "pom.xml"
+    if pom.is_file():
+        try:
+            text = pom.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            text = ""
+        for block in _POM_DEP.findall(text):
+            g = re.search(r"<groupId>\s*([^<\s]+)\s*</groupId>", block)
+            a = re.search(r"<artifactId>\s*([^<\s]+)\s*</artifactId>", block)
+            v = re.search(r"<version>\s*([^<\s]+)\s*</version>", block)
+            if g and a and g.group(1) == group and a.group(1) == artifact and v and not v.group(1).startswith("$"):
+                return f"{coord}@{v.group(1)}"
+    for name in ("build.gradle.kts", "build.gradle"):
+        f = root / name
+        if not f.is_file():
+            continue
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        m = re.search(r"[\"']" + re.escape(coord) + r":([^\"'\s:]+)[\"']", text)
+        if m and not m.group(1).startswith("$"):
+            return f"{coord}@{m.group(1)}"
+    return ""
 
 
 # `import yaml` is provided by PyYAML: a pin names what pip installs, not the module.

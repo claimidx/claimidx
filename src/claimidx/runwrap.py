@@ -31,11 +31,17 @@ def run_command(argv: list[str], *, cwd: str | None = None, timeout: float | Non
     """Run argv, passing stdout/stderr through live, and return (rc, captured tail of both)."""
     if not argv:
         return 2, ""
+    from .sandbox import _which
+
+    head = argv[0]
+    if not os.path.dirname(head):
+        head = _which(head) or head  # PATH lookup with PATHEXT: `gradle` is gradle.cmd on Windows, as a shell would find it
     try:
-        proc = subprocess.Popen(argv, cwd=cwd or None, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+        proc = subprocess.Popen([head, *argv[1:]], cwd=cwd or None, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
     except OSError as e:
+        # The command never started: that is this wrapper's failure, not the tree's. Nothing to ask or remember.
         sys.stderr.write(f"claimidx run: {e}\n")
-        return 127, str(e)
+        return 127, ""
     chunks: list[str] = []
     assert proc.stdout is not None
     try:
