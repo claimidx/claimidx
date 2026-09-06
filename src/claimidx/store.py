@@ -498,6 +498,57 @@ class Store:
                 ),
             )
 
+    def bind_after_publish(self, claim: Claim, *, cwd: str | None, observe_digest: bool = False, digests=None) -> dict:
+        """Bind a tree recipe to its files under cwd and record observed dependency digests. Returns what was recorded."""
+        from .binding import compute_binding, observe_digests
+
+        out: dict = {}
+        if cwd:
+            binding = compute_binding(claim.eval.cmd, cwd, source="ingest")
+            if binding is not None and self.bind_proof(claim.id, binding, actor=claim.own):
+                out["binding"] = [a.path for a in binding.artifacts]
+        digs = list(digests or [])
+        if observe_digest:
+            digs.extend(observe_digests(claim.dep, cwd, claim.eco))
+        if digs and self.record_observed_digest(claim.id, digs):
+            out["observed_digest"] = [d.dep for d in digs]
+        return out
+
+    def proof_for(self, claim_id: str):
+        """The v2 Proof behind a claim, or None."""
+        from .graph import Proof
+
+        graph = self.graph(claim_id)
+        if not graph or not graph.get("proof"):
+            return None
+        try:
+            return Proof.model_validate(graph["proof"])
+        except Exception:
+            return None
+
+    def update_proof(self, proof) -> None:
+        """Rewrite a proof row in place (binding / observed_digest). Steps and id do not change."""
+        with self._conn() as con:
+            con.execute("UPDATE proofs_v2 SET json=? WHERE id=?", (proof.model_dump_json(), proof.id))
+
+    def bind_proof(self, claim_id: str, binding, *, actor: str = "did:claimidx:anon") -> bool:
+        proof = self.proof_for(claim_id)
+        if proof is None:
+            return False
+        proof.binding = binding
+        self.update_proof(proof)
+        self._event(claim_id, "proof-bind", actor, {"source": binding.source, "paths": [a.path for a in binding.artifacts]})
+        return True
+
+    def record_observed_digest(self, claim_id: str, digests) -> bool:
+        proof = self.proof_for(claim_id)
+        if proof is None or not digests:
+            return False
+        seen = {d.dep for d in proof.observed_digest}
+        proof.observed_digest = [*proof.observed_digest, *[d for d in digests if d.dep not in seen]][:32]
+        self.update_proof(proof)
+        return True
+
     def attach_proof(self, claim_id: str, proof) -> None:
         from .graph import canonical_hash
         from .proofs import validate_proof

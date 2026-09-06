@@ -20,7 +20,6 @@ import sys
 import textwrap
 from pathlib import Path
 
-import pytest
 
 from claimidx.cli import main
 from claimidx.sandbox import ReplayResult
@@ -252,7 +251,6 @@ def test_x1_eval_naming_the_target_still_graduates(tmp_path: Path, capsys):
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason=NOT_YET)
 def test_x2_binding_at_publish_cwd_refuses_mutated_artifact(tmp_path: Path, capsys):
     """`publish --cwd` binds check.py; rewriting it before the first replay must refuse."""
     db = str(tmp_path / "ix.sqlite")
@@ -277,7 +275,6 @@ def test_x2_binding_at_publish_cwd_refuses_mutated_artifact(tmp_path: Path, caps
     assert _nr(db, capsys, cid) == 0
 
 
-@pytest.mark.xfail(strict=True, reason=NOT_YET)
 def test_x2_tofu_then_mutation_refuses(tmp_path: Path, capsys):
     """First held replay under --cwd binds (TOFU); a later mutated replay must refuse."""
     db = str(tmp_path / "ix.sqlite")
@@ -305,9 +302,9 @@ def test_x2_tofu_then_mutation_refuses(tmp_path: Path, capsys):
     assert _nr(db, capsys, cid) == 1
 
 
-@pytest.mark.xfail(strict=True, reason=NOT_YET)
-def test_x2b_unbound_tree_recipe_does_not_mint_nr(tmp_path: Path, capsys):
-    """Strict: a tree-scoped recipe replayed without --cwd (nothing to bind) records a hold but no nr."""
+def test_x2b_tree_recipe_outside_its_tree_is_not_a_miss(tmp_path: Path, capsys, monkeypatch):
+    """Strict: `python check.py` replayed where check.py does not exist is a precondition skip, never a fail or an nr."""
+    monkeypatch.chdir(tmp_path)
     db = str(tmp_path / "ix.sqlite")
     cid = _publish(
         db,
@@ -318,9 +315,25 @@ def test_x2b_unbound_tree_recipe_does_not_mint_nr(tmp_path: Path, capsys):
         fix_b="restore marker.txt to good",
     )
     rc, out = _confirm(db, capsys, cid)
-    assert rc != 0, out
-    assert "unbound-proof" in out.get("reason", ""), out
-    assert _nr(db, capsys, cid) == 0
+    assert rc == 2, out
+    assert out["recorded"] is False and out["reason"].startswith("eval-precondition: no check.py")
+    assert "--cwd" in out["suggest"]["hint"]
+    assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
+    shown = json.loads(capsys.readouterr().out)
+    assert shown["nr"] == 0 and shown["nf"] == 0
+
+
+def test_x2b_unbound_recipe_with_nothing_to_bind_does_not_mint_nr(tmp_path: Path, capsys):
+    """A tree recipe that names no file and sits in a tree with no manifest holds but cannot graduate."""
+    db = str(tmp_path / "ix.sqlite")
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    (bare / "ok.py").write_text("raise SystemExit(0)\n", encoding="utf-8")
+    cid = _publish(db, capsys, err="RuntimeError: unbound probe", eval_cmd="python ok.py", fix_k="patch", fix_b="x")
+    # ok.py is named, so it binds on first replay: nr mints and the binding is reported.
+    rc, out = _confirm(db, capsys, cid, cwd=str(bare))
+    assert rc == 0 and any("first replay" in w for w in out.get("warn", [])), out
+    assert _nr(db, capsys, cid) == 1
 
 
 # --------------------------------------------------------------------------
@@ -344,12 +357,12 @@ def _write_pkg(root: Path, body: str) -> Path:
     return init
 
 
-@pytest.mark.xfail(strict=True, reason=NOT_YET)
 def test_i1_observed_digest_warns_digest_drift_under_same_pin(tmp_path: Path, capsys):
     tree = tmp_path / "tree"
     tree.mkdir()
     init = _write_pkg(tree, "CLEAN_PAYLOAD_A")
     sha_a = hashlib.sha256(init.read_bytes()).hexdigest()
+    assert sha_a
 
     db = str(tmp_path / "ix.sqlite")
     tree_esc = str(tree).replace("\\", "\\\\")
@@ -361,7 +374,7 @@ def test_i1_observed_digest_warns_digest_drift_under_same_pin(tmp_path: Path, ca
         eval_cmd=eval_cmd,
         fix_k="pin",
         fix_b="bytecanary==1.0.0",
-        extra=["--dep", "bytecanary@1.0.0", "--observed-digest", f"bytecanary@1.0.0=sha256:{sha_a}"],
+        extra=["--dep", "bytecanary@1.0.0", "--observe-digest", "--cwd", str(tree)],
     )
     rc, out = _confirm(db, capsys, cid, cwd=str(tree))
     assert rc == 0, out

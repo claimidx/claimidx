@@ -240,6 +240,8 @@ def publish_draft(draft: dict[str, Any], *, db: str | os.PathLike[str] | None, o
         note=str(draft.get("note") or ""),
         own=own,
         db=db,
+        cwd=str(draft.get("cwd") or "") or None,
+        observe_digest=True,
     )
     out = dict(out)
     out["ok"] = True
@@ -272,7 +274,7 @@ def _replay_now(claim_id: str, *, db, own: str | None, cwd: str) -> dict[str, An
     if not result.held:
         # The agent says it is fixed; the eval disagrees. Record nothing, say so loudly.
         return {"held": False, "recorded": False, "reason": "eval-miss: the fix did not hold under this eval", "replay": info}
-    decision = graduation_gate(c, result, cwd=cwd or None, store=store)
+    decision = graduation_gate(c, result, cwd=cwd or None, store=store, actor=resolve_owner(own))
     if not decision.mint_nr:
         return {"held": True, "recorded": False, **decision.refusal(), "replay": info}
     detail = {"ms": int(result.ms or 0), "held": True, "env": {"rt": result.env} if result.env else {}}

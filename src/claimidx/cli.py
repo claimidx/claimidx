@@ -274,6 +274,16 @@ def cmd_publish(ns: argparse.Namespace) -> int:
         from .proofs import load_proof
 
         store.attach_proof(claim.id, load_proof(ns.proof))
+    digests = []
+    for raw in getattr(ns, "observed_digest", None) or []:
+        from .binding import parse_digest_arg
+
+        try:
+            digests.append(parse_digest_arg(raw))
+        except ValueError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+    bound = store.bind_after_publish(claim, cwd=getattr(ns, "cwd", None), observe_digest=bool(getattr(ns, "observe_digest", False)), digests=digests)
     if existing and ns.alternative:
         from .graph import Relation
 
@@ -305,6 +315,7 @@ def cmd_publish(ns: argparse.Namespace) -> int:
     if ns.fmt == "json":
         payload = json.loads(claim.model_dump_json())
         payload["eval_proof"] = proof
+        payload.update(bound)
         if warns:
             payload["warn"] = "; ".join(warns)
         if shared:
@@ -329,6 +340,7 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
         print("quarantine: home claims require confirm --replay", file=sys.stderr)
         return 2
     replay_info = None
+    gate_warns: list[str] = []
     if getattr(ns, "replay", False):
         from .evaltrust import eval_trust
         from .gate import graduation_gate
@@ -366,7 +378,15 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
                 print(json.dumps(replay_info), file=sys.stderr)
                 print(_dumps(failed, ns.fmt))
             return 2
-        decision = graduation_gate(c, result, cwd=getattr(ns, "cwd", None), store=store)
+        decision = graduation_gate(
+            c,
+            result,
+            cwd=getattr(ns, "cwd", None),
+            store=store,
+            strict_digest=True if getattr(ns, "strict_digest", False) else None,
+            actor=resolve_owner(ns.own),
+        )
+        gate_warns = list(decision.warns)
         if not decision.mint_nr:
             if ns.fmt == "json":
                 print(json.dumps({"held": True, "replay": replay_info, "recorded": False, **decision.refusal()}, default=str))
@@ -398,6 +418,8 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
         body = json.loads(confirmed.model_dump_json())
         if replay_info:
             out = {"held": True, "replay": replay_info, "claim": body}
+            if gate_warns:
+                out["warn"] = gate_warns
             if shared:
                 out["share"] = shared
             print(json.dumps(out, default=str))
@@ -408,6 +430,8 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
     else:
         if replay_info:
             print(json.dumps(replay_info), file=sys.stderr)
+        for w in gate_warns:
+            print(f"# warn {w}", file=sys.stderr)
         print(_dumps(confirmed, ns.fmt))
         if shared:
             print(f"# share {shared.get('status')} {shared.get('id')}", file=sys.stderr)
@@ -1179,6 +1203,11 @@ def build_parser() -> argparse.ArgumentParser:
     pub.add_argument("--force", action="store_true")
     pub.add_argument("--alternative", action="store_true", help="store a distinct remedy for an existing failure fingerprint")
     pub.add_argument("--proof", help="attach a structured v2 proof JSON document")
+    pub.add_argument("--cwd", help="tree the eval runs in: binds a tree recipe to the files it names (proof binding)")
+    pub.add_argument("--observe-digest", action="store_true", help="record the digest of the installed artifact for each --dep pin (I1)")
+    pub.add_argument(
+        "--observed-digest", action="append", default=None, metavar="DEP=sha256:HEX", help="record a dependency digest you computed yourself; repeatable"
+    )
     pub.set_defaults(func=cmd_publish)
     c = sub.add_parser("confirm")
     c.add_argument("id")
@@ -1186,6 +1215,7 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--replay", action="store_true")
     c.add_argument("--cwd")
     c.add_argument("--trust-eval", action="store_true", help="run this claim's eval even though it was not published here (prints it first)")
+    c.add_argument("--strict-digest", action="store_true", help="refuse nr on digest_drift instead of warning (also CLAIMIDX_STRICT_DIGEST=1)")
     c.add_argument("--trust-domain", help="declared observation trust domain (provenance, not quorum)")
     c.add_argument("--sensor-plane", help="declared observation sensor plane (provenance, not quorum)")
     c.set_defaults(func=cmd_confirm)

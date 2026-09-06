@@ -116,6 +116,8 @@ def ingest(
     share: bool = False,
     expect: int = 0,
     db: str | os.PathLike[str] | None = None,
+    cwd: str | None = None,
+    observe_digest: bool = False,
 ) -> dict[str, Any]:
     """Write a claim to the local index. Does not share unless share=True.
 
@@ -166,6 +168,7 @@ def ingest(
         **extra,
     )
     store.publish(claim, claim.own, reset)
+    bound = store.bind_after_publish(claim, cwd=cwd, observe_digest=observe_digest)
     if existing and alternative:
         from .graph import Relation
 
@@ -190,6 +193,7 @@ def ingest(
         "own": claim.own,
         "nr": claim.nr,
         "eval_proof": eval_is_proof(claim.eval.cmd),
+        **bound,
     }
     warns = ingest_warnings(err, claim.eval.cmd, cls=claim.cls, dep=claim.dep, eco=claim.eco)
     if warns:

@@ -146,8 +146,17 @@ _CLAIM_WRITE_PROPS: dict[str, Any] = {
     "own": _OWN,
     "force": _FORCE_WRITE,
     "alternative": _ALTERNATIVE,
+    "cwd": {
+        "type": "string",
+        "description": "Tree the eval runs in. A tree recipe (pytest, npx tsc, python check.py) is bound to the files it names there; later replays refuse nr if those bytes change (proof-artifact-drift).",
+    },
+    "observe_digest": {
+        "type": "boolean",
+        "default": False,
+        "description": "Record the digest of the installed artifact behind each dep pin, so a later replay under the same pin but different bytes warns digest_drift.",
+    },
 }
-_CLAIM_WRITE_OUT = _out(exists=_B, id=_S, fp=_S, st=_S, own=_S, nr=_I, eval_proof=_B, warn=_S, share=_O, force_reset=_O)
+_CLAIM_WRITE_OUT = _out(exists=_B, id=_S, fp=_S, st=_S, own=_S, nr=_I, eval_proof=_B, warn=_S, share=_O, force_reset=_O, binding=_A, observed_digest=_A)
 _INGEST_DESCRIPTION = (
     "Record a solved failure as a claim in the local index under your DID. Auto-shares to a live home only when "
     "CLAIMIDX_HOME_API is set and CLAIMIDX_SHARE is not 0; otherwise the claim stays private until claimidx_share. "
@@ -403,6 +412,11 @@ TOOLS: list[dict[str, Any]] = [
                 },
                 "cwd": _CWD,
                 "trust_eval": _TRUST_EVAL,
+                "strict_digest": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Refuse nr on digest_drift (observed dependency digest differs from local bytes) instead of warning.",
+                },
                 "trust_domain": {
                     "type": "string",
                     "description": "Declared trust domain of this observation (e.g. ci, laptop). Provenance only; not attested.",
@@ -930,6 +944,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
 
         shared = maybe_share(store, c)
         out = {"exists": False, "id": c.id, "fp": c.fp, "st": c.st, "own": c.own, "nr": c.nr, "eval_proof": eval_is_proof(c.eval.cmd)}
+        out.update(store.bind_after_publish(c, cwd=args.get("cwd") or None, observe_digest=bool(args.get("observe_digest"))))
         warns = ingest_warnings(err, c.eval.cmd, cls=c.cls, dep=c.dep, eco=c.eco)
         if warns:
             out["warn"] = "; ".join(warns)
@@ -944,6 +959,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             raise KeyError(args["id"])
         if getattr(current, "src", "local") == "home" and not args.get("replay"):
             raise ValueError("quarantine: home claims require confirm with replay=true")
+        gate_warns: list[str] = []
         if args.get("replay"):
             from .evaltrust import eval_trust
             from .gate import graduation_gate
@@ -972,7 +988,15 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             if not result.held:
                 failed = store.fail(args["id"], resolve_owner(args.get("own")), detail=eval_detail)
                 return {"id": failed.id, "st": failed.st, "nc": failed.nc, "nf": failed.nf, "replay": result.as_dict(), "held": False}
-            decision = graduation_gate(current, result, cwd=args.get("cwd"), store=store)
+            decision = graduation_gate(
+                current,
+                result,
+                cwd=args.get("cwd"),
+                store=store,
+                strict_digest=True if args.get("strict_digest") else None,
+                actor=resolve_owner(args.get("own")),
+            )
+            gate_warns = list(decision.warns)
             if not decision.mint_nr:
                 return {
                     "id": current.id,
@@ -1003,6 +1027,8 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
 
         shared = maybe_share(store, c)
         out = {"id": c.id, "st": c.st, "nc": c.nc, "nf": c.nf, "own": resolve_owner(args.get("own")), "held": True}
+        if gate_warns:
+            out["warn"] = gate_warns
         if shared:
             out["share"] = shared
         return out

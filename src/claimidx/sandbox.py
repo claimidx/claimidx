@@ -197,14 +197,32 @@ def replay_records_hold(claim_rt: str, result: ReplayResult, cmd: str = "") -> t
     return True, "held"
 
 
+_NAMED_FILE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:py|js|mjs|cjs|ts|tsx|jsx|rs|go|sh|toml|json|ya?ml|txt|cfg|ini)$")
+
+
 def _precondition(head: str, cwd: str | None, cmd: str = "") -> str | None:
     markers = _TREE_MARKERS.get(head)
     blob = cmd or ""
+    try:
+        _env, parts = split_eval(blob)
+    except ValueError:
+        parts = []
+    tokens = {p.lower() for p in parts}
+    if head in {"python", "python3", "node", "rustc"}:
+        # `python check.py` outside the tree is not a miss; it is a recipe with nothing to run against.
+        for tok in parts[1:]:
+            if tok.startswith("-"):
+                break
+            if _NAMED_FILE.match(tok) and ".." not in tok.split("/"):
+                if not os.path.exists(os.path.join(cwd or os.getcwd(), tok)):
+                    return f"eval-precondition: no {tok} in cwd"
+                break
     if head in {"python", "python3"} and _LOCAL_PIP.search(blob):
         markers = ("pyproject.toml", "setup.py", "setup.cfg")
-    elif head in {"python", "python3"} and re.search(r"\bpytest\b", blob):
+    elif head in {"python", "python3"} and "pytest" in tokens:
+        # An argv token, not a substring: a -c payload or a path containing "pytest" is not a pytest run.
         markers = _TREE_MARKERS["pytest"]
-    elif re.search(r"\bmake\b", blob) and head in {"python", "python3", "node", "test", "make"}:
+    elif "make" in tokens and head in {"python", "python3", "node", "test", "make"}:
         markers = _TREE_MARKERS["make"]
     if not markers:
         return None

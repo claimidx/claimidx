@@ -80,11 +80,47 @@ class ProofStep(V2Model):
         return self
 
 
+class ArtifactDigest(V2Model):
+    """Digest of one file or directory the proof recipe names, relative to --cwd."""
+
+    path: str = Field(min_length=1, max_length=400)
+    alg: Literal["sha256"] = "sha256"
+    hex: Digest
+
+
+class ProofBinding(V2Model):
+    """What the recipe was bound to when it last proved something.
+
+    `confirm --replay` re-hashes the same paths under --cwd; a mismatch is
+    `proof-artifact-drift` and does not graduate. `source` says whether the
+    author bound it at ingest (`publish --cwd`) or the first held replay did
+    (trust-on-first-use).
+    """
+
+    artifacts: list[ArtifactDigest] = Field(min_length=1, max_length=64)
+    source: Literal["ingest", "first-replay"] = "ingest"
+    recorded: datetime = Field(default_factory=utcnow)
+
+
+class DepDigest(V2Model):
+    """Digest of the dependency artifact the author actually observed under a `name@ver` pin.
+
+    Optional. Never part of the fingerprint: same pin + different bytes is the
+    same failure identity, surfaced as `digest_drift` on replay.
+    """
+
+    dep: str = Field(min_length=1, max_length=200)
+    alg: Literal["sha256"] = "sha256"
+    hex: Digest
+
+
 class Proof(V2Model):
     v: Literal[2] = 2
     id: ProofId = Field(default_factory=lambda: _id("prf_"))
     steps: list[ProofStep] = Field(min_length=1, max_length=32)
     legacy_cmd: str = ""
+    binding: ProofBinding | None = None
+    observed_digest: list[DepDigest] = Field(default_factory=list, max_length=32)
     created: datetime = Field(default_factory=utcnow)
 
 

@@ -39,6 +39,35 @@
       "title": "Applicability",
       "type": "object"
     },
+    "ArtifactDigest": {
+      "additionalProperties": false,
+      "description": "Digest of one file or directory the proof recipe names, relative to --cwd.",
+      "properties": {
+        "alg": {
+          "const": "sha256",
+          "default": "sha256",
+          "title": "Alg",
+          "type": "string"
+        },
+        "hex": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Hex",
+          "type": "string"
+        },
+        "path": {
+          "maxLength": 400,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "hex"
+      ],
+      "title": "ArtifactDigest",
+      "type": "object"
+    },
     "Bundle": {
       "additionalProperties": false,
       "properties": {
@@ -64,6 +93,35 @@
         "remedy"
       ],
       "title": "Bundle",
+      "type": "object"
+    },
+    "DepDigest": {
+      "additionalProperties": false,
+      "description": "Digest of the dependency artifact the author actually observed under a `name@ver` pin.\n\nOptional. Never part of the fingerprint: same pin + different bytes is the\nsame failure identity, surfaced as `digest_drift` on replay.",
+      "properties": {
+        "alg": {
+          "const": "sha256",
+          "default": "sha256",
+          "title": "Alg",
+          "type": "string"
+        },
+        "dep": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Dep",
+          "type": "string"
+        },
+        "hex": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Hex",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dep",
+        "hex"
+      ],
+      "title": "DepDigest",
       "type": "object"
     },
     "Failure": {
@@ -288,6 +346,17 @@
     "Proof": {
       "additionalProperties": false,
       "properties": {
+        "binding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProofBinding"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "created": {
           "format": "date-time",
           "title": "Created",
@@ -302,6 +371,14 @@
           "default": "",
           "title": "Legacy Cmd",
           "type": "string"
+        },
+        "observed_digest": {
+          "items": {
+            "$ref": "#/$defs/DepDigest"
+          },
+          "maxItems": 32,
+          "title": "Observed Digest",
+          "type": "array"
         },
         "steps": {
           "items": {
@@ -323,6 +400,40 @@
         "steps"
       ],
       "title": "Proof",
+      "type": "object"
+    },
+    "ProofBinding": {
+      "additionalProperties": false,
+      "description": "What the recipe was bound to when it last proved something.\n\n`confirm --replay` re-hashes the same paths under --cwd; a mismatch is\n`proof-artifact-drift` and does not graduate. `source` says whether the\nauthor bound it at ingest (`publish --cwd`) or the first held replay did\n(trust-on-first-use).",
+      "properties": {
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/ArtifactDigest"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "recorded": {
+          "format": "date-time",
+          "title": "Recorded",
+          "type": "string"
+        },
+        "source": {
+          "default": "ingest",
+          "enum": [
+            "ingest",
+            "first-replay"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifacts"
+      ],
+      "title": "ProofBinding",
       "type": "object"
     },
     "ProofStep": {

@@ -441,7 +441,7 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
     return {"action": "skip", "reason": result.reason, "id": c.id, "replay": result.as_dict()}
 
 
-def decide(c: Claim, *, scratch: Path, trust: str = "local") -> dict:
+def decide(c: Claim, *, scratch: Path, trust: str = "local", store: Store | None = None) -> dict:
     cmd = c.eval.cmd
     ok, reason = eval_allowed(cmd)
     if not ok:
@@ -495,9 +495,11 @@ def decide(c: Claim, *, scratch: Path, trust: str = "local") -> dict:
     if not result.ran:
         return {"action": "skip", "reason": result.reason, "id": c.id, "replay": info}
     if result.held:
-        decision = graduation_gate(c, result, cwd=str(scratch))
+        decision = graduation_gate(c, result, cwd=str(scratch), store=store)
         if not decision.mint_nr:
             return {"action": "skip", **decision.refusal(), "id": c.id, "replay": info}
+        if decision.warns:
+            return {"action": "confirm", "reason": "held", "id": c.id, "replay": info, "warn": list(decision.warns)}
         return {"action": "confirm", "reason": "held", "id": c.id, "replay": info}
     blob = (result.stderr or "") + " " + (result.stdout or "")
     if is_runnable(c):
@@ -586,7 +588,7 @@ def run(
             if harness_mode and trust != "local":
                 decision = {"action": "skip", "reason": "eval-untrusted: harness installs pins from a claim not published here", "id": c.id}
             else:
-                decision = harness(c, work) if harness_mode else decide(c, scratch=replay_root, trust=trust)
+                decision = harness(c, work) if harness_mode else decide(c, scratch=replay_root, trust=trust, store=store)
             action = decision["action"]
             if not dry_run:
                 if action == "confirm":

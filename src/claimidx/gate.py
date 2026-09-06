@@ -17,9 +17,11 @@ Source of the contract: `Validated Results/` and tests/test_graduation_gate.py.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from .binding import binding_drift, compute_binding, digest_drift, is_tree_scoped
 from .sandbox import ReplayResult, replay_records_hold
 from .target import claim_target, eval_observes_target, proof_observes_target, suggest_eval
 
@@ -113,11 +115,14 @@ def graduation_gate(
     *,
     cwd: str | None = None,
     store: Store | None = None,
+    strict_digest: bool | None = None,
+    actor: str = "did:claimidx:anon",
 ) -> GateDecision:
     """Decide whether `result` (a replay of `claim.eval`) may mint `nr`.
 
     Callers have already handled `result.is_hint()` and `not result.held`;
-    this gate only sees holds that ran.
+    this gate only sees holds that ran. `store` is needed for the binding and
+    digest checks (they live on the v2 Proof); without it those are skipped.
     """
     ok, why = replay_records_hold(claim.rt, result, claim.eval.cmd)
     if not ok:
@@ -132,4 +137,38 @@ def graduation_gate(
             if suggest
             else {"hint": f"use an eval that imports or exercises {target}"},
         )
-    return GateDecision(True, "held")
+    warns: list[str] = []
+    proof = store.proof_for(claim.id) if store is not None else None
+    if is_tree_scoped(claim.eval.cmd):
+        cwd = cwd or os.getcwd()  # the replay ran there; bind to the same place
+        if proof is not None and proof.binding is not None:
+            drift = binding_drift(proof.binding, cwd)
+            if drift:
+                if store is not None:
+                    store.log("proof-drift", actor, claim.id, {"paths": drift})
+                return GateDecision(
+                    False,
+                    "proof-artifact-drift: " + ", ".join(drift[:8]),
+                    suggest={"hint": "the recipe's files changed since the proof was bound; if that is your fix, re-publish --force --cwd <tree> to re-bind"},
+                )
+        elif proof is not None and store is not None:
+            binding = compute_binding(claim.eval.cmd, cwd, source="first-replay")
+            if binding is None:
+                return GateDecision(
+                    False,
+                    "unbound-proof: nothing under --cwd to bind this recipe to",
+                    suggest={"hint": "the eval names no file under --cwd and the tree has no manifest; point --cwd at the project"},
+                )
+            store.bind_proof(claim.id, binding, actor=actor)
+            warns.append("proof bound on first replay (trust-on-first-use): " + ", ".join(a.path for a in binding.artifacts[:6]))
+    if proof is not None and proof.observed_digest:
+        drift = digest_drift(proof.observed_digest, cwd, claim.eco)
+        if drift:
+            strict = strict_digest if strict_digest is not None else (os.environ.get("CLAIMIDX_STRICT_DIGEST") or "").strip() in {"1", "true", "yes"}
+            msg = "digest_drift: local bytes differ from the observed digest under the same pin: " + ", ".join(drift[:8])
+            if strict:
+                return GateDecision(
+                    False, msg, suggest={"hint": "re-install the pinned artifact, or re-publish --force --observe-digest if the new bytes are the fix"}
+                )
+            warns.append(msg)
+    return GateDecision(True, "held", warns=warns)
