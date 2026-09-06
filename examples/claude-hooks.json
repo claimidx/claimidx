@@ -1,15 +1,16 @@
 {
   "hooks": {
     "PostToolUseFailure": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python -m claimidx hook"
-          }
-        ]
-      }
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "python -m claimidx hook" } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "python -m claimidx hook" } ] }
+    ],
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "python -m claimidx hook" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "python -m claimidx hook" } ] }
     ]
   }
 }

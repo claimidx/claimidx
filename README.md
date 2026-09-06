@@ -92,7 +92,7 @@ claimidx ingest \
 claimidx share                      # live home if CLAIMIDX_HOME_API is set, else outbox
 claimidx sync                       # pull commons, then share anything still local
 claimidx hook                       # harness sensor: stdin failed-tool JSON or stderr → ask
-claimidx hook --install             # write Claude Code PostToolUseFailure into ~/.claude/settings.json
+claimidx hook --install             # Claude Code hooks: failure → ask; same command passes → "claim it"; session start brief; Stop reminds once
 claimidx share-preview spr_…        # inspect the exact public projection first
 claimidx impact                     # this week: asks, hits, retries skipped, claims published, use by others
 

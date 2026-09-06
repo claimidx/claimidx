@@ -215,7 +215,9 @@ def last_failure_path() -> Path:
     return config_path().parent / "last_failure.json"
 
 
-def remember_failure(err: str, *, command: str = "", cwd: str = "", eco: str = "", rt: str = "", event: str = "", fp: str = "") -> dict[str, Any]:
+def remember_failure(
+    err: str, *, command: str = "", cwd: str = "", eco: str = "", rt: str = "", event: str = "", fp: str = "", extra: dict[str, Any] | None = None
+) -> dict[str, Any]:
     from .security import SecretError, reject_secrets, strip_control
 
     command = strip_control(command or "")
@@ -232,6 +234,7 @@ def remember_failure(err: str, *, command: str = "", cwd: str = "", eco: str = "
         "event": event or "",
         "fp": fp or "",
         "ts": int(time.time()),
+        **(extra or {}),
     }
     try:
         path = last_failure_path()

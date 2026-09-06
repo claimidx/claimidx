@@ -169,6 +169,88 @@ def sensor(store, raw: str, *, eco: str = "", rt: str = "", dep: list | None = N
     }
 
 
+def _same_command(a: str, b: str) -> bool:
+    return bool(a) and bool(b) and " ".join(a.split()) == " ".join(b.split())
+
+
+def success_nudge(raw: str, store) -> str | None:
+    """PostToolUse: the remembered failure's command just passed. Say so, once, with the draft."""
+    from .env import last_failure, remember_failure
+
+    rec = last_failure()
+    if not rec or rec.get("nudged"):
+        return None
+    ctx = extract_hook_context(raw)
+    cmd = ctx.get("command", "")
+    if not _same_command(cmd, str(rec.get("command") or "")):
+        return None
+    body = ctx.get("body", "")
+    if _first_err_line(body) and _ERR_LINE.search(body):
+        return None  # still failing
+    try:
+        from .claim import draft_claim
+
+        draft = draft_claim(cwd=str(rec.get("cwd") or ctx.get("cwd") or ""))
+    except Exception:
+        draft = {"ok": False}
+    rec["nudged"] = True
+    remember_failure(
+        str(rec["err"]),
+        command=cmd,
+        cwd=str(rec.get("cwd") or ""),
+        eco=str(rec.get("eco") or ""),
+        rt=str(rec.get("rt") or ""),
+        event="fixed",
+        fp=str(rec.get("fp") or ""),
+        extra={"nudged": True},
+    )
+    line = f"CLAIMIDX fixed: `{cmd}` now passes after failing with: {rec['err'][:120]}"
+    if draft.get("ok"):
+        line += (
+            f"\nRecord it so the next agent skips this: claimidx claim --yes"
+            f"   (drafted: fix.k={draft['fix_k']} eval={draft['eval']} proof={str(draft['eval_proof']).lower()})"
+        )
+    else:
+        line += "\nRecord it so the next agent skips this: claimidx claim --yes --fix '<what you changed>'"
+    return line
+
+
+def session_brief(store) -> str:
+    """SessionStart: one line of value, one line of what to do."""
+    from .impact import local_impact
+
+    try:
+        imp = local_impact(store, days=7)
+        first = f"CLAIMIDX 7d: asks {imp['asks']}, hits {imp['hits']}, retries skipped {imp['retries_skipped']}, claims published {imp['claims_published']}."
+    except Exception:
+        first = "CLAIMIDX is installed."
+    return first + " Failed commands are looked up automatically; after you fix one, run `claimidx claim --yes`."
+
+
+def stop_reminder(store) -> dict | None:
+    """Stop: block once when a failure was fixed this session and never claimed."""
+    from .env import last_failure, remember_failure
+
+    rec = last_failure()
+    if not rec or not rec.get("nudged") or rec.get("stop_nudged"):
+        return None
+    rec["stop_nudged"] = True
+    remember_failure(
+        str(rec["err"]),
+        command=str(rec.get("command") or ""),
+        cwd=str(rec.get("cwd") or ""),
+        eco=str(rec.get("eco") or ""),
+        rt=str(rec.get("rt") or ""),
+        event="fixed",
+        fp=str(rec.get("fp") or ""),
+        extra={"nudged": True, "stop_nudged": True},
+    )
+    return {
+        "decision": "block",
+        "reason": f"You fixed `{rec.get('command') or 'a failing command'}` ({rec['err'][:100]}) but did not record it. Run `claimidx claim --yes` (or `claimidx claim` to review the draft), then stop.",
+    }
+
+
 def claude_context(event: str, dense: str) -> str:
     payload = {
         "hookSpecificOutput": {
@@ -194,21 +276,42 @@ def claude_settings_path() -> Path:
     return Path.home() / ".claude" / "settings.json"
 
 
-def claude_hook_block() -> dict:
+# The four moments an agent forgets Claimidx, and the one command that covers them all:
+#   PostToolUseFailure  a command failed          -> ask, remember the failure
+#   PostToolUse         the same command passed   -> "you fixed it: claimidx claim --yes"
+#   SessionStart        a new session             -> one-line brief (impact, what to do)
+#   Stop                the turn is ending        -> once: a fixed-but-unclaimed failure
+CLAUDE_EVENTS: tuple[tuple[str, str | None], ...] = (
+    ("PostToolUseFailure", "Bash"),
+    ("PostToolUse", "Bash"),
+    ("SessionStart", None),
+    ("Stop", None),
+)
+
+
+def claude_hook_block(matcher: str | None = "Bash") -> dict:
     h: dict = {"type": "command", "command": hook_command()}
     if os.name == "nt":
         h["shell"] = "powershell"
-    return {"matcher": "Bash", "hooks": [h]}
+    block: dict = {"hooks": [h]}
+    if matcher:
+        block["matcher"] = matcher
+    return block
 
 
 def settings_has_claimidx(data: dict) -> bool:
-    for group in (data.get("hooks") or {}).get("PostToolUseFailure") or []:
-        if not isinstance(group, dict):
-            continue
-        for h in group.get("hooks") or []:
-            if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
-                return True
-    return False
+    hooks = data.get("hooks") or {}
+    for event, _matcher in CLAUDE_EVENTS:
+        present = False
+        for group in hooks.get(event) or []:
+            if not isinstance(group, dict):
+                continue
+            for h in group.get("hooks") or []:
+                if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
+                    present = True
+        if not present:
+            return False
+    return True
 
 
 def merge_claude_hooks(data: dict) -> dict:
@@ -219,27 +322,28 @@ def merge_claude_hooks(data: dict) -> dict:
     if not isinstance(raw_hooks, dict):
         raise ValueError("settings.json hooks is not an object")
     hooks = dict(raw_hooks)
-    raw_groups = hooks.get("PostToolUseFailure") or []
-    if not isinstance(raw_groups, list):
-        raise ValueError("settings.json PostToolUseFailure is not a list")
-    groups = list(raw_groups)
     cmd = hook_command()
-    found = False
-    for group in groups:
-        if not isinstance(group, dict):
-            continue
-        for h in group.get("hooks") or []:
-            if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
-                h["type"] = "command"
-                h["command"] = cmd
-                if os.name == "nt":
-                    h["shell"] = "powershell"
-                else:
-                    h.pop("shell", None)
-                found = True
-    if not found:
-        groups.append(claude_hook_block())
-    hooks["PostToolUseFailure"] = groups
+    for event, matcher in CLAUDE_EVENTS:
+        raw_groups = hooks.get(event) or []
+        if not isinstance(raw_groups, list):
+            raise ValueError(f"settings.json {event} is not a list")
+        groups = list(raw_groups)
+        found = False
+        for group in groups:
+            if not isinstance(group, dict):
+                continue
+            for h in group.get("hooks") or []:
+                if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
+                    h["type"] = "command"
+                    h["command"] = cmd
+                    if os.name == "nt":
+                        h["shell"] = "powershell"
+                    else:
+                        h.pop("shell", None)
+                    found = True
+        if not found:
+            groups.append(claude_hook_block(matcher))
+        hooks[event] = groups
     out["hooks"] = hooks
     return out
 
@@ -276,6 +380,7 @@ def install_claude_hook(path: Path | None = None) -> dict:
         "path": str(target),
         "command": hook_command(),
         "event": "PostToolUseFailure",
+        "events": [e for e, _m in CLAUDE_EVENTS],
         "matcher": "Bash",
         "status": "installed",
     }

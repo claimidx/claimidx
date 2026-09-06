@@ -152,6 +152,22 @@ def cmd_hook(ns: argparse.Namespace) -> int:
 
     raw = (getattr(ns, "err", None) or "").strip() or sys.stdin.read()
     err, event = extract_hook_err(raw)
+    if event in {"PostToolUse", "SessionStart", "Stop"}:
+        from .hook import session_brief, stop_reminder, success_nudge
+
+        store = _store(ns)
+        if event == "SessionStart":
+            print(claude_context(event, session_brief(store)))
+            return 0
+        if event == "PostToolUse":
+            nudge = success_nudge(raw, store)
+            if nudge:
+                print(claude_context(event, nudge))
+            return 0
+        reminder = stop_reminder(store)
+        if reminder:
+            print(json.dumps(reminder))
+        return 0
     if not err:
         return 0
     store = _store(ns)

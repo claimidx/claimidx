@@ -365,3 +365,72 @@ def test_mcp_hook_fail_open_empty_and_secrets(tmp_path):
     secret_body = json.loads(secret["result"]["content"][0]["text"])
     assert secret_body["hit"] is False
     assert secret_body["apply_fix"] is False
+
+
+def test_install_wires_all_four_events(tmp_path, capsys):
+    settings = tmp_path / "claude" / "settings.json"
+    assert main(["hook", "--install"]) == 0
+    data = json.loads(settings.read_text(encoding="utf-8"))
+    for event in ("PostToolUseFailure", "PostToolUse", "SessionStart", "Stop"):
+        assert any("claimidx hook" in json.dumps(g) for g in data["hooks"][event]), event
+    assert data["hooks"]["PostToolUse"][0]["matcher"] == "Bash"
+    assert "matcher" not in data["hooks"]["Stop"][0]
+    assert main(["hook", "--install"]) == 0
+    data2 = json.loads(settings.read_text(encoding="utf-8"))
+    assert data2 == data  # idempotent
+
+
+def test_never_forget_flow(tmp_path, capsys):
+    """failure -> same command passes -> one nudge with the draft -> Stop blocks once -> claim clears it."""
+    db = str(tmp_path / "ix.sqlite")
+    tree = tmp_path / "t"
+    tree.mkdir()
+    fail = json.dumps(
+        {
+            "hook_event_name": "PostToolUseFailure",
+            "tool_name": "Bash",
+            "tool_input": {"command": "python app.py"},
+            "cwd": str(tree),
+            "tool_response": {"stderr": "ModuleNotFoundError: No module named 'json'"},
+        }
+    )
+    assert main(["--db", db, "hook", "--err", fail]) == 0
+    capsys.readouterr()
+    ok = json.dumps(
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "python  app.py"},
+            "cwd": str(tree),
+            "tool_response": {"stdout": "ok\n"},
+        }
+    )
+    assert main(["--db", db, "hook", "--err", ok]) == 0
+    ctx = json.loads(capsys.readouterr().out)["hookSpecificOutput"]["additionalContext"]
+    assert ctx.startswith("CLAIMIDX fixed: `python  app.py`") and "claimidx claim --yes" in ctx and 'eval=python -c "import json"' in ctx
+    # Not twice.
+    assert main(["--db", db, "hook", "--err", ok]) == 0
+    assert capsys.readouterr().out == ""
+    # Stop blocks once with the reason, then never again.
+    assert main(["--db", db, "hook", "--err", json.dumps({"hook_event_name": "Stop"})]) == 0
+    stop = json.loads(capsys.readouterr().out)
+    assert stop["decision"] == "block" and "claimidx claim --yes" in stop["reason"]
+    assert main(["--db", db, "hook", "--err", json.dumps({"hook_event_name": "Stop"})]) == 0
+    assert capsys.readouterr().out == ""
+    # Claiming consumes the remembered failure.
+    assert main(["--db", db, "--fmt", "json", "claim", "--yes", "--no-diff", "--fix", "json"]) == 0
+    assert json.loads(capsys.readouterr().out)["ok"] is True
+    from claimidx.env import last_failure
+
+    assert last_failure() is None
+    # A session brief is one line and never fails.
+    assert main(["--db", db, "hook", "--err", json.dumps({"hook_event_name": "SessionStart"})]) == 0
+    brief = json.loads(capsys.readouterr().out)["hookSpecificOutput"]["additionalContext"]
+    assert brief.startswith("CLAIMIDX 7d:") and "claimidx claim --yes" in brief
+
+
+def test_success_hook_stays_silent_without_a_remembered_failure(tmp_path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    ok = json.dumps({"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {"command": "ls"}, "tool_response": {"stdout": "a\n"}})
+    assert main(["--db", db, "hook", "--err", ok]) == 0
+    assert capsys.readouterr().out == ""
