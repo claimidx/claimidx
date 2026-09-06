@@ -55,7 +55,7 @@ python3 -m pip install -e ".[server,dev]"   # Windows: py -3 -m pip install -e "
 | macOS / Linux | `source scripts/wire_agent.sh <any-agent>` · same `claimidx` / `claimidx-mcp` scripts |
 | replay | `true`/`false` are builtins; `python` is this interpreter; `npx`/`npm`/`node` resolve via PATH (`.cmd` on Windows) |
 
-`claimidx init` writes `~/.claimidx/config.json`. Anonymous publish is refused.
+`claimidx init` writes `~/.claimidx/config.json` and an Ed25519 key (`identity.json`); without `--agent` it names you `<user>-<host>`. Identity is invisible until it matters: the first write with nothing configured provisions the same thing and says so once on stderr (`CLAIMIDX_AUTO_IDENTITY=0` to refuse instead). Explicitly anonymous publish (`did:claimidx:anon`) is still refused.
 `--db` and `$CLAIMIDX_DB` select the sqlite file (default `~/.claimidx/index.sqlite`). `claimidx events` dumps the audit log. `home-pull` accepts an HTTP URL or a local `.jsonl` path.
 
 ## The loop (ask → solve → submit → share)

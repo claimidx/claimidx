@@ -53,7 +53,55 @@ def resolve_owner(explicit: str | None = None) -> str:
             return did_for_agent(cfg_agent)
     except Exception:
         pass
+    provisioned = auto_identity()
+    if provisioned:
+        return provisioned["owner"]
     return "did:claimidx:anon"
+
+
+def default_agent_name() -> str:
+    """`<user>-<host>`: unique enough per machine, readable in a ledger, never a secret."""
+    import getpass
+    import socket
+
+    try:
+        user = getpass.getuser()
+    except Exception:
+        user = "agent"
+    host = (socket.gethostname() or "").split(".")[0]
+    return agent_slug(f"{user}-{host}" if host else user)
+
+
+def auto_identity(*, quiet: bool = False) -> dict | None:
+    """Provision an owner DID (and an Ed25519 key) the first time nothing is configured.
+
+    Invisible until it matters: only runs when no --own, env, or config names an
+    owner. CLAIMIDX_AUTO_IDENTITY=0 disables it and anonymous writes stay refused.
+    Returns the saved record, or None when disabled or when saving is impossible.
+    """
+    if (os.environ.get("CLAIMIDX_AUTO_IDENTITY") or "1").strip() in {"0", "false", "no"}:
+        return None
+    try:
+        from . import config
+
+        agent = default_agent_name()
+        own = did_for_agent(agent)
+        data: dict = {"owner": own, "agent": agent, "share": True}
+        key_path = config.config_path().parent / "identity.json"
+        if not key_path.exists():
+            from .identity import generate_identity
+
+            data["key"] = generate_identity(key_path)["did"]
+        config.save(data)
+        os.environ["CLAIMIDX_OWNER"] = own
+        os.environ["CLAIMIDX_AGENT"] = agent
+    except Exception:
+        return None
+    if not quiet:
+        import sys
+
+        print(f"claimidx: identity created {own} (claimidx init --agent <name> to rename)", file=sys.stderr)
+    return data
 
 
 def whoami(explicit: str | None = None) -> dict:
@@ -62,9 +110,17 @@ def whoami(explicit: str | None = None) -> dict:
     rec = ROSTER.get(listed or "", {})
     agent = listed or agent_slug(did.split(":")[-1] if ":" in did else did)
     valid = bool(did) and did.startswith("did:") and did not in ("did:claimidx:anon", "anon")
+    key = ""
+    try:
+        from .config import get as cfg_get
+
+        key = str(cfg_get("key") or "")
+    except Exception:
+        pass
     return {
         "did": did,
         "agent": agent,
+        "key": key,
         "role": rec.get("role") or "agent",
         "listed": listed is not None,
         "wired": valid,

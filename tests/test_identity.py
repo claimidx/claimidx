@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -63,3 +64,90 @@ def test_cli_publish_refuses_anon(tmp_path: Path, capsys, monkeypatch):
     assert rc != 0
     err = capsys.readouterr().err
     assert "anonymous" in err.lower() or "refused" in err.lower() or "error" in err.lower()
+
+
+def test_first_write_provisions_identity_when_nothing_is_configured(tmp_path: Path, capsys, monkeypatch):
+    """No --own, no env, no config: the first write creates an owner DID and a key instead of refusing."""
+    monkeypatch.delenv("CLAIMIDX_OWNER", raising=False)
+    monkeypatch.delenv("CLAIMIDX_AGENT", raising=False)
+    db = str(tmp_path / "ix.sqlite")
+    rc = main(
+        [
+            "--db",
+            db,
+            "--fmt",
+            "json",
+            "publish",
+            "--err",
+            "RuntimeError: auto identity probe",
+            "--eco",
+            "py",
+            "--fix-k",
+            "constraint",
+            "--fix-b",
+            "ok",
+            "--eval",
+            "true",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert rc == 0, captured.err
+    out = json.loads(captured.out)
+    assert out["own"].startswith("did:claimidx:") and out["own"] != "did:claimidx:anon"
+    assert "identity created" in captured.err
+    from claimidx import config
+
+    data = json.loads(config.config_path().read_text(encoding="utf-8"))
+    assert data["owner"] == out["own"]
+    assert data["key"].startswith("did:key:")
+    assert (config.config_path().parent / "identity.json").exists()
+    # Second write is silent and reuses it.
+    rc = main(
+        [
+            "--db",
+            db,
+            "--fmt",
+            "json",
+            "publish",
+            "--err",
+            "RuntimeError: auto identity probe 2",
+            "--eco",
+            "py",
+            "--fix-k",
+            "constraint",
+            "--fix-b",
+            "ok",
+            "--eval",
+            "true",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert rc == 0 and "identity created" not in captured.err
+    assert json.loads(captured.out)["own"] == out["own"]
+
+
+def test_auto_identity_can_be_disabled(tmp_path: Path, capsys, monkeypatch):
+    monkeypatch.delenv("CLAIMIDX_OWNER", raising=False)
+    monkeypatch.delenv("CLAIMIDX_AGENT", raising=False)
+    monkeypatch.setenv("CLAIMIDX_AUTO_IDENTITY", "0")
+    db = str(tmp_path / "ix.sqlite")
+    rc = main(["--db", db, "publish", "--err", "RuntimeError: no auto", "--eco", "py", "--fix-k", "constraint", "--fix-b", "ok", "--eval", "true"])
+    assert rc != 0
+    assert "refused" in capsys.readouterr().err.lower()
+
+
+def test_init_without_agent_picks_a_name_and_a_key(tmp_path: Path, capsys, monkeypatch):
+    monkeypatch.delenv("CLAIMIDX_OWNER", raising=False)
+    monkeypatch.delenv("CLAIMIDX_AGENT", raising=False)
+    db = str(tmp_path / "ix.sqlite")
+    rc = main(["--db", db, "init", "--offline", "--no-hooks"])
+    captured = capsys.readouterr()
+    assert rc == 0, captured.err
+    from claimidx import config
+
+    data = json.loads(config.config_path().read_text(encoding="utf-8"))
+    assert data["owner"].startswith("did:claimidx:") and data["agent"]
+    assert data["key"].startswith("did:key:")
+    assert main(["--db", db, "whoami"]) == 0
+    who = capsys.readouterr().out
+    assert data["key"] in who

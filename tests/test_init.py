@@ -3,13 +3,14 @@ from pathlib import Path
 from claimidx.cli import main
 
 
-def test_init_requires_an_agent(tmp_path: Path, capsys, monkeypatch):
+def test_init_without_agent_provisions_a_default_name(tmp_path: Path, capsys, monkeypatch):
+    """init no longer refuses without --agent: a <user>-<host> slug and an Ed25519 key are provisioned."""
     monkeypatch.delenv("CLAIMIDX_OWNER", raising=False)
     monkeypatch.delenv("CLAIMIDX_AGENT", raising=False)
     monkeypatch.setenv("CLAIMIDX_CONFIG", str(tmp_path / "config.json"))
-    rc = main(["--db", str(tmp_path / "ix.sqlite"), "init", "--offline"])
-    assert rc == 2
-    assert "any-name" in capsys.readouterr().err
+    rc = main(["--db", str(tmp_path / "ix.sqlite"), "init", "--offline", "--no-hooks"])
+    assert rc == 0
+    assert "init --agent <name>" in capsys.readouterr().err
 
 
 def test_init_offline_seeds_and_writes_config(tmp_path: Path, capsys, monkeypatch):

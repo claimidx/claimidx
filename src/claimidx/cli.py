@@ -860,10 +860,24 @@ def cmd_init(ns: argparse.Namespace) -> int:
     else:
         own = (os.environ.get("CLAIMIDX_OWNER") or "").strip()
         if not own and not agent:
-            print("error: pass --agent <any-name> or --own did:... (any runtime, any provider)", file=sys.stderr)
-            return 2
+            from .team import default_agent_name
+
+            agent = default_agent_name()
+            print(f"# no --agent given; using {agent} (rename any time with claimidx init --agent <name>)", file=sys.stderr)
         own = own or did_for_agent(agent)
     data = {"owner": own, "agent": agent, "share": True}
+    key_path = config.config_path().parent / "identity.json"
+    if not key_path.exists():
+        from .identity import generate_identity
+
+        data["key"] = generate_identity(key_path)["did"]
+    else:
+        try:
+            from .identity import load_identity
+
+            data["key"] = load_identity(key_path)[0]
+        except (OSError, ValueError):
+            pass
     if ns.home_api:
         data["home_api"] = ns.home_api
     if ns.home:
