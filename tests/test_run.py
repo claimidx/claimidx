@@ -69,9 +69,11 @@ def test_run_with_a_hit_names_the_claim(tmp_path: Path, capsys):
 def test_run_never_uses_a_shell(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
     marker = tmp_path / "pwned"
-    rc = main(["--db", db, "run", "--cwd", str(tmp_path), "--", "echo", "x;", "touch", str(marker)])
-    capsys.readouterr()
-    assert rc == 0 and not marker.exists()
+    # With a shell, `;` would run the second command and create the marker. Without one, python gets three extra argv
+    # entries and prints x. The interpreter is the executable so this holds under Git Bash and PowerShell alike (no `echo` binary).
+    rc = main(["--db", db, "run", "--cwd", str(tmp_path), "--", sys.executable, "-c", "print('x')", ";", "touch", str(marker)])
+    captured = capsys.readouterr()
+    assert rc == 0 and "x" in captured.out and not marker.exists()
 
 
 def test_run_resolves_the_head_like_a_shell_and_a_spawn_failure_is_not_a_tree_failure(tmp_path: Path, monkeypatch, capsys):
