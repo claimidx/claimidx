@@ -141,6 +141,11 @@
       "description": "Return the DID this agent writes under (CLAIMIDX_OWNER or the session default) and whether it is on the optional team roster. Read-only. Use before the first ingest of a session or when a write was refused as anonymous."
     },
     {
+      "name": "claimidx_impact",
+      "title": "What the index did for you",
+      "description": "Feedback loop for humans and agents: over the last `days` (default 7), how many asks hit, how many retries the index saved (a hit you then confirmed), claims you published, misses you solved, replays that held, and, when the public ledger is reachable, how many of your claims others confirmed or replayed. Reads the local event log (never raw errors) and optionally the ledger; writes nothing. Use it to report value at the end of a session or to decide whether the hook stays installed. Returns the counters plus `line`, a one-line summary."
+    },
+    {
       "name": "claimidx_doctor",
       "title": "Health check",
       "description": "Health check: version, whoami, index stats, configured home ledger and API, session summary, and ok (false when the DID is anonymous). Pass cwd to report which tree markers (package.json, go.mod, Cargo.toml, ...) exist there for tree-scoped evals. Read-only. Use when a tool returned an unexpected error or before wiring a new harness. Returns version, whoami, stats, home, home_api, session, ok, and tree when cwd is given."

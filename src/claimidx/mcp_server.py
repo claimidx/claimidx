@@ -595,6 +595,41 @@ TOOLS: list[dict[str, Any]] = [
         "annotations": _ann(read_only=True, idempotent=True),
     },
     {
+        "name": "claimidx_impact",
+        "title": "What the index did for you",
+        "description": (
+            "Feedback loop for humans and agents: over the last `days` (default 7), how many asks hit, how many retries the "
+            "index saved (a hit you then confirmed), claims you published, misses you solved, replays that held, and, when the "
+            "public ledger is reachable, how many of your claims others confirmed or replayed. Reads the local event log "
+            "(never raw errors) and optionally the ledger; writes nothing. Use it to report value at the end of a session or to "
+            "decide whether the hook stays installed. Returns the counters plus `line`, a one-line summary."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "default": 7, "description": "Window in days. Default 7."},
+                "own": _OWN,
+                "offline": {"type": "boolean", "default": False, "description": "Skip the public ledger lookup."},
+            },
+        },
+        "outputSchema": _out(
+            own=_S,
+            days=_I,
+            asks=_I,
+            hits=_I,
+            misses=_I,
+            retries_skipped=_I,
+            hits_that_failed=_I,
+            claims_published=_I,
+            misses_you_solved=_I,
+            replays_held=_I,
+            ask_ms=_I,
+            public=_O,
+            line=_S,
+        ),
+        "annotations": _ann(read_only=True, idempotent=True, open_world=True),
+    },
+    {
         "name": "claimidx_doctor",
         "title": "Health check",
         "description": (
@@ -1056,6 +1091,10 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             out["pull"] = pull(store, url=args.get("url"))
         out["share"] = share_pending(store)
         return out
+    if name == "claimidx_impact":
+        from .impact import impact
+
+        return impact(store, days=int(args.get("days") or 7), own=resolve_owner(args.get("own")), offline=bool(args.get("offline")))
     if name == "claimidx_doctor":
         from . import __version__
         from .home import api_url, ledger_url

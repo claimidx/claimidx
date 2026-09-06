@@ -923,6 +923,15 @@ def cmd_init(ns: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_impact(ns: argparse.Namespace) -> int:
+    """What the index did for you: retries skipped, claims contributed, use by others."""
+    from .impact import impact
+
+    out = impact(_store(ns), days=int(ns.days or 7), own=resolve_owner(getattr(ns, "own", None)), offline=bool(ns.offline), url=ns.home)
+    print(json.dumps(out, default=str, indent=2) if ns.fmt == "json" else out["line"])
+    return 0
+
+
 def cmd_doctor(ns: argparse.Namespace) -> int:
     from . import __version__, config
     from .home import DEFAULT_LEDGER, api_url, ledger_url
@@ -1329,6 +1338,12 @@ def build_parser() -> argparse.ArgumentParser:
     sy.add_argument("--token")
     sy.add_argument("--no-pull", action="store_true")
     sy.set_defaults(func=cmd_sync)
+    imp = sub.add_parser("impact", help="What the index did for you: retries skipped, claims published, use by other agents")
+    imp.add_argument("--days", type=int, default=7)
+    imp.add_argument("--own")
+    imp.add_argument("--home", help="ledger URL (default CLAIMIDX_HOME or the public jsonl)")
+    imp.add_argument("--offline", action="store_true", help="local event log only; skip the public ledger")
+    imp.set_defaults(func=cmd_impact)
     ini = sub.add_parser("init", help="Write ~/.claimidx/config.json, seed the local index, pull home")
     ini.add_argument("--own")
     ini.add_argument("--agent")
