@@ -51,11 +51,19 @@ def local_impact(store: Store, *, days: int = 7, own: str = "") -> dict[str, Any
     asks = [r for r in rows if r["kind"] in ("ask", "hook")]
     hits = [r for r in asks if r["detail"].get("hit") is True]
     misses = [r for r in asks if r["detail"].get("hit") is False]
-    confirmed_ids = {r["claim_id"] for r in rows if r["kind"] in ("confirm", "confirm-replay") and r["claim_id"]}
-    failed_ids = {r["claim_id"] for r in rows if r["kind"] == "fail" and r["claim_id"]}
-    # A retry skipped: the ask hit, and that hit was then confirmed by you in the window.
-    skipped = {r["claim_id"] for r in hits if r["claim_id"] and r["claim_id"] in confirmed_ids}
-    misled = {r["claim_id"] for r in hits if r["claim_id"] and r["claim_id"] in failed_ids and r["claim_id"] not in confirmed_ids}
+
+    def _after(kinds: tuple[str, ...]) -> dict[str, datetime]:
+        latest: dict[str, datetime] = {}
+        for r in rows:
+            if r["kind"] in kinds and r["claim_id"]:
+                latest[r["claim_id"]] = max(latest.get(r["claim_id"], r["ts"]), r["ts"])
+        return latest
+
+    confirmed_at = _after(("confirm", "confirm-replay"))
+    failed_at = _after(("fail",))
+    # A retry skipped: the ask hit, and that hit was then confirmed by you, after the ask.
+    skipped = {r["claim_id"] for r in hits if r["claim_id"] and confirmed_at.get(r["claim_id"], since) > r["ts"]}
+    misled = {r["claim_id"] for r in hits if r["claim_id"] and failed_at.get(r["claim_id"], since) > r["ts"] and r["claim_id"] not in skipped}
     published = [r for r in rows if r["kind"] == "publish" and (not own or r["actor"] == own)]
     miss_fps = {r["detail"].get("fp") for r in misses if r["detail"].get("fp")}
     published_fps = set()
