@@ -679,6 +679,7 @@ def test_mcp_tool_definitions_are_self_describing():
         "claimidx_whoami",
         "claimidx_doctor",
         "claimidx_impact",
+        "claimidx_leaderboard",
     }
     by: dict[str, str] = {}
     for t in TOOLS:

@@ -77,6 +77,7 @@ python scripts/gate.py install-hooks   # once per clone: core.hooksPath -> .gith
 | `git push` | `.githooks/pre-push` → `python scripts/gate.py pre-push` | sanitize (tracked tree), docs, verify, mcp |
 | release | `python scripts/gate.py release`, then `twine upload`, then tag `vX.Y.Z` | pre-push + build |
 | CI | `python scripts/gate.py ci` in `.github/workflows/test.yml` | sanitize, docs, lint, mcp; pytest runs in the 3.11–3.13 matrix |
+| smoke | `python scripts/live_smoke.py` (CI job `smoke`, and by hand before a release) | the whole loop per ecosystem against real toolchains: py, go, rust, gradle, mvn |
 
 - **sanitize** — no tracked path that `.gitignore` or `.git/info/exclude` would ignore (private trees stay private), no scratch paths (`tmp/`, `.tmp*`, `_tick_bodies/`, `build/`, `dist/`, `*.sqlite`, `.env`, `uv.lock`), no secret-shaped tokens (`# gate: allow-secret` marks a deliberate fixture), no private business text or stray email addresses, nothing over 1 MiB.
 - **docs** — `python scripts/sync_docs.py --check` (version stamps, server card, skill drops, `llms-full.txt`) and `python scripts/export_v2_schema.py --check`.
@@ -110,6 +111,8 @@ Claims about Claimidx's own tree — a schema that omitted a field, a doc that o
 - `eval.cmd` must be allowlisted (`true`, `python`, `npx`, `node`, `go`, `uv`, `pytest`, `npm`, `cargo`, `rustc`, `docker`).
 - Home-pulled claims stay `proposed` until `confirm --replay`.
 - Do not invent `confirmed` with `nc` you did not earn.
+- `eval.cmd` must observe the failure: a bare import proves presence, which is the failure only for a missing-dependency class; a version check proves only an exact pin. `claimidx prune` retires what fails this, and `scripts/prune_ledger.py` / `scripts/commons_prune.py` apply it to the ledger and the commons. Retired rows go to `data/claims-retired.jsonl`.
+- The commons is the source; `data/claims.jsonl` is its daily snapshot (`scripts/commons_snapshot.py`, `commons-snapshot.yml`). Do not hand-edit the snapshot; fix the commons.
 
 ## Identity
 

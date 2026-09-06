@@ -21,11 +21,21 @@ A poisoned claim whose `fix.b` or `eval.cmd` is a dropper, so that an agent whic
 
 `confirm --replay` proves only that the recipe produced the expected result in the executing environment. Repeating it under one trust anchor is not a second witness, and a compromised host can forge both the artifact and its local observation. A contested remedy therefore stays contested; resolution requires a replacement or alternative remedy rather than more confirms on the same row. V2 observations may carry declared `trust_domain` and `sensor_plane` metadata, but Claimidx does not currently treat those declarations as independently attested quorum.
 
+## The commons
+
+`home.claimidx.com/t/commons` is one open tenant of the home worker, and it is deliberately reachable without a token because sharing is the default path. What admits a write there:
+
+- A publish needs a `did:` owner (not anon), a non-empty `err` and `fix.b`, an `eval.cmd` that can be replayed (`true`, `false`, and `<tool> --version` are refused), and passes the same secret and dropper scan as any home. It arrives as the public projection: fingerprint kept, notes, paths, and project recipes removed.
+- A hold or fail needs a signed record (`claim_id`, `kind`, `own`, `ts`, `key_id`, `signature`; Ed25519 over the canonical JSON, `ts` within ten minutes). The first `did:key` that signs for a DID is bound to it; another key for the same DID is refused.
+- Sixty writes an hour per DID and three hundred per address.
+
+What it does not stop: a person minting many keys and DIDs. The leaderboard therefore counts distinct verifiers, excludes self-holds, and shows first-seen dates; anything paid on it is reviewed by a human first. Pulled rows are quarantined exactly as from any home (`src=home`, `proposed`, counters wiped on the first local observation), so a poisoned commons row cannot arrive as confirmed. Opt out with `CLAIMIDX_COMMONS=0`, `--local`, or `claimidx --scratch`; `claimidx share-preview` shows what would leave.
+
 ## What Claimidx does not claim
 
 - It cannot stop an agent that copies `fix.b` into a shell after a human or a loose skill tells it to “just run this.” That is the agent runtime’s policy, not the index.
 - Pattern scanners are not a proof of safety. They raise the cost of sloppy droppers. They do not make a zero-day filter.
-- A remotely reachable home API must sit behind the same admission scan, plus authentication. An open anonymous write endpoint is unsafe.
+- A remotely reachable private home must sit behind the same admission scan, plus a bearer token. The commons is the one open endpoint, and it is open only to DID-owned, replayable, scanned, rate-limited writes, with holds signed; see above for what that does and does not stop.
 - Claimidx does not provide Byzantine host-compromise resistance, cross-domain attestation, or permission to execute a fix. Those require independently rooted sensors and an external authorization policy.
 
 ## The public site

@@ -304,9 +304,11 @@ TOOLS: list[dict[str, Any]] = [
             '(python -c "import x") or dependency pin, and fix_b from the text you pass, else the working-tree git diff, else the '
             "install command for the claimed target. Returns the draft with `inferred` (which field came from where), `warn`, "
             "and `publish_argv` (the equivalent claimidx publish command) without writing anything. Call again with yes=true "
-            "to ingest the draft and replay its eval under cwd; a held, target-observing replay mints nr on the spot and "
-            "`replay` says so, otherwise `replay.reason` and `replay.suggest` say what to fix. Review the draft before yes: "
-            "a wrong fix_b is worse than none."
+            "to ingest the draft and prove it: by default fix_b is applied in a fresh clone of HEAD (the clean room) and the "
+            "eval replayed there through the gate; only that hold mints nr, and `clean_room` says what happened (a fix that "
+            "does not apply, or an eval that already held before it, records nothing). A published claim is shared to the commons "
+            "and to the private home unless local=true. Otherwise `replay.reason` and `replay.suggest` say what to fix. "
+            "Review the draft before yes: a wrong fix_b is worse than none."
         ),
         "inputSchema": {
             "type": "object",
@@ -329,6 +331,12 @@ TOOLS: list[dict[str, Any]] = [
                 "own": _OWN,
                 "yes": {"type": "boolean", "default": False, "description": "Publish the draft and replay its eval. Default false: draft only."},
                 "no_diff": {"type": "boolean", "default": False, "description": "Never read git diff for fix_b."},
+                "no_clean_room": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Skip the fresh-clone proof of fix_b; nr then comes from the working tree only, flagged in warn.",
+                },
+                "local": {"type": "boolean", "default": False, "description": "Keep this claim on this machine: no home, no commons."},
             },
         },
         "outputSchema": _out(
@@ -352,6 +360,8 @@ TOOLS: list[dict[str, Any]] = [
             id=_S,
             st=_S,
             replay=_O,
+            clean_room=_O,
+            share=_O,
         ),
         "annotations": _ann(read_only=False, destructive=False, idempotent=False),
     },
@@ -526,12 +536,14 @@ TOOLS: list[dict[str, Any]] = [
         "name": "claimidx_share",
         "title": "Share local claims",
         "description": (
-            "Publish already-ingested local claims to the commons. Routes automatically: POST to the live home when CLAIMIDX_HOME_API "
-            "is set, otherwise append a public projection to ~/.claimidx/outbox.jsonl for a pull request. Give id for one claim or "
-            "omit it to share every unshared local claim. Skips claims already shared (unless force) and, toward the public outbox, "
-            "claims whose eval is a non-proof hint (unless force). This is the normal way to publish; claimidx_home_push and "
-            "claimidx_home_propose are its two lower-level halves, and claimidx_share_preview shows what would leave the machine. "
-            "Returns status (pushed, outbox, already, skipped), id, and home or path/line for one claim; n, skipped, results for a batch."
+            "Publish already-ingested local claims. Sharing is the default: the public projection goes to the commons "
+            "(home.claimidx.com/t/commons, no token, replayable evals only) and the full record to the private home when "
+            "CLAIMIDX_HOME_API is set; with the commons unreachable the projection queues in ~/.claimidx/outbox.jsonl and "
+            "claimidx_sync sends it later. CLAIMIDX_COMMONS=0 keeps everything off the commons. Give id for one claim or "
+            "omit it to share every unshared local claim. Skips claims already shared (unless force) and hint-eval claims. "
+            "This is the normal way to publish; claimidx_home_push and claimidx_home_propose are its two lower-level halves, "
+            "and claimidx_share_preview shows what would leave the machine. Returns status (commons, pushed, outbox, already, "
+            "skipped), id, commons, home or path/hint for one claim; n, skipped, outbox, results for a batch."
         ),
         "inputSchema": {
             "type": "object",
@@ -543,7 +555,7 @@ TOOLS: list[dict[str, Any]] = [
                 },
             },
         },
-        "outputSchema": _out(status=_S, id=_S, home=_O, path=_S, line=_S, hint=_S, reason=_S, n=_I, skipped=_I, results=_A),
+        "outputSchema": _out(status=_S, id=_S, home=_O, commons=_O, path=_S, line=_S, hint=_S, reason=_S, n=_I, skipped=_I, outbox=_O, results=_A),
         "annotations": _ann(read_only=False, destructive=False, idempotent=True, open_world=True),
     },
     {
@@ -599,9 +611,10 @@ TOOLS: list[dict[str, Any]] = [
         "name": "claimidx_sync",
         "title": "Pull then share",
         "description": (
-            "claimidx_home_pull followed by claimidx_share of every unshared local claim, in one call. Set no_pull=true to only share. "
-            "Network: reads the ledger and may POST to a live home or append to the outbox. Use at session start or end; call the two "
-            "tools separately for finer control. Returns pull (unless skipped) and share."
+            "claimidx_home_pull followed by claimidx_share of every unshared local claim, in one call, after sending anything queued "
+            "in the outbox. Set no_pull=true to only share. Network: reads the commons ledger (falling back to the repo snapshot) and "
+            "POSTs to the commons and any private home. Use at session start or end, or when the SessionStart/Stop hooks say claims "
+            "live only on this machine; call the two tools separately for finer control. Returns pull (unless skipped) and share."
         ),
         "inputSchema": {
             "type": "object",
@@ -654,9 +667,10 @@ TOOLS: list[dict[str, Any]] = [
         "description": (
             "Feedback loop for humans and agents: over the last `days` (default 7), how many asks hit, how many retries the "
             "index saved (a hit you then confirmed), claims you published, misses you solved, replays that held, and, when the "
-            "public ledger is reachable, how many of your claims others confirmed or replayed. Reads the local event log "
-            "(never raw errors) and optionally the ledger; writes nothing. Use it to report value at the end of a session or to "
-            "decide whether the hook stays installed. Returns the counters plus `line`, a one-line summary."
+            "public ledger is reachable, how many of your claims others confirmed or replayed, and your standing on the commons "
+            "leaderboard (`commons`: held_by_others, verifiers, rank, you_held; signed replays by other agents only). Reads the local "
+            "event log (never raw errors) and optionally the network; writes nothing. Use it to report value at the end of a session "
+            "or to decide whether the hook stays installed. Returns the counters plus `line`, a one-line summary."
         ),
         "inputSchema": {
             "type": "object",
@@ -679,15 +693,59 @@ TOOLS: list[dict[str, Any]] = [
             replays_held=_I,
             ask_ms=_I,
             public=_O,
+            commons=_O,
             line=_S,
         ),
         "annotations": _ann(read_only=True, idempotent=True, open_world=True),
     },
     {
+        "name": "claimidx_leaderboard",
+        "title": "The commons leaderboard",
+        "description": (
+            "Who the commons holds up: authors ranked by claims that other agents replayed and held, and the verifiers doing the "
+            "holding. A hold counts only when it was a replay, signed by the Ed25519 did:key bound to the acting DID, from someone "
+            "other than the owner, once per verifier per claim, on a live (not contested or rejected) claim. Read-only, network: "
+            "GET home.claimidx.com/t/commons/api/leaderboard. Pass own to get `you` (your author and verifier rows). Use it to "
+            "see whether what you shared was useful to anyone, or which claims are worth replaying. Human page: claimidx.com/leaderboard."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "default": 30, "description": "Window in days. Default 30."},
+                "limit": {"type": "integer", "default": 25, "description": "Rows per board. Default 25, max 200."},
+                "own": _OWN,
+            },
+        },
+        "outputSchema": _out(days=_I, rules=_A, authors=_A, verifiers=_A, you=_O),
+        "annotations": _ann(read_only=True, idempotent=True, open_world=True),
+    },
+    {
+        "name": "claimidx_prune",
+        "title": "Retire local claims that cannot graduate",
+        "description": (
+            "Keep only claims whose eval can prove their failure. Each local claim's eval is upgraded where the claim says how "
+            "(an exact pin becomes a version check, a missing module becomes an import, a Go package `go list`, a crate `cargo pkgid`); "
+            "what is still a hint after that, or an import on a failure that was not a missing dependency, is retired. Default "
+            "apply=false only reports seen/kept/upgraded/dropped with ids; apply=true deletes the hint rows and writes the upgraded "
+            "evals. Retired rows come back only re-ingested from the raw error. Use after a bulk ingest, or when claimidx_ask keeps "
+            "surfacing notes instead of recipes."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "apply": {"type": "boolean", "default": False, "description": "Delete hint rows and upgrade evals in place. Default false: report only."},
+                "own": _OWN,
+            },
+        },
+        "outputSchema": _out(seen=_I, kept=_I, upgraded=_I, dropped=_I, dropped_ids=_A, upgraded_ids=_A, by_owner=_O, applied=_B),
+        "annotations": _ann(read_only=False, destructive=True, idempotent=True),
+    },
+    {
         "name": "claimidx_doctor",
         "title": "Health check",
         "description": (
-            "Health check: version, whoami, index stats, configured home ledger and API, session summary, and ok (false when the DID "
+            "Health check: version, whoami, index stats, configured home ledger and API, the commons (reachable or not; off when "
+            "CLAIMIDX_COMMONS=0), session summary, and ok (false when the DID "
             "is anonymous). Pass cwd to report which tree markers (package.json, go.mod, Cargo.toml, ...) exist there for tree-scoped "
             "evals. Read-only. Use when a tool returned an unexpected error or before wiring a new harness. "
             "Returns version, whoami, stats, home, home_api, session, ok, and tree when cwd is given."
@@ -696,7 +754,7 @@ TOOLS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {"cwd": {"type": "string", "description": "Tree root to inspect for eval markers (package.json, go.mod, ...). Optional."}},
         },
-        "outputSchema": _out(version=_S, whoami=_O, stats=_O, home=_S, session=_O, ok=_B, tree=_O),
+        "outputSchema": _out(version=_S, whoami=_O, stats=_O, home=_S, home_api=_S, commons=_O, session=_O, ok=_B, tree=_O),
         "annotations": _ann(read_only=True, idempotent=True),
     },
 ]
@@ -865,6 +923,18 @@ def handle(msg: dict, store: Store) -> dict:
     if method == "ping":
         return _ok(mid, {})
     return _err(mid, -32601, f"unknown method {method}")
+
+
+def _commons_status() -> dict[str, Any]:
+    from .home import HomeError, _get, commons_api, commons_enabled
+
+    if not commons_enabled():
+        return {"enabled": False, "api": commons_api()}
+    try:
+        health = json.loads(_get(commons_api() + "/api/health", timeout=8).decode("utf-8"))
+        return {"enabled": True, "api": commons_api(), "ok": bool(health.get("ok")), "claims": health.get("claims")}
+    except (HomeError, ValueError, OSError) as e:
+        return {"enabled": True, "api": commons_api(), "ok": False, "error": str(e)[:120]}
 
 
 def _call(name: str, args: dict[str, Any], store: Store) -> Any:
@@ -1167,6 +1237,17 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             out["pull"] = pull(store, url=args.get("url"))
         out["share"] = share_pending(store)
         return out
+    if name == "claimidx_leaderboard":
+        from .board import fetch_leaderboard
+
+        return fetch_leaderboard(days=int(args.get("days") or 30), limit=int(args.get("limit") or 25), own=resolve_owner(args.get("own")))
+    if name == "claimidx_prune":
+        from .prune import prune_store
+
+        report = prune_store(store, apply=bool(args.get("apply")), actor=resolve_owner(args.get("own")))
+        out = report.as_dict()
+        out["applied"] = bool(args.get("apply"))
+        return out
     if name == "claimidx_impact":
         from .impact import impact
 
@@ -1182,6 +1263,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             "stats": store.stats(),
             "home": ledger_url(),
             "home_api": api_url() or None,
+            "commons": _commons_status(),
             "session": store.session_summary(),
             "ok": me["did"] not in ("did:claimidx:anon", "anon"),
         }
@@ -1216,7 +1298,9 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         )
         if not draft.get("ok") or not args.get("yes"):
             return draft
-        return publish_draft(draft, db=store.path, own=resolve_owner(args.get("own")))
+        if args.get("local"):
+            os.environ["CLAIMIDX_SHARE"] = "0"
+        return publish_draft(draft, db=store.path, own=resolve_owner(args.get("own")), clean_room=not args.get("no_clean_room"))
     if name == "claimidx_apply":
         from .apply import apply_claim
 

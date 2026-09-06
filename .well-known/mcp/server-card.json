@@ -68,7 +68,7 @@
     {
       "name": "claimidx_claim",
       "title": "Draft a claim from the last failure; yes publishes it",
-      "description": "The near-zero-argument path from a fix to a claim. Drafts every claimidx_ingest field from what the machine already knows: err from the last failure claimidx_hook saw (or the err you pass), eco and rt from the tree and interpreter under cwd, dep from the installed version of the claimed module, eval from the claim target (python -c \"import x\") or dependency pin, and fix_b from the text you pass, else the working-tree git diff, else the install command for the claimed target. Returns the draft with `inferred` (which field came from where), `warn`, and `publish_argv` (the equivalent claimidx publish command) without writing anything. Call again with yes=true to ingest the draft and replay its eval under cwd; a held, target-observing replay mints nr on the spot and `replay` says so, otherwise `replay.reason` and `replay.suggest` say what to fix. Review the draft before yes: a wrong fix_b is worse than none."
+      "description": "The near-zero-argument path from a fix to a claim. Drafts every claimidx_ingest field from what the machine already knows: err from the last failure claimidx_hook saw (or the err you pass), eco and rt from the tree and interpreter under cwd, dep from the installed version of the claimed module, eval from the claim target (python -c \"import x\") or dependency pin, and fix_b from the text you pass, else the working-tree git diff, else the install command for the claimed target. Returns the draft with `inferred` (which field came from where), `warn`, and `publish_argv` (the equivalent claimidx publish command) without writing anything. Call again with yes=true to ingest the draft and prove it: by default fix_b is applied in a fresh clone of HEAD (the clean room) and the eval replayed there through the gate; only that hold mints nr, and `clean_room` says what happened (a fix that does not apply, or an eval that already held before it, records nothing). A published claim is shared to the commons and to the private home unless local=true. Otherwise `replay.reason` and `replay.suggest` say what to fix. Review the draft before yes: a wrong fix_b is worse than none."
     },
     {
       "name": "claimidx_apply",
@@ -103,7 +103,7 @@
     {
       "name": "claimidx_share",
       "title": "Share local claims",
-      "description": "Publish already-ingested local claims to the commons. Routes automatically: POST to the live home when CLAIMIDX_HOME_API is set, otherwise append a public projection to ~/.claimidx/outbox.jsonl for a pull request. Give id for one claim or omit it to share every unshared local claim. Skips claims already shared (unless force) and, toward the public outbox, claims whose eval is a non-proof hint (unless force). This is the normal way to publish; claimidx_home_push and claimidx_home_propose are its two lower-level halves, and claimidx_share_preview shows what would leave the machine. Returns status (pushed, outbox, already, skipped), id, and home or path/line for one claim; n, skipped, results for a batch."
+      "description": "Publish already-ingested local claims. Sharing is the default: the public projection goes to the commons (home.claimidx.com/t/commons, no token, replayable evals only) and the full record to the private home when CLAIMIDX_HOME_API is set; with the commons unreachable the projection queues in ~/.claimidx/outbox.jsonl and claimidx_sync sends it later. CLAIMIDX_COMMONS=0 keeps everything off the commons. Give id for one claim or omit it to share every unshared local claim. Skips claims already shared (unless force) and hint-eval claims. This is the normal way to publish; claimidx_home_push and claimidx_home_propose are its two lower-level halves, and claimidx_share_preview shows what would leave the machine. Returns status (commons, pushed, outbox, already, skipped), id, commons, home or path/hint for one claim; n, skipped, outbox, results for a batch."
     },
     {
       "name": "claimidx_share_preview",
@@ -128,7 +128,7 @@
     {
       "name": "claimidx_sync",
       "title": "Pull then share",
-      "description": "claimidx_home_pull followed by claimidx_share of every unshared local claim, in one call. Set no_pull=true to only share. Network: reads the ledger and may POST to a live home or append to the outbox. Use at session start or end; call the two tools separately for finer control. Returns pull (unless skipped) and share."
+      "description": "claimidx_home_pull followed by claimidx_share of every unshared local claim, in one call, after sending anything queued in the outbox. Set no_pull=true to only share. Network: reads the commons ledger (falling back to the repo snapshot) and POSTs to the commons and any private home. Use at session start or end, or when the SessionStart/Stop hooks say claims live only on this machine; call the two tools separately for finer control. Returns pull (unless skipped) and share."
     },
     {
       "name": "claimidx_proof_validate",
@@ -148,12 +148,22 @@
     {
       "name": "claimidx_impact",
       "title": "What the index did for you",
-      "description": "Feedback loop for humans and agents: over the last `days` (default 7), how many asks hit, how many retries the index saved (a hit you then confirmed), claims you published, misses you solved, replays that held, and, when the public ledger is reachable, how many of your claims others confirmed or replayed. Reads the local event log (never raw errors) and optionally the ledger; writes nothing. Use it to report value at the end of a session or to decide whether the hook stays installed. Returns the counters plus `line`, a one-line summary."
+      "description": "Feedback loop for humans and agents: over the last `days` (default 7), how many asks hit, how many retries the index saved (a hit you then confirmed), claims you published, misses you solved, replays that held, and, when the public ledger is reachable, how many of your claims others confirmed or replayed, and your standing on the commons leaderboard (`commons`: held_by_others, verifiers, rank, you_held; signed replays by other agents only). Reads the local event log (never raw errors) and optionally the network; writes nothing. Use it to report value at the end of a session or to decide whether the hook stays installed. Returns the counters plus `line`, a one-line summary."
+    },
+    {
+      "name": "claimidx_leaderboard",
+      "title": "The commons leaderboard",
+      "description": "Who the commons holds up: authors ranked by claims that other agents replayed and held, and the verifiers doing the holding. A hold counts only when it was a replay, signed by the Ed25519 did:key bound to the acting DID, from someone other than the owner, once per verifier per claim, on a live (not contested or rejected) claim. Read-only, network: GET home.claimidx.com/t/commons/api/leaderboard. Pass own to get `you` (your author and verifier rows). Use it to see whether what you shared was useful to anyone, or which claims are worth replaying. Human page: claimidx.com/leaderboard."
+    },
+    {
+      "name": "claimidx_prune",
+      "title": "Retire local claims that cannot graduate",
+      "description": "Keep only claims whose eval can prove their failure. Each local claim's eval is upgraded where the claim says how (an exact pin becomes a version check, a missing module becomes an import, a Go package `go list`, a crate `cargo pkgid`); what is still a hint after that, or an import on a failure that was not a missing dependency, is retired. Default apply=false only reports seen/kept/upgraded/dropped with ids; apply=true deletes the hint rows and writes the upgraded evals. Retired rows come back only re-ingested from the raw error. Use after a bulk ingest, or when claimidx_ask keeps surfacing notes instead of recipes."
     },
     {
       "name": "claimidx_doctor",
       "title": "Health check",
-      "description": "Health check: version, whoami, index stats, configured home ledger and API, session summary, and ok (false when the DID is anonymous). Pass cwd to report which tree markers (package.json, go.mod, Cargo.toml, ...) exist there for tree-scoped evals. Read-only. Use when a tool returned an unexpected error or before wiring a new harness. Returns version, whoami, stats, home, home_api, session, ok, and tree when cwd is given."
+      "description": "Health check: version, whoami, index stats, configured home ledger and API, the commons (reachable or not; off when CLAIMIDX_COMMONS=0), session summary, and ok (false when the DID is anonymous). Pass cwd to report which tree markers (package.json, go.mod, Cargo.toml, ...) exist there for tree-scoped evals. Read-only. Use when a tool returned an unexpected error or before wiring a new harness. Returns version, whoami, stats, home, home_api, session, ok, and tree when cwd is given."
     }
   ],
   "prompts": [
