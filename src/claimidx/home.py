@@ -388,9 +388,16 @@ def share_claim(store, claim: Claim, *, api: str | None = None, token: str | Non
     base = (api if api is not None else api_url()).rstrip("/")
     out: dict[str, Any] = {"status": "already", "id": claim.id}
     if base and (force or not already_shared(store, claim.id)):
-        result = publish_home(claim, api=base, token=token, force=force)
-        store.log("home-push", claim.own, claim.id)
-        out.update({"status": "pushed", "home": result})
+        try:
+            result = publish_home(claim, api=base, token=token, force=force)
+        except HomeError as e:
+            # A private home that refuses (old server, cap, outage) does not keep the claim off the commons.
+            out["home"] = {"status": "error", "error": str(e)[:300]}
+            if not commons_enabled():
+                raise
+        else:
+            store.log("home-push", claim.own, claim.id)
+            out.update({"status": "pushed", "home": result})
     if commons_enabled():
         commons = push_commons(store, claim, force=force)
         out["commons"] = commons
@@ -445,7 +452,11 @@ def share_pending(store, *, api: str | None = None, token: str | None = None, fo
         if done_private and done_commons and not force:
             skipped += 1
             continue
-        r = share_claim(store, c, api=api, token=token, force=force)
+        try:
+            r = share_claim(store, c, api=api, token=token, force=force)
+        except HomeError as e:
+            results.append({"status": "error", "id": c.id, "error": str(e)[:300]})  # one refusal never stops the run
+            continue
         if r.get("status") == "already":
             skipped += 1
             continue

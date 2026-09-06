@@ -180,3 +180,24 @@ def test_verdict_calls_a_hint_a_hint(tmp_path: Path, capsys):
     cmd.fix = Fix(k="cmd", b="rm -rf node_modules && npm i")
     v = verdict_for({"err": cmd.err, "cls": cmd.cls, "eco": "py", "rt": "", "dep": [], "fp": cmd.fp}, [(cmd, 1.0)])
     assert v["action"] == "review"
+
+
+def test_a_private_home_refusal_does_not_keep_the_claim_off_the_commons(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
+    monkeypatch.setenv("CLAIMIDX_HOME_API", "http://private.example/t/acme")
+    store = Store(str(tmp_path / "ix.sqlite"))
+    a = store.put(_claim())
+    b = store.put(_claim(err="ModuleNotFoundError: No module named 'tomllib'"))
+    posted: list[str] = []
+
+    def fake_post(url, payload, token="", timeout=20.0):
+        if url.startswith("http://private.example"):
+            raise home.HomeError("home POST 400: eval head not allowlisted")
+        posted.append(payload.get("id"))
+        return {"exists": False}
+
+    monkeypatch.setattr(home, "_post", fake_post)
+    out = home.share_claim(store, a)
+    assert out["status"] == "commons" and out["home"]["status"] == "error"
+    pending = home.share_pending(store)
+    assert pending["n"] == 1 and posted == [a.id, b.id]  # the run went on past the refusal
