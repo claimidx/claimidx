@@ -2,7 +2,7 @@
 
 Current shape, then dated notes. Newer notes first.
 
-## Current (v0.6.3)
+## Current (v0.7.0)
 
 **Planes**
 - Local index: SQLite (`~/.claimidx/index.sqlite`), WAL. Agents on one machine share it at the default path.
