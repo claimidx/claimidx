@@ -68,7 +68,7 @@ def test_unreachable_commons_queues_and_sync_flushes(tmp_path: Path, monkeypatch
     sent: list[dict] = []
     monkeypatch.setattr(home, "_post", lambda url, payload, token="", timeout=20.0: sent.append(payload) or {"exists": False})
     flushed = home.flush_outbox(store)
-    assert flushed == {"sent": 1, "kept": 0} and not outbox.exists() and sent[0]["id"] == c.id
+    assert flushed == {"sent": 1, "kept": 0, "refused": 0} and not outbox.exists() and sent[0]["id"] == c.id
     assert home.commons_shared(store, c.id)
 
 
@@ -257,3 +257,70 @@ def test_success_output_names_the_destination(tmp_path: Path, commons, capsys, m
     assert main(["--db", db, "claim", "--yes", "--no-diff", "--no-clean-room", "--fix", "pip install abc"]) == 0
     err = capsys.readouterr().err
     assert "queued" in err and "claimidx sync" in err and "not private" in err
+
+
+def test_a_projection_without_a_replayable_eval_stays_local_without_queueing(tmp_path: Path, monkeypatch):
+    """A tree-specific recipe projects to an empty eval; the commons would refuse it, so it is skipped, not queued forever."""
+    from claimidx.hook import unshared_claims
+
+    monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
+    store = Store(str(tmp_path / "ix.sqlite"))
+    err = "AssertionError: recipe file missing an entry"
+    c = store.put(
+        Claim(
+            fp=fingerprint(err=err, eco="py"),
+            cls="other",
+            err=err,
+            eco="py",
+            fix=Fix(k="patch", b="diff --git a/x b/x"),
+            eval=EvalSpec(cmd="python -c \"from pathlib import Path; assert 'x' in Path(r'C:/pack/recipes.js').read_text()\""),
+            own="did:claimidx:agent-a",
+        )
+    )
+    monkeypatch.setattr(home, "_post", lambda *a, **k: pytest.fail("must not post a projection the commons refuses"))
+    out = home.share_claim(store, c)
+    assert out["commons"]["status"] == "skipped" and "replayable" in out["commons"]["reason"], out
+    assert not Path(home.outbox_path()).exists()
+    assert unshared_claims(store) == []  # nothing to nudge about
+    assert home.share_pending(store)["n"] == 0
+
+
+def test_a_commons_refusal_is_recorded_not_queued_but_an_outage_is(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
+    store = Store(str(tmp_path / "ix.sqlite"))
+    c = store.put(_claim())
+
+    def refuse(url, payload, token="", timeout=20.0):
+        raise home.HomeError('home POST 400: {"error":"eval is a hint; the commons keeps claims that can be replayed"}')
+
+    monkeypatch.setattr(home, "_post", refuse)
+    out = home.share_claim(store, c)
+    assert out["commons"]["status"] == "refused" and "400" in out["commons"]["reason"], out
+    assert not Path(home.outbox_path()).exists()
+    from claimidx.hook import unshared_claims
+
+    assert unshared_claims(store) == []
+    d = store.put(_claim(err="ModuleNotFoundError: No module named 'tomllib'"))
+    monkeypatch.setattr(home, "_post", lambda *a, **k: (_ for _ in ()).throw(home.HomeError("connection refused")))
+    assert home.share_claim(store, d)["commons"]["status"] == "outbox"
+    assert unshared_claims(store) == [d.id]
+
+
+def test_flush_outbox_drops_refused_lines_and_keeps_transport_failures(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
+    store = Store(str(tmp_path / "ix.sqlite"))
+    outbox = Path(home.outbox_path())
+    outbox.parent.mkdir(parents=True, exist_ok=True)
+    outbox.write_text(
+        json.dumps({"id": "cix_00000000000000a1", "own": "did:claimidx:x"}) + "\n" + json.dumps({"id": "cix_00000000000000b2", "own": "did:claimidx:x"}) + "\n",
+        encoding="utf-8",
+    )
+
+    def post(url, payload, token="", timeout=20.0):
+        if payload["id"].endswith("a1"):
+            raise home.HomeError("home POST 400: refused")
+        raise home.HomeError("connection refused")
+
+    monkeypatch.setattr(home, "_post", post)
+    assert home.flush_outbox(store) == {"sent": 0, "kept": 1, "refused": 1}
+    assert [json.loads(ln)["id"] for ln in outbox.read_text(encoding="utf-8").splitlines() if ln.strip()] == ["cix_00000000000000b2"]

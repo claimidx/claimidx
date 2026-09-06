@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -317,6 +318,13 @@ def local_status(claim_id: str) -> dict[str, Any]:
     return {"status": "local", "id": claim_id, "hint": f"kept on this machine; `claimidx share {claim_id}` publishes it"}
 
 
+def commons_settled(store, claim_id: str) -> bool:
+    """Nothing more to do toward the commons: pushed, refused, or skipped as untravellable."""
+    if hasattr(store, "has_event"):
+        return store.has_event(claim_id, ("commons-push", "commons-refused", "commons-skip"))
+    return False
+
+
 def commons_shared(store, claim_id: str) -> bool:
     if hasattr(store, "has_event"):
         return store.has_event(claim_id, ("commons-push",))
@@ -330,23 +338,49 @@ def _public_payload(claim: Claim) -> dict[str, Any]:
     return payload
 
 
+def _is_refusal(err: str) -> bool:
+    """A 4xx from the home is a decision about the row; anything else is transport and worth a retry."""
+    return bool(re.search(r"home POST 4\d\d", err))
+
+
+def commons_travels(claim: Claim) -> tuple[bool, str]:
+    """Whether the public projection of this claim is something the commons accepts: a replayable eval survives projection."""
+    from .public import eval_is_proof, public_eval
+
+    if not eval_is_proof(claim.eval.cmd):
+        return False, "eval is a hint; the commons keeps claims that can be replayed"
+    if not eval_is_proof(public_eval(claim.eval.cmd)):
+        return False, "the public projection has no replayable eval (a tree-specific recipe); the claim stays local and in any private home"
+    return True, ""
+
+
 def push_commons(store, claim: Claim, *, force: bool = False) -> dict[str, Any]:
-    """Push the public projection to the commons; queue it in the outbox when the commons is unreachable."""
-    from .public import HINT_WARN, PublicSkip, eval_is_proof
+    """Push the public projection to the commons; queue it in the outbox only when the commons is unreachable.
+
+    A refusal (4xx) is recorded as `commons-refused` and never retried; a projection with no replayable eval is
+    recorded as `commons-skip` before any request. Both stop the hooks nudging about the claim.
+    """
+    from .public import PublicSkip
 
     if not force and commons_shared(store, claim.id):
         return {"status": "already", "id": claim.id}
-    if not force and not eval_is_proof(claim.eval.cmd):
-        return {"status": "skipped", "id": claim.id, "reason": HINT_WARN}
+    ok, why = commons_travels(claim)
+    if not ok and not force:
+        store.log("commons-skip", claim.own, claim.id, {"reason": why})
+        return {"status": "skipped", "id": claim.id, "reason": why}
     try:
         payload = _public_payload(claim)
     except PublicSkip as e:
+        store.log("commons-skip", claim.own, claim.id, {"reason": str(e)[:200]})
         return {"status": "skipped", "id": claim.id, "reason": str(e)}
     if force:
         payload["force"] = True
     try:
         result = _post(commons_api() + "/api/publish", payload)
     except HomeError as e:
+        if _is_refusal(str(e)):
+            store.log("commons-refused", claim.own, claim.id, {"error": str(e)[:300]})
+            return {"status": "refused", "id": claim.id, "reason": str(e)[:300]}
         path = outbox_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as f:
@@ -361,9 +395,10 @@ def flush_outbox(store) -> dict[str, Any]:
     """Send queued public rows to the commons; keep the ones that still fail."""
     path = outbox_path()
     if not path.exists() or not commons_enabled():
-        return {"sent": 0, "kept": 0}
+        return {"sent": 0, "kept": 0, "refused": 0}
     kept: list[str] = []
     sent = 0
+    refused = 0
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -373,7 +408,13 @@ def flush_outbox(store) -> dict[str, Any]:
             continue
         try:
             _post(commons_api() + "/api/publish", payload)
-        except HomeError:
+        except HomeError as e:
+            if _is_refusal(str(e)):
+                refused += 1  # a decision, not an outage: drop it, record it
+                cid = str(payload.get("id") or "")
+                if cid:
+                    store.log("commons-refused", str(payload.get("own") or "did:claimidx:anon"), cid, {"error": str(e)[:300], "from": "outbox"})
+                continue
             kept.append(line)
             continue
         sent += 1
@@ -384,7 +425,7 @@ def flush_outbox(store) -> dict[str, Any]:
         path.write_text("\n".join(kept) + "\n", encoding="utf-8")
     else:
         path.unlink(missing_ok=True)
-    return {"sent": sent, "kept": len(kept)}
+    return {"sent": sent, "kept": len(kept), "refused": refused}
 
 
 def already_shared(store, claim_id: str) -> bool:
@@ -473,7 +514,7 @@ def share_pending(store, *, api: str | None = None, token: str | None = None, fo
             skipped += 1
             continue
         done_private = already_shared(store, c.id) or not (api if api is not None else api_url())
-        done_commons = commons_shared(store, c.id) or not commons_enabled()
+        done_commons = commons_settled(store, c.id) or not commons_enabled()
         if done_private and done_commons and not force:
             skipped += 1
             continue
