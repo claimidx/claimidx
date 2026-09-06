@@ -363,6 +363,20 @@ class Store:
             (event.id, event.kind, event.object_id, event.actor, event.model_dump_json(), event.created.isoformat()),
         )
 
+    def delete(self, claim_id: str, *, actor: str = "did:claimidx:anon", reason: str = "") -> bool:
+        """Remove a claim row and its search entry. Observations and proofs stay as history. False when absent."""
+        with self._conn() as con:
+            row = con.execute("SELECT 1 FROM claims WHERE id=?", (claim_id,)).fetchone()
+            if not row:
+                return False
+            con.execute("DELETE FROM claims WHERE id=?", (claim_id,))
+            try:
+                con.execute("DELETE FROM claims_fts WHERE id=?", (claim_id,))
+            except sqlite3.OperationalError:
+                pass
+        self.log("prune", actor, claim_id, {"reason": reason} if reason else None)
+        return True
+
     def put(self, claim: Claim) -> Claim:
         self._prepare_write(claim)
         with self._conn() as con:

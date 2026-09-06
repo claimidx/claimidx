@@ -33,6 +33,10 @@ from .policy import PolicyError
 from .security import SecretError
 
 DEFAULT_LEDGER = "https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl"
+# The commons: a public home every install shares to and pulls from unless told not to.
+# No token, no PR; the repo's data/claims.jsonl is a snapshot of it for the offline fallback.
+COMMONS_API = "https://home.claimidx.com/t/commons"
+COMMONS_LEDGER = COMMONS_API + "/api/claims.jsonl"
 USER_AGENT = f"claimidx-home/{__version__}"
 
 
@@ -52,7 +56,35 @@ def ledger_url() -> str:
             return cfg
     except Exception:
         pass
-    return DEFAULT_LEDGER
+    return COMMONS_LEDGER if commons_enabled() else DEFAULT_LEDGER
+
+
+def commons_api() -> str:
+    env = (os.environ.get("CLAIMIDX_COMMONS_API") or "").rstrip("/")
+    if env:
+        return env
+    try:
+        from .config import get as cfg_get
+
+        return str(cfg_get("commons_api") or COMMONS_API).rstrip("/")
+    except Exception:
+        return COMMONS_API
+
+
+def commons_enabled() -> bool:
+    """On by default. Off with CLAIMIDX_COMMONS=0 or config `commons: false`."""
+    raw = os.environ.get("CLAIMIDX_COMMONS")
+    if raw is not None and raw.strip():
+        return raw.strip().lower() not in ("0", "false", "no", "off")
+    try:
+        from .config import get as cfg_get
+
+        val = cfg_get("commons", True)
+    except Exception:
+        return True
+    if isinstance(val, str):
+        return val.strip().lower() not in ("0", "false", "no", "off")
+    return bool(val)
 
 
 def api_url() -> str:
@@ -179,7 +211,13 @@ def _read_target(target: str) -> str:
 
 def fetch_ledger(url: str | None = None) -> tuple[list[Claim], list[str], str]:
     target = url or ledger_url()
-    text = _read_target(target)
+    try:
+        text = _read_target(target)
+    except HomeError:
+        if url or target != COMMONS_LEDGER:
+            raise
+        target = DEFAULT_LEDGER  # the commons is unreachable: the repo snapshot is the offline copy
+        text = _read_target(target)
     claims, skipped = parse_ledger(text)
     return claims, skipped, target
 
@@ -264,6 +302,76 @@ def publish_home(claim: Claim, api: str | None = None, token: str | None = None,
     return _post(f"{base}/api/publish", body, token=token if token is not None else api_token())
 
 
+def commons_shared(store, claim_id: str) -> bool:
+    if hasattr(store, "has_event"):
+        return store.has_event(claim_id, ("commons-push",))
+    return any(ev.get("claim_id") == claim_id and ev.get("kind") == "commons-push" for ev in store.events(limit=1000))
+
+
+def _public_payload(claim: Claim) -> dict[str, Any]:
+    payload = json.loads(propose_line(claim))
+    payload["fix_k"] = (payload.get("fix") or {}).get("k")
+    payload["fix_b"] = (payload.get("fix") or {}).get("b")
+    return payload
+
+
+def push_commons(store, claim: Claim, *, force: bool = False) -> dict[str, Any]:
+    """Push the public projection to the commons; queue it in the outbox when the commons is unreachable."""
+    from .public import HINT_WARN, PublicSkip, eval_is_proof
+
+    if not force and commons_shared(store, claim.id):
+        return {"status": "already", "id": claim.id}
+    if not force and not eval_is_proof(claim.eval.cmd):
+        return {"status": "skipped", "id": claim.id, "reason": HINT_WARN}
+    try:
+        payload = _public_payload(claim)
+    except PublicSkip as e:
+        return {"status": "skipped", "id": claim.id, "reason": str(e)}
+    if force:
+        payload["force"] = True
+    try:
+        result = _post(commons_api() + "/api/publish", payload)
+    except HomeError as e:
+        path = outbox_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, separators=(",", ":"), ensure_ascii=False) + "\n")
+        store.log("home-propose", claim.own, claim.id, {"commons": "outbox", "error": str(e)[:200]})
+        return {"status": "outbox", "id": claim.id, "path": str(path), "hint": f"commons unreachable ({str(e)[:80]}); queued, `claimidx sync` sends it"}
+    store.log("commons-push", claim.own, claim.id, {"exists": bool(result.get("exists")) if isinstance(result, dict) else False})
+    return {"status": "commons", "id": claim.id, "commons": result}
+
+
+def flush_outbox(store) -> dict[str, Any]:
+    """Send queued public rows to the commons; keep the ones that still fail."""
+    path = outbox_path()
+    if not path.exists() or not commons_enabled():
+        return {"sent": 0, "kept": 0}
+    kept: list[str] = []
+    sent = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except ValueError:
+            continue
+        try:
+            _post(commons_api() + "/api/publish", payload)
+        except HomeError:
+            kept.append(line)
+            continue
+        sent += 1
+        cid = str(payload.get("id") or "")
+        if cid:
+            store.log("commons-push", str(payload.get("own") or "did:claimidx:anon"), cid, {"from": "outbox"})
+    if kept:
+        path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    else:
+        path.unlink(missing_ok=True)
+    return {"sent": sent, "kept": len(kept)}
+
+
 def already_shared(store, claim_id: str) -> bool:
     if hasattr(store, "has_event"):
         return store.has_event(claim_id, ("home-push", "home-propose", "share"))
@@ -274,14 +382,28 @@ def already_shared(store, claim_id: str) -> bool:
 
 
 def share_claim(store, claim: Claim, *, api: str | None = None, token: str | None = None, force: bool = False) -> dict[str, Any]:
-    """Push a local claim. Live private home gets the full record; the GitHub outbox gets a public projection."""
-    if already_shared(store, claim.id) and not force:
-        return {"status": "already", "id": claim.id}
+    """Push a local claim: the full record to a private home when one is configured, and the public
+    projection to the commons unless it is switched off. With neither, the projection is queued.
+    """
     base = (api if api is not None else api_url()).rstrip("/")
-    if base:
+    out: dict[str, Any] = {"status": "already", "id": claim.id}
+    if base and (force or not already_shared(store, claim.id)):
         result = publish_home(claim, api=base, token=token, force=force)
         store.log("home-push", claim.own, claim.id)
-        return {"status": "pushed", "id": claim.id, "home": result}
+        out.update({"status": "pushed", "home": result})
+    if commons_enabled():
+        commons = push_commons(store, claim, force=force)
+        out["commons"] = commons
+        if commons.get("status") in {"commons", "outbox"} and out["status"] == "already":
+            out["status"] = commons["status"]
+        if commons.get("status") == "outbox":
+            out["path"] = commons.get("path")
+            out["hint"] = commons.get("hint")
+        return out
+    if base:
+        return out
+    if already_shared(store, claim.id) and not force:
+        return out
     from .public import HINT_WARN, PublicSkip, eval_is_proof
 
     if not force and not eval_is_proof(claim.eval.cmd):
@@ -310,6 +432,7 @@ def share_pending(store, *, api: str | None = None, token: str | None = None, fo
     """Share every local (non-seed, non-home) claim that has not been submitted yet."""
     results: list[dict[str, Any]] = []
     skipped = 0
+    flushed = flush_outbox(store)
     for c in store.all():
         if getattr(c, "src", "local") in ("home", "seed"):
             skipped += 1
@@ -317,18 +440,24 @@ def share_pending(store, *, api: str | None = None, token: str | None = None, fo
         if c.st == "rejected":
             skipped += 1
             continue
-        if already_shared(store, c.id) and not force:
+        done_private = already_shared(store, c.id) or not (api if api is not None else api_url())
+        done_commons = commons_shared(store, c.id) or not commons_enabled()
+        if done_private and done_commons and not force:
             skipped += 1
             continue
-        results.append(share_claim(store, c, api=api, token=token, force=force))
-    return {"n": len(results), "skipped": skipped, "results": results}
+        r = share_claim(store, c, api=api, token=token, force=force)
+        if r.get("status") == "already":
+            skipped += 1
+            continue
+        results.append(r)
+    return {"n": len(results), "skipped": skipped, "outbox": flushed, "results": results}
 
 
 def maybe_share(store, claim: Claim) -> dict[str, Any] | None:
     """Auto-submit after ingest/confirm when a live home is configured."""
     if not share_enabled():
         return None
-    if not api_url():
+    if not api_url() and not commons_enabled():
         return None
     try:
         return share_claim(store, claim)
@@ -347,6 +476,9 @@ def share_observation(store, claim: Claim, *, held: bool, actor: str, replayed: 
     if not share_enabled() or not replayed:
         return None
     base = api_url()
+    token = api_token()
+    if not base and commons_enabled() and commons_shared(store, claim.id):
+        base, token = commons_api(), ""  # the commons counts replays too; that is how a claim earns its standing
     if not base:
         return None
     verb = "confirm" if held else "fail"
@@ -354,7 +486,7 @@ def share_observation(store, claim: Claim, *, held: bool, actor: str, replayed: 
 
     url = f"{base}/api/claims/{quote(claim.id)}/{verb}?own={quote(actor)}" + ("&replay=true" if held else "")
     try:
-        result = _post(url, {}, token=api_token())
+        result = _post(url, {}, token=token)
     except HomeError as e:
         return {"status": "error", "id": claim.id, "error": str(e)}
     store.log("home-" + verb, actor, claim.id, {"replayed": True})

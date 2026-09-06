@@ -99,6 +99,9 @@ class ProofBinding(V2Model):
 
     artifacts: list[ArtifactDigest] = Field(min_length=1, max_length=64)
     source: Literal["ingest", "first-replay"] = "ingest"
+    # A proof node is content-addressed by its steps, so every claim with the same recipe under the
+    # same tree shares this binding. Re-binding for one claim re-binds them all; the gate therefore
+    # tolerates a pin's manifest drift with a warning instead of re-binding.
     recorded: datetime = Field(default_factory=utcnow)
 
 

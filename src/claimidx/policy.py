@@ -48,6 +48,9 @@ _DROPPER_CODE = [
     re.compile(r"\bexec\s*\(|\beval\s*\(|(?<!re\.)(?<!:)\bcompile\s*\("),
 ]
 
+# `urllib` / `urllib.request` fetch; `urllib3` is a package name and a version check on it fetches nothing.
+_URLLIB_MODULE = re.compile(r"\burllib\b(?!3)")
+
 _LONG_B64 = re.compile(rf"[A-Za-z0-9+/]{{{MAX_BASE64_RUN},}}={{0,2}}")
 
 ALLOWED_EVAL_HEADS = {
@@ -260,9 +263,11 @@ def eval_allowed(cmd: str, *, heads: set[str] | None = None) -> tuple[bool, str]
     if lower & DENIED_EVAL_TOKENS:
         return False, "eval token denied"
     joined = " ".join(parts).lower()
-    for tok in ("os.system", "subprocess", "urllib", "__import__"):
+    for tok in ("os.system", "subprocess", "__import__"):
         if tok in joined:
             return False, "eval imports a dangerous module"
+    if _URLLIB_MODULE.search(joined):
+        return False, "eval imports a dangerous module"
     if any(p.lower() == "socket" for p in parts):
         return False, "eval imports a dangerous module"
     return True, "ok"

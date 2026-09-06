@@ -211,3 +211,11 @@ def test_outbox_line_has_no_home_paths(tmp_path: Path, monkeypatch):
     assert "test_internal" not in line
     assert "const x = await params" in line
     assert propose_line(c)
+
+
+def test_public_fix_body_keeps_pins_and_redacts_mailboxes():
+    from claimidx.public import public_fix_body
+
+    for pin in ("github.com/google/uuid@v1.6.0", "react@18.2.0", "serde@1.0.219", "@scope/pkg@2.0.0", "uuid@1"):
+        assert public_fix_body(pin) == pin, pin
+    assert public_fix_body("mail ops@example.com about it") == "mail <STR> about it"

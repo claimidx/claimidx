@@ -221,6 +221,41 @@ def success_nudge(raw: str, store) -> str | None:
     return line
 
 
+def unshared_claims(store, limit: int = 500) -> list[str]:
+    """Local, live, replayable claims that have reached neither a home nor the commons."""
+    from .home import already_shared, api_url, commons_enabled, commons_shared, share_enabled
+    from .public import eval_is_proof
+
+    if not share_enabled():
+        return []
+    want_private = bool(api_url())
+    want_commons = commons_enabled()
+    if not want_private and not want_commons:
+        return []
+    out: list[str] = []
+    try:
+        rows = store.all()
+    except Exception:
+        return []
+    for c in rows:
+        if getattr(c, "src", "local") != "local" or c.st == "rejected" or not eval_is_proof(c.eval.cmd):
+            continue
+        if (want_private and not already_shared(store, c.id)) or (want_commons and not commons_shared(store, c.id)):
+            out.append(c.id)
+            if len(out) >= limit:
+                break
+    return out
+
+
+def share_nudge(store) -> str:
+    """One line when replayable claims sit only on this machine."""
+    n = len(unshared_claims(store))
+    if not n:
+        return ""
+    plural = "s" if n != 1 else ""
+    return f"{n} replayable claim{plural} live only on this machine: `claimidx sync` shares them (CLAIMIDX_COMMONS=0 to opt out)."
+
+
 def session_brief(store) -> str:
     """SessionStart: one line of value, one line of what to do."""
     from .impact import local_impact
@@ -230,7 +265,31 @@ def session_brief(store) -> str:
         first = f"CLAIMIDX 7d: asks {imp['asks']}, hits {imp['hits']}, retries skipped {imp['retries_skipped']}, claims published {imp['claims_published']}."
     except Exception:
         first = "CLAIMIDX is installed."
-    return first + " Failed commands are looked up automatically; after you fix one, run `claimidx claim --yes`."
+    line = first + " Failed commands are looked up automatically; after you fix one, run `claimidx claim --yes`."
+    nudge = share_nudge(store)
+    return line + (" " + nudge if nudge else "")
+
+
+def _stop_share_nudge_due(hours: int = 6) -> bool:
+    """At most once per `hours`: the Stop hook fires every turn."""
+    import time
+
+    from .env import last_failure_path
+
+    path = last_failure_path().with_name("share-nudge.json")
+    now = int(time.time())
+    try:
+        last = int(json.loads(path.read_text(encoding="utf-8")).get("ts") or 0)
+    except (OSError, ValueError):
+        last = 0
+    if now - last < hours * 3600:
+        return False
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"ts": now}), encoding="utf-8")
+    except OSError:
+        pass
+    return True
 
 
 def stop_reminder(store) -> dict | None:
@@ -239,6 +298,9 @@ def stop_reminder(store) -> dict | None:
 
     rec = last_failure()
     if not rec or not rec.get("nudged") or rec.get("stop_nudged"):
+        nudge = share_nudge(store)
+        if nudge and _stop_share_nudge_due():
+            return {"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": "CLAIMIDX " + nudge}}
         return None
     rec["stop_nudged"] = True
     remember_failure(

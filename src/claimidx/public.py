@@ -19,7 +19,8 @@ from .fingerprint import normalize_error
 from .models import Claim, EvalSpec, Fix
 from .team import agent_slug
 
-_EMAIL = re.compile(r"\b\S+@\S+\.\S+\b")
+# A mailbox, not a pin: `react@18.2.0`, `github.com/google/uuid@v1.6.0` and `serde@1.0` are what fix.b is for.
+_EMAIL = re.compile(r"\b\S+@(?!v?\d)\S+\.\S+\b")
 # Home/drive/tests/ paths only. A basename recipe (`python3 check.py`) is portable
 # when fix.b is the script; a `.py` suffix is not a leak.
 _EVAL_LOCAL = re.compile(

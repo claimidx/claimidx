@@ -16,6 +16,9 @@ def isolate_claimidx(tmp_path, monkeypatch):
     monkeypatch.delenv("CLAIMIDX_HOME_API", raising=False)
     monkeypatch.delenv("CLAIMIDX_HOME_TOKEN", raising=False)
     monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
+    # The commons is a real public home. Tests that exercise it set CLAIMIDX_COMMONS=1 and stub the transport.
+    monkeypatch.setenv("CLAIMIDX_COMMONS", "0")
+    monkeypatch.delenv("CLAIMIDX_COMMONS_API", raising=False)
     monkeypatch.delenv("CLAIMIDX_CURSOR_MCP", raising=False)
     monkeypatch.delenv("CLAIMIDX_GROK_CONFIG", raising=False)
     monkeypatch.delenv("CLAIMIDX_OPENCODE_CONFIG", raising=False)

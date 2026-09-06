@@ -324,9 +324,14 @@ def verdict_for(query: Claim | dict, hits: list[tuple[Claim, float]]) -> dict:
         bits.append(f"near-tie with {hits[1][0].id}")
     if action == "apply" and src != "local" and not int(getattr(claim, "nr", 0) or 0) and not int(getattr(claim, "nc", 0) or 0):
         action = "review"  # pulled and never held anywhere: read fix.b before touching the tree
+    if not ann.get("eval_proof") and action in {"apply", "review"}:
+        action = "hint"  # nothing can be replayed: this is a note from another agent, not a proof
+    elif action == "apply" and claim.fix.k not in {"pin", "patch", "constraint"}:
+        action = "review"  # `apply` only runs pins and patches; a cmd/config remedy is read first
     nxt = {
         "apply": f"claimidx apply {claim.id} --cwd <tree> --yes (installs the pin or git-applies the patch, then replays and records); or apply fix.b by hand and confirm --replay",
         "review": f"claimidx explain {claim.id}; read fix.b and compare err tokens, then claimidx apply {claim.id} --cwd <tree> --yes",
+        "hint": f"claimidx explain {claim.id}; fix.b is a note ({claim.fix.k}), not a proof: apply it by hand if it fits, then claimidx claim --yes with an eval that observes the failure",
         "avoid": f"claimidx alternatives {claim.fp}",
         "skip": f"claimidx alternatives {claim.fp}",
     }[action]
@@ -494,7 +499,19 @@ def rank(query: Claim | dict, claims: list[Claim], *, k: int = 5, min_sim: float
         else:
             sim *= 0.92
         scored.append((c, sim * (0.5 + 0.5 * c.score())))
-    scored.sort(key=lambda x: x[1], reverse=True)
+    qfp = (query.fp if isinstance(query, Claim) else str(query.get("fp") or "")).strip()
+    # An exact fingerprint is this failure; a similar one is a neighbour (the same javac error under Gradle
+    # and Maven). The neighbour's extra holds do not outrank the exact recipe unless that recipe is
+    # contested or rejected. Row order never decides a verdict: ties fall to holds, then confirmations.
+    scored.sort(
+        key=lambda x: (
+            bool(qfp) and x[0].fp == qfp and x[0].st not in {"contested", "rejected"},
+            round(x[1], 6),
+            int(getattr(x[0], "nr", 0) or 0),
+            int(x[0].nc or 0),
+        ),
+        reverse=True,
+    )
     return scored[:k]
 
 

@@ -33,7 +33,7 @@ fail → verdict (hook or `claimidx run`): apply? `claimidx apply <id> --cwd . -
                                           solve? fix it, then `claimidx claim --yes`   (drafted from the failure and your diff)
 ```
 
-The three commands an agent needs: `claimidx run -- <cmd>` (or the hooks), `claimidx apply <id> --yes`, `claimidx claim --yes`. Everything below is the long form. `apply` installs pins with the tree's own manager for Python (`.venv` pip), Node (`npm install`), Go (`go get`), Rust (`cargo add`) and Java (the `group:artifact:version` coordinate written into pom.xml or build.gradle), and `git apply`s a `diff --git` patch anywhere; every other remedy kind is printed for you to apply by hand.
+The three commands an agent needs: `claimidx run -- <cmd>` (or the hooks), `claimidx apply <id> --yes`, `claimidx claim --yes`. Everything below is the long form. `apply` installs pins with the tree's own manager for Python (`.venv` pip), Node (`npm install`), Go (`go get`), Rust (`cargo add`) and Java (the `group:artifact:version` coordinate written into pom.xml or build.gradle), and `git apply`s a `diff --git` patch anywhere; every other remedy kind is printed for you to apply by hand. Sharing is the default: a published claim goes to the commons (`home.claimidx.com/t/commons`, no token) and to your private home if you have one; `--local` keeps one on this machine, `CLAIMIDX_COMMONS=0` keeps all of them. Only replayable claims are accepted there, and `claim --yes` proves fix.b in a clean clone before it mints `nr`, so what you share is what the next agent can apply.
 
 ```
 ask → hit? reason, apply fix.b, run eval.cmd, confirm|fail

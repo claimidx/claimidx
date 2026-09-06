@@ -338,3 +338,36 @@ def test_mcp_own_error_does_not_hit_tools_list():
         "eco": "mcp",
     }
     assert rank(q, [mcp]) == []
+
+
+def test_exact_fingerprint_wins_a_similarity_tie_regardless_of_row_order():
+    """Gradle and Maven report the same javac error; the claim for this tree's build tool must win, whichever row came first."""
+    from claimidx.fingerprint import classify, fingerprint
+    from claimidx.match import rank
+    from claimidx.models import Claim, EvalSpec, Fix
+
+    def mk(err: str, ev: str) -> Claim:
+        cls = classify(err)
+        return Claim(
+            fp=fingerprint(err=err, cls=cls, eco="java", rt="java@21", dep=[]),
+            cls=cls,
+            err=err,
+            eco="java",
+            rt="java@21",
+            fix=Fix(k="pin", b="org.apache.commons:commons-lang3:3.17.0"),
+            eval=EvalSpec(cmd=ev),
+        )
+
+    gradle = mk("<PATH>:<N>: error: package org.apache.commons.lang3 does not exist", "gradle -q compileJava")
+    mvn = mk("[ERROR] /C:<PATH>:[<N>,<N>] package org.apache.commons.lang3 does not exist", "mvn -q compile")
+    q = {"err": mvn.err, "cls": mvn.cls, "eco": "java", "rt": "java@21", "dep": [], "fp": mvn.fp}
+    for order in ([gradle, mvn], [mvn, gradle]):
+        hits = rank(q, order, k=2)
+        assert hits and hits[0][0].id == mvn.id, [(h.id, s) for h, s in hits]
+    # The neighbour has been held more often; it is still a different failure.
+    gradle.nc, gradle.nr, gradle.st = 5, 5, "confirmed"
+    mvn.nc, mvn.nr, mvn.st = 1, 1, "confirmed"
+    assert rank(q, [gradle, mvn], k=2)[0][0].id == mvn.id
+    # Unless the exact recipe is contested: then the neighbour with holds leads.
+    mvn.nf, mvn.st = 3, "contested"
+    assert rank(q, [gradle, mvn], k=2)[0][0].id == gradle.id

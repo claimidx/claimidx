@@ -338,8 +338,17 @@ def _publish_argv(err: str, fix_k: str, fix_b: str, ev: str, eco: str, rt: str, 
     return shlex.join(parts)
 
 
-def publish_draft(draft: dict[str, Any], *, db: str | os.PathLike[str] | None, own: str | None = None, replay: bool = True) -> dict[str, Any]:
-    """Write the draft as a claim; replay its eval under cwd so a held proof mints nr on the spot."""
+def publish_draft(
+    draft: dict[str, Any], *, db: str | os.PathLike[str] | None, own: str | None = None, replay: bool = True, clean_room: bool = True
+) -> dict[str, Any]:
+    """Write the draft as a claim, then prove it.
+
+    With `clean_room` (default) the proof is fix.b applied in a fresh clone of
+    HEAD and replayed there: that is what the next agent's `apply` will do. The
+    working-tree replay is the fallback when the room cannot run (no git, a
+    prose remedy), and it is flagged as such. A room that runs and fails mints
+    nothing and says why.
+    """
     from .query import ingest
 
     if not draft.get("ok"):
@@ -384,15 +393,47 @@ def publish_draft(draft: dict[str, Any], *, db: str | os.PathLike[str] | None, o
     out["ok"] = True
     if out.get("exists"):
         return out
+    # Published is shared: the private home when one is configured, the commons unless it is off.
+    # `--local` / CLAIMIDX_SHARE=0 is the opt-out; a hint eval never leaves the machine anyway.
+    from .home import maybe_share
+    from .store import DEFAULT_DB, Store
+
+    published = Store(db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)).get(out["id"])
+    if published is not None:
+        shared = maybe_share(Store(db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)), published)
+        if shared:
+            out["share"] = shared
     if replay and draft.get("eval_proof"):
-        out["replay"] = _replay_now(out["id"], db=db, own=own, cwd=str(draft.get("cwd") or ""))
+        cwd = str(draft.get("cwd") or "")
+        warns = list(draft.get("warn") or [])
+        room = None
+        if clean_room:
+            from .cleanroom import clean_room as run_room
+            from .store import DEFAULT_DB, Store
+
+            stored = Store(db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)).get(out["id"])
+            if stored is not None:
+                room = run_room(stored, cwd, db=db, own=own)
+                out["clean_room"] = room
+        if room is not None and room.get("ran"):
+            if room.get("recorded"):
+                out["replay"] = room.get("after") or {}
+            else:
+                out["replay"] = {"held": bool(room.get("after_held")), "recorded": False, "reason": room.get("reason")}
+                warns.append("clean clone: " + str(room.get("reason")) + "; nothing minted")
+        else:
+            out["replay"] = _replay_now(out["id"], db=db, own=own, cwd=cwd)
+            if room is not None:
+                warns.append("clean-room skipped: " + str(room.get("reason")) + "; nr minted from the working tree only")
+        if warns:
+            out["warn"] = warns
     from .env import forget_failure
 
     forget_failure()
     return out
 
 
-def _replay_now(claim_id: str, *, db, own: str | None, cwd: str, trust_eval: bool = False) -> dict[str, Any]:
+def _replay_now(claim_id: str, *, db, own: str | None, cwd: str, trust_eval: bool = False, detail_extra: dict[str, Any] | None = None) -> dict[str, Any]:
     from .evaltrust import eval_trust
     from .gate import graduation_gate
     from .sandbox import replay
@@ -421,6 +462,8 @@ def _replay_now(claim_id: str, *, db, own: str | None, cwd: str, trust_eval: boo
     if not decision.mint_nr:
         return {"held": True, "recorded": False, **decision.refusal(), "replay": info}
     detail = {"ms": int(result.ms or 0), "held": True, "env": {"rt": result.env} if result.env else {}}
+    if detail_extra:
+        detail.update(detail_extra)
     confirmed = store.confirm(claim_id, resolve_owner(own), replayed=True, detail=detail)
     from .home import maybe_share, share_observation
 

@@ -149,7 +149,8 @@ def test_pulled_and_never_held_is_review_not_apply(tmp_path: Path, capsys):
     )
     assert main(["--db", db, "--fmt", "json", "ask", "--err", err, "--eco", "py"]) == 0
     v = json.loads(capsys.readouterr().out)["verdict"]
-    assert v["action"] == "review" and "unverified" in v["why"]
+    # Pulled, never held, and its eval is `true`: a note, not something to apply or even review as a fix.
+    assert v["action"] == "hint" and "unverified" in v["why"]
 
 
 def test_family_match_when_the_asker_did_not_know_the_dep(tmp_path: Path, capsys):

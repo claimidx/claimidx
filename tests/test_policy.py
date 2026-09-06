@@ -246,3 +246,12 @@ def test_quarantine_demotes_home_confirmed_only():
     )
     quarantine(local)
     assert local.st == "confirmed"
+
+
+def test_urllib3_is_a_package_not_the_urllib_module():
+    from claimidx.policy import eval_allowed
+
+    assert eval_allowed('python -c "import urllib3"')[0]
+    assert eval_allowed("python -c \"from importlib.metadata import version; raise SystemExit(version('urllib3')!='2.6.3')\"")[0]
+    assert not eval_allowed('python -c "import urllib.request"')[0]
+    assert not eval_allowed('python -c "import urllib"')[0]

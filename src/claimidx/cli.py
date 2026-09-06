@@ -34,7 +34,17 @@ def _print_cli_error(ns: argparse.Namespace, error: Exception, *, exit_code: int
         print(f"error: {error}", file=sys.stderr)
 
 
+def _scratch_dir() -> str:
+    import tempfile
+
+    d = os.environ.get("CLAIMIDX_SCRATCH_DIR") or os.path.join(tempfile.gettempdir(), "claimidx-scratch")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 def _db_path(ns: argparse.Namespace) -> str:
+    if getattr(ns, "scratch", False):
+        return os.path.join(_scratch_dir(), "index.sqlite")
     return ns.db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)
 
 
@@ -533,7 +543,7 @@ def cmd_claim(ns: argparse.Namespace) -> int:
     if not ns.yes:
         print(json.dumps(draft, default=str) if ns.fmt == "json" else render_draft(draft))
         return 0
-    out = publish_draft(draft, db=_db_path(ns), own=resolve_owner(ns.own), replay=not ns.no_replay)
+    out = publish_draft(draft, db=_db_path(ns), own=resolve_owner(ns.own), replay=not ns.no_replay, clean_room=not ns.no_clean_room)
     if ns.fmt == "json":
         print(json.dumps(out, default=str))
     else:
@@ -544,7 +554,15 @@ def cmd_claim(ns: argparse.Namespace) -> int:
         else:
             rp = out.get("replay") or {}
             tail = f" nr={rp.get('nr')}" if rp.get("recorded") else (f" not recorded: {rp.get('reason')}" if rp else "")
+            room = out.get("clean_room") or {}
+            if room.get("recorded"):
+                tail += " (proven in a clean clone)"
             print(f"{out['id']} {out.get('fp', '')[:16]}{tail}")
+            for w in out.get("warn") or []:
+                print(f"warn {w}", file=sys.stderr)
+            sh = out.get("share") or {}
+            if sh.get("status") in {"commons", "pushed", "outbox"}:
+                print(f"# shared: {sh.get('status')}", file=sys.stderr)
             if rp.get("suggest", {}).get("eval"):
                 print(f"suggest eval: {rp['suggest']['eval']}", file=sys.stderr)
     return 0 if out.get("ok") else 2
@@ -566,6 +584,24 @@ def cmd_run(ns: argparse.Namespace) -> int:
     except Exception as e:  # the wrapper must never change the command's outcome
         print(f"claimidx run: {e}", file=sys.stderr)
     return rc
+
+
+def cmd_prune(ns: argparse.Namespace) -> int:
+    """Keep only claims that can graduate: eval upgraded where the claim says how, hints retired."""
+    from .prune import prune_store
+
+    store = _store(ns)
+    report = prune_store(store, apply=bool(ns.apply), actor=resolve_owner(ns.own))
+    out = report.as_dict()
+    out["applied"] = bool(ns.apply)
+    if ns.fmt == "json":
+        print(json.dumps(out))
+    else:
+        verb = "retired" if ns.apply else "would retire"
+        print(f"prune: seen {out['seen']}, kept {out['kept']} (evals upgraded {out['upgraded']}), {verb} {out['dropped']}")
+        if not ns.apply and out["dropped"]:
+            print("re-run with --apply to write; retired rows can only come back re-ingested from the raw error", file=sys.stderr)
+    return 0
 
 
 def cmd_apply(ns: argparse.Namespace) -> int:
@@ -1255,6 +1291,7 @@ def _glue_dashed_opt(argv: list[str], opt: str) -> list[str]:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="claimidx", description="Claimidx — prior art for agents. Ask before you burn tokens.")
     p.add_argument("--db", default=None, help="sqlite path (default: $CLAIMIDX_DB or ~/.claimidx/index.sqlite)")
+    p.add_argument("--scratch", action="store_true", help="throwaway index under the temp dir ($CLAIMIDX_SCRATCH_DIR); nothing is shared or queued")
     p.add_argument("--fmt", choices=["dense", "json", "id"], default="dense")
     p.add_argument("--version", action="version", version=f"claimidx {__version__}")
     p.add_argument(
@@ -1295,6 +1332,8 @@ def build_parser() -> argparse.ArgumentParser:
     cl.add_argument("--yes", "-y", action="store_true", help="publish the draft and replay its eval")
     cl.add_argument("--no-diff", action="store_true", help="never read git diff for fix.b")
     cl.add_argument("--no-replay", action="store_true", help="publish without replaying the eval")
+    cl.add_argument("--no-clean-room", action="store_true", help="skip the fresh-clone proof of fix.b; nr then comes from the working tree only")
+    cl.add_argument("--local", action="store_true", help="keep this claim on this machine: no home, no commons")
     cl.set_defaults(func=cmd_claim)
     rn = sub.add_parser("run", help="Run a command through the sensor: failure → ask + remember; the fix → `claim --yes` nudge. Exit status is the command's")
     rn.add_argument("--cwd")
@@ -1309,6 +1348,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--trust-eval", action="store_true", help="also run a non-portable eval from a claim not published here")
     ap.set_defaults(func=cmd_apply)
     pub = sub.add_parser("publish")
+    pub.add_argument("--local", action="store_true", help="keep this claim on this machine: no home, no commons")
     pub.add_argument("--err", required=True)
     pub.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"])
     pub.add_argument("--fix-b", required=True)
@@ -1372,6 +1412,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     vf.add_argument("--cwd", help="working directory for tree-scoped evals (default: isolated scratch)")
     vf.set_defaults(func=cmd_verify, dry_run=True)
+    pr = sub.add_parser("prune", help="Retire local claims whose eval is only a hint after upgrade; --apply to write")
+    pr.add_argument("--apply", action="store_true", help="delete hint rows and upgrade evals in place (default: report only)")
+    pr.add_argument("--own")
+    pr.set_defaults(func=cmd_prune)
     rj = sub.add_parser("reject")
     rj.add_argument("id")
     rj.add_argument("--own")
@@ -1566,6 +1610,13 @@ def main(argv: list[str] | None = None) -> int:
     raw = _glue_dashed_opt(raw, "--fix-b")
     ns = build_parser().parse_args(raw)
     try:
+        if getattr(ns, "scratch", False):
+            d = _scratch_dir()
+            os.environ["CLAIMIDX_SHARE"] = "0"
+            os.environ["CLAIMIDX_COMMONS"] = "0"
+            os.environ["CLAIMIDX_OUTBOX"] = os.path.join(d, "outbox.jsonl")
+        if getattr(ns, "local", False):
+            os.environ["CLAIMIDX_SHARE"] = "0"
         return int(ns.func(ns))
     except BrokenPipeError:
         return 0
