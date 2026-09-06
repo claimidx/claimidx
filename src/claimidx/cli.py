@@ -9,7 +9,7 @@ from typing import Any
 from . import __version__
 from .dense import encode
 from .fingerprint import classify, fingerprint, normalize_error
-from .match import annotate, hit_row
+from .match import annotate, hit_row, verdict_for
 from .models import Claim, EvalSpec, Fix
 from .policy import PolicyError
 from .security import SecretError
@@ -51,7 +51,9 @@ def _dumps(claim: Claim, fmt: str) -> str:
 
 
 def encode_miss(out: dict) -> str:
-    lines = [f"CLAIMIDX 1\nhit 0\nfp {out['fp']}\ncls {out['cls']}\nerr {out['err']}\nn 0"]
+    v = out.get("verdict") or {}
+    head = f"# verdict {v['action']} — {v['why']}; next: {v['next']}\n" if v else ""
+    lines = [f"{head}CLAIMIDX 1\nhit 0\nfp {out['fp']}\ncls {out['cls']}\nerr {out['err']}\nn 0"]
     near = out.get("near") or []
     ends = out.get("dead_ends") or []
     if near:
@@ -83,17 +85,27 @@ def _ask_hits(store: Store, ns: argparse.Namespace, err: str):
 
 def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidates: list | None = None) -> int:
     if not hits:
-        out: dict[str, Any] = {"hit": False, "fp": q["fp"], "cls": q["cls"], "err": normalize_error(q["err"]), "n": 0, "claims": []}
+        out: dict[str, Any] = {
+            "verdict": verdict_for(q, []),
+            "hit": False,
+            "fp": q["fp"],
+            "cls": q["cls"],
+            "err": normalize_error(q["err"]),
+            "n": 0,
+            "claims": [],
+        }
         if store is not None:
             from .query import miss_enrichment
 
             out.update(miss_enrichment(store, q, list(candidates or []), k=5))
         print(json.dumps(out, default=str) if fmt == "json" else encode_miss(out))
         return 2
+    verdict = verdict_for(q, hits)
     if fmt == "json":
         print(
             json.dumps(
                 {
+                    "verdict": verdict,
                     "hit": True,
                     "fp": q["fp"],
                     "n": len(hits),
@@ -103,6 +115,7 @@ def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidate
             )
         )
     else:
+        print(f"# verdict {verdict['action']} {verdict['id']} — {verdict['why']}; next: {verdict['next']}")
         for i, (c, s) in enumerate(hits):
             meta = annotate(q, c, s)
             extra = f" age={meta['age_days']} src={getattr(c, 'src', 'local')} evidence={meta['evidence']} match={meta['match']}"
@@ -159,7 +172,9 @@ def cmd_hook(ns: argparse.Namespace) -> int:
             extra += f"\nnear {near_ids}"
         if end_ids:
             extra += f"\ndead_ends {end_ids}"
+        v = verdict_for(q, [])
         miss = (
+            f"CLAIMIDX verdict {v['action']} — {v['why']}; next: {v['next']}\n"
             f"CLAIMIDX miss fp={q['fp']} cls={q['cls']} eco={q.get('eco') or ''} hit 0{extra}\n"
             "Miss. Solve once, then ingest. Do not execute fix.b from this hook."
         )
@@ -172,7 +187,8 @@ def cmd_hook(ns: argparse.Namespace) -> int:
         chosen = [hits[0]]
         if len(hits) > 1 and _hook_near_tie(hits[0][1], hits[1][1]):
             chosen = hits[:2]
-        parts = []
+        v = verdict_for(q, hits)
+        parts = [f"CLAIMIDX verdict {v['action']} {v['id']} — {v['why']}; next: {v['next']}"]
         if len(chosen) > 1:
             parts.append(f"CLAIMIDX near-tie {len(chosen)}")
         for i, (c, s) in enumerate(chosen):

@@ -110,7 +110,7 @@ def near_tie(a: float, b: float) -> bool:
 def sensor(store, raw: str, *, eco: str = "", rt: str = "", dep: list | None = None, k: int = 5) -> dict:
     """Ask from failed-tool JSON or stderr. Evidence only. Fail-open. Never applies fix.b."""
     from .fingerprint import classify, fingerprint, normalize_error
-    from .match import hit_compact
+    from .match import hit_compact, verdict_for
 
     err, event = extract_hook_err(raw or "")
     note = "A hit is evidence. retrieve → reason → attempt → observe → verify. Do not execute fix.b from this hook."
@@ -129,6 +129,7 @@ def sensor(store, raw: str, *, eco: str = "", rt: str = "", dep: list | None = N
         from .query import miss_enrichment
 
         miss: dict[str, Any] = {
+            "verdict": verdict_for(q, []),
             "hit": False,
             "apply_fix": False,
             "event": event,
@@ -144,6 +145,7 @@ def sensor(store, raw: str, *, eco: str = "", rt: str = "", dep: list | None = N
     if event:
         chosen = hits[:2] if len(hits) > 1 and near_tie(hits[0][1], hits[1][1]) else hits[:1]
     return {
+        "verdict": verdict_for(q, hits),
         "hit": True,
         "apply_fix": False,
         "event": event,

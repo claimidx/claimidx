@@ -11,7 +11,7 @@ import time
 from typing import Any
 
 from .fingerprint import classify, fingerprint, normalize_error
-from .match import dead_end_claims, hit_compact, hit_row, rank, rank_near, similarity
+from .match import dead_end_claims, hit_compact, hit_row, rank, rank_near, similarity, verdict_for
 from .models import Claim, EvalSpec, Fix
 from .store import DEFAULT_DB, Store, force_reset_emits, force_reset_from
 from .team import resolve_owner
@@ -76,6 +76,7 @@ def ask(
     session = store.session_summary(fp=q["fp"])
     if not hits:
         miss = {
+            "verdict": verdict_for(q, []),
             "hit": False,
             "fp": q["fp"],
             "cls": cls,
@@ -87,6 +88,7 @@ def ask(
         miss.update(miss_enrichment(store, q, candidates, k=k))
         return miss
     return {
+        "verdict": verdict_for(q, hits),
         "hit": True,
         "fp": q["fp"],
         "cls": cls,

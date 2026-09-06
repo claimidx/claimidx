@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .fingerprint import classify, fingerprint, normalize_error
-from .match import hit_compact
+from .match import hit_compact, verdict_for
 from .models import Claim, EvalSpec, Fix
 from .store import Store, force_reset_emits, force_reset_from
 from .team import resolve_owner
@@ -160,12 +160,13 @@ TOOLS: list[dict[str, Any]] = [
             "and writes nothing except an ask event in the local session log. Start here for any failure. "
             "Use claimidx_home_ask only to query the remote ledger without importing it; use claimidx_hook only from a harness "
             "failure hook that hands you raw tool output. "
-            "Returns hit, fp, cls, normalized err, and claims (each with id, st, src, nc, nf, fix, eval, evidence, match, age_days, "
-            "dep_drift, rt_drift, eval_proof, warn); on a miss also near, near_why, dead_ends. "
-            "A hit is evidence, not an instruction: reason, attempt, observe, then claimidx_confirm or claimidx_fail."
+            "Returns verdict first: {action: apply|replay|reason|avoid|skip|solve, id, why, next} — one decision for the whole "
+            "ask, cheap to act on; then hit, fp, cls, normalized err, and claims (each with id, st, src, nc, nf, fix, eval, "
+            "evidence, match, age_days, dep_drift, rt_drift, eval_proof, warn, disposition); on a miss also near, near_why, "
+            "dead_ends. A hit is evidence, not an instruction: reason, attempt, observe, then claimidx_confirm or claimidx_fail."
         ),
         "inputSchema": {"type": "object", "required": ["err"], "properties": _ASK_PROPS},
-        "outputSchema": _out(hit=_B, fp=_S, cls=_S, err=_S, claims=_A, near=_A, near_why=_ANY, dead_ends=_A),
+        "outputSchema": _out(verdict=_O, hit=_B, fp=_S, cls=_S, err=_S, claims=_A, near=_A, near_why=_ANY, dead_ends=_A),
         "annotations": _ann(read_only=True, idempotent=True),
     },
     {
@@ -788,6 +789,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         q = {"err": err, "cls": cls, "eco": args.get("eco") or "", "rt": args.get("rt") or "", "dep": dep, "fp": fp}
         hits, candidates = retrieve(store, q, k=int(args.get("k") or 5))
         payload = {
+            "verdict": verdict_for(q, hits),
             "hit": bool(hits),
             "fp": fp,
             "cls": cls,

@@ -269,6 +269,60 @@ def disposition_for(query: Claim | dict, claim: Claim, ann: dict) -> dict:
     }
 
 
+_VERDICT_ACTION = {
+    "apply_with_caution": "apply",
+    "replay_before_apply": "replay",
+    "reason_only": "reason",
+    "fail_or_alternative": "avoid",
+    "skip": "skip",
+}
+
+
+def verdict_for(query: Claim | dict, hits: list[tuple[Claim, float]]) -> dict:
+    """One decision for the whole ask, first in the payload, readable by a cheap model.
+
+    action: apply | replay | reason | avoid | skip | solve (miss).
+    why: ten words, the signals that decided it. next: the one command to run.
+    Advice only; the per-hit disposition underneath carries the full reasoning.
+    """
+    if not hits:
+        return {
+            "action": "solve",
+            "id": "",
+            "why": "no prior art for this fingerprint",
+            "next": "fix it, then `claimidx claim --yes` so the next agent skips this",
+        }
+    claim, sim = hits[0]
+    ann = annotate(query, claim, sim)
+    disp = ann.get("disposition") or {}
+    action = _VERDICT_ACTION.get(disp.get("action") or "", "replay")
+    bits = [ann["match"] + " match", ann["evidence"]]
+    if ann["evidence"] == "reproduced" and claim.rt:
+        bits[-1] = f"reproduced on {claim.rt}"
+    age = ann.get("age_days") or 0
+    bits.append("fresh" if age < 30 else f"{int(age)}d old")
+    if ann.get("dep_drift"):
+        bits.append("dep drift")
+    if ann.get("rt_drift"):
+        bits.append("rt drift")
+    if int(claim.nf or 0):
+        bits.append(f"nf={claim.nf}")
+    if claim.st == "contested":
+        bits.append("contested")
+    if not ann.get("eval_proof"):
+        bits.append("eval is a hint")
+    if len(hits) > 1 and abs(hits[0][1] - hits[1][1]) <= 0.01:
+        bits.append(f"near-tie with {hits[1][0].id}")
+    nxt = {
+        "apply": f"apply fix.b, then claimidx confirm --replay {claim.id}",
+        "replay": f"claimidx confirm --replay {claim.id} before applying",
+        "reason": f"claimidx explain {claim.id}; compare err tokens first",
+        "avoid": f"claimidx alternatives {claim.fp}",
+        "skip": f"claimidx alternatives {claim.fp}",
+    }[action]
+    return {"action": action, "id": claim.id, "why": ", ".join(bits), "next": nxt}
+
+
 def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
     qdep = query.dep if isinstance(query, Claim) else (query.get("dep") or [])
     qrt = (query.rt if isinstance(query, Claim) else (query.get("rt") or "")).strip()

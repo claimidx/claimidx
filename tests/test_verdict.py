@@ -1,0 +1,90 @@
+"""`verdict` is the first thing an ask returns: one action, ten words of why, one next command."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+from claimidx.cli import main
+
+
+def _py_rt() -> str:
+    return f"py@{sys.version_info.major}.{sys.version_info.minor}"
+
+
+def test_miss_verdict_says_solve(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    rc = main(["--db", db, "--fmt", "json", "ask", "--err", "RuntimeError: nothing like this exists"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 2
+    assert list(out.keys())[0] == "verdict"
+    assert out["verdict"]["action"] == "solve"
+    assert "claimidx claim" in out["verdict"]["next"]
+
+
+def test_hit_verdict_replay_then_apply(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    err = "ModuleNotFoundError: No module named 'json'"
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                err,
+                "--eco",
+                "py",
+                "--rt",
+                _py_rt(),
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "json",
+                "--eval",
+                'python -c "import json"',
+            ]
+        )
+        == 0
+    )
+    cid = capsys.readouterr().out.strip()
+    # Retrieved only: replay first.
+    assert main(["--db", db, "--fmt", "json", "ask", "--err", err, "--eco", "py", "--rt", _py_rt()]) == 0
+    out = json.loads(capsys.readouterr().out)
+    v = out["verdict"]
+    assert v["action"] == "replay" and v["id"] == cid
+    assert "exact match" in v["why"] and "retrieved" in v["why"]
+    assert f"confirm --replay {cid}" in v["next"]
+    # Reproduced: apply.
+    assert main(["--db", db, "--fmt", "json", "confirm", "--replay", cid]) == 0
+    capsys.readouterr()
+    assert main(["--db", db, "--fmt", "json", "ask", "--err", err, "--eco", "py", "--rt", _py_rt()]) == 0
+    v = json.loads(capsys.readouterr().out)["verdict"]
+    assert v["action"] == "apply"
+    assert f"reproduced on {_py_rt()}" in v["why"]
+    # Dense output leads with the verdict line.
+    assert main(["--db", db, "ask", "--err", err, "--eco", "py", "--rt", _py_rt()]) == 0
+    first = capsys.readouterr().out.splitlines()[0]
+    assert first.startswith(f"# verdict apply {cid}")
+
+
+def test_hook_context_leads_with_verdict(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    payload = json.dumps({"hook_event_name": "PostToolUseFailure", "tool_response": {"stderr": "RuntimeError: hook verdict probe"}})
+    assert main(["--db", db, "hook", "--err", payload]) == 0
+    ctx = json.loads(capsys.readouterr().out)["hookSpecificOutput"]["additionalContext"]
+    assert ctx.splitlines()[0].startswith("CLAIMIDX verdict solve")
+
+
+def test_mcp_ask_and_hook_carry_verdict(tmp_path: Path):
+    from claimidx.mcp_server import _call
+    from claimidx.store import Store
+
+    store = Store(tmp_path / "ix.sqlite")
+    out = _call("claimidx_ask", {"err": "RuntimeError: mcp verdict probe"}, store)
+    assert list(out.keys())[0] == "verdict" and out["verdict"]["action"] == "solve"
+    out = _call("claimidx_hook", {"err": "RuntimeError: mcp verdict probe"}, store)
+    assert out["verdict"]["action"] == "solve"

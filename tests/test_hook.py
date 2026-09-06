@@ -292,7 +292,8 @@ def test_hook_cli_raw_stderr_miss_prints_line(tmp_path, capsys, monkeypatch):
     rc = main(["--db", db, "hook", "--eco", "py"])
     out = capsys.readouterr().out
     assert rc == 0
-    assert out.startswith("CLAIMIDX miss")
+    assert out.startswith("CLAIMIDX verdict solve")
+    assert "CLAIMIDX miss" in out
     assert "hit 0" in out
 
 
