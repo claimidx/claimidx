@@ -151,3 +151,48 @@ def test_init_without_agent_picks_a_name_and_a_key(tmp_path: Path, capsys, monke
     assert main(["--db", db, "whoami"]) == 0
     who = capsys.readouterr().out
     assert data["key"] in who
+
+
+def test_observations_are_signed_silently_with_the_local_key(tmp_path: Path, capsys, monkeypatch):
+    monkeypatch.delenv("CLAIMIDX_OWNER", raising=False)
+    monkeypatch.delenv("CLAIMIDX_AGENT", raising=False)
+    db = str(tmp_path / "ix.sqlite")
+    assert main(["--db", db, "init", "--offline", "--no-hooks"]) == 0
+    capsys.readouterr()
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "RuntimeError: signed obs probe",
+                "--eco",
+                "py",
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "ok",
+                "--eval",
+                "true",
+            ]
+        )
+        == 0
+    )
+    cid = capsys.readouterr().out.strip()
+    assert main(["--db", db, "--fmt", "json", "confirm", cid]) == 0
+    capsys.readouterr()
+    assert main(["--db", db, "--fmt", "json", "explain", cid]) == 0
+    graph = json.loads(capsys.readouterr().out)
+    obs = graph["observations"][-1]
+    from claimidx import config
+    from claimidx.identity import verify_record
+
+    key = json.loads(config.config_path().read_text(encoding="utf-8"))["key"]
+    assert obs["key_id"] == key and obs["signature"]
+    assert verify_record(obs)
+    # Tamper: the signature no longer verifies.
+    obs["held"] = not obs["held"]
+    assert not verify_record(obs)

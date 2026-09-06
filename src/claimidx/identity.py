@@ -97,6 +97,29 @@ def load_identity(path: str | os.PathLike[str]) -> tuple[str, Ed25519PrivateKey]
     return did, private
 
 
+def local_key_path() -> Path:
+    """This machine's Ed25519 key, next to config.json (provisioned by init or the first write)."""
+    from .config import config_path
+
+    return config_path().parent / "identity.json"
+
+
+def maybe_sign(record: dict[str, Any]) -> dict[str, Any]:
+    """Sign with the local key when there is one; otherwise return the record untouched.
+
+    Silent by design: observations this machine records carry its key_id and
+    signature so a home can tell attested observations from asserted ones,
+    without the agent ever thinking about keys. Never raises.
+    """
+    path = local_key_path()
+    if not path.exists():
+        return record
+    try:
+        return sign_record(record, path)
+    except (OSError, ValueError, TypeError):
+        return record
+
+
 def sign_record(record: dict[str, Any], path: str | os.PathLike[str]) -> dict[str, Any]:
     did, private = load_identity(path)
     signed = dict(record)

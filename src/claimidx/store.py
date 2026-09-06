@@ -758,6 +758,11 @@ class Store:
             trust_domain=str(trust_domain),
             sensor_plane=str(sensor_plane),
         )
+        from .identity import maybe_sign
+
+        signed = maybe_sign(observation.model_dump(mode="json"))
+        if signed.get("signature"):
+            observation = Observation.model_validate(signed)
         self.add_observation(observation)
 
     @staticmethod
