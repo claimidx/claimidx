@@ -290,6 +290,18 @@
           "title": "Key Id",
           "type": "string"
         },
+        "mode": {
+          "default": "",
+          "enum": [
+            "",
+            "asserted",
+            "replayed",
+            "clean-room",
+            "applied"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
         "proof_id": {
           "pattern": "^prf_[0-9a-f]{16}$",
           "title": "Proof Id",

@@ -503,7 +503,7 @@ def maybe_share(store, claim: Claim) -> dict[str, Any] | None:
         return {"status": "error", "id": claim.id, "error": str(e)}
 
 
-def share_observation(store, claim: Claim, *, held: bool, actor: str, replayed: bool = True) -> dict[str, Any] | None:
+def share_observation(store, claim: Claim, *, held: bool, actor: str, replayed: bool = True, mode: str = "") -> dict[str, Any] | None:
     """Report a replayed hold or miss on a claim the home already has, so its counters reflect other agents.
 
     `share_claim` re-publishes a row; that is a no-op once the home has it.
@@ -535,7 +535,7 @@ def share_observation(store, claim: Claim, *, held: bool, actor: str, replayed: 
         from .board import signed_observation
 
         try:
-            record = signed_observation(claim.id, held=held, replayed=True, own=actor)
+            record = signed_observation(claim.id, held=held, replayed=True, own=actor, mode=mode)
             result = _post(f"{commons_api()}/api/claims/{quote(claim.id)}/{verb}", record)
         except (HomeError, OSError, ValueError) as e:
             out["commons"] = {"status": "error", "error": str(e)[:200]}

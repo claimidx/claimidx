@@ -447,7 +447,16 @@ def publish_draft(
     return out
 
 
-def _replay_now(claim_id: str, *, db, own: str | None, cwd: str, trust_eval: bool = False, detail_extra: dict[str, Any] | None = None) -> dict[str, Any]:
+def _replay_now(
+    claim_id: str,
+    *,
+    db,
+    own: str | None,
+    cwd: str,
+    trust_eval: bool = False,
+    detail_extra: dict[str, Any] | None = None,
+    mode: str = "replayed",
+) -> dict[str, Any]:
     from .evaltrust import eval_trust
     from .gate import graduation_gate
     from .sandbox import replay
@@ -475,7 +484,7 @@ def _replay_now(claim_id: str, *, db, own: str | None, cwd: str, trust_eval: boo
     decision = graduation_gate(c, result, cwd=cwd or None, store=store, actor=resolve_owner(own))
     if not decision.mint_nr:
         return {"held": True, "recorded": False, **decision.refusal(), "replay": info}
-    detail = {"ms": int(result.ms or 0), "held": True, "env": {"rt": result.env} if result.env else {}}
+    detail = {"ms": int(result.ms or 0), "held": True, "env": {"rt": result.env} if result.env else {}, "mode": mode}
     if detail_extra:
         detail.update(detail_extra)
     confirmed = store.confirm(claim_id, resolve_owner(own), replayed=True, detail=detail)
@@ -483,7 +492,7 @@ def _replay_now(claim_id: str, *, db, own: str | None, cwd: str, trust_eval: boo
 
     shared = maybe_share(store, confirmed)
     if (shared or {}).get("status") in {"already", "pushed"}:
-        shared = share_observation(store, confirmed, held=True, actor=resolve_owner(own)) or shared
+        shared = share_observation(store, confirmed, held=True, actor=resolve_owner(own), mode=mode) or shared
     out: dict[str, Any] = {"held": True, "recorded": True, "nr": confirmed.nr, "st": confirmed.st, "replay": info}
     if decision.warns:
         out["warn"] = list(decision.warns)

@@ -173,6 +173,10 @@ class Observation(V2Model):
     sandbox: str = "legacy"
     trust_domain: str = Field(default="", max_length=200)
     sensor_plane: str = Field(default="", max_length=200)
+    # How the hold was produced. asserted: confirm/fail without a replay. replayed: the eval ran in the
+    # observer's tree. clean-room: fix.b applied in a fresh clone of HEAD, then replayed. applied: another
+    # tree ran `claimidx apply`, which installed the remedy and replayed. A `true` eval is none of these.
+    mode: Literal["", "asserted", "replayed", "clean-room", "applied"] = ""
     key_id: str = ""
     signature: str = ""
     created: datetime = Field(default_factory=utcnow)

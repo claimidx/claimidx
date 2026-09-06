@@ -116,7 +116,7 @@ def clean_room(claim: Claim, cwd: str, *, db, own: str | None, trust_eval: bool 
             return out
         from .claim import _replay_now
 
-        rep = _replay_now(claim.id, db=db, own=own, cwd=room, trust_eval=trust_eval, detail_extra={"clean_room": True})
+        rep = _replay_now(claim.id, db=db, own=own, cwd=room, trust_eval=trust_eval, detail_extra={"clean_room": True}, mode="clean-room")
         out["after"] = rep
         out["after_held"] = bool(rep.get("held"))
         out["recorded"] = bool(rep.get("recorded"))

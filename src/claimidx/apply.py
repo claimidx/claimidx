@@ -274,7 +274,7 @@ def apply_claim(store, claim: Claim, *, cwd: str, own: str | None, yes: bool, tr
     out["applied"] = True
     from .claim import _replay_now
 
-    out["replay"] = _replay_now(claim.id, db=store.path, own=own, cwd=p["cwd"], trust_eval=trust_eval)
+    out["replay"] = _replay_now(claim.id, db=store.path, own=own, cwd=p["cwd"], trust_eval=trust_eval, mode="applied")
     if out["replay"].get("recorded"):
         # The hold is on record: the sensor's remembered failure for this tree or fingerprint is
         # consumed, as `claim --yes` does, so the next run or Stop hook does not ask the agent to

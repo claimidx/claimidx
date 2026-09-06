@@ -5,6 +5,7 @@ import os
 import sqlite3
 from datetime import UTC
 from pathlib import Path
+from typing import Literal
 
 from pydantic import ValidationError
 
@@ -758,12 +759,23 @@ class Store:
         env = (detail or {}).get("env") or {}
         trust_domain = (detail or {}).get("trust_domain") or ""
         sensor_plane = (detail or {}).get("sensor_plane") or ""
+        raw_mode = str((detail or {}).get("mode") or "")
+        mode: Literal["asserted", "replayed", "clean-room", "applied"]
+        if raw_mode == "clean-room":
+            mode = "clean-room"
+        elif raw_mode == "applied":
+            mode = "applied"
+        elif raw_mode == "asserted":
+            mode = "asserted"
+        else:
+            mode = "replayed" if replayed else "asserted"
         observation = Observation(
             remedy_id=remedy["id"],
             proof_id=proof["id"],
             actor=actor,
             held=held,
             replayed=replayed,
+            mode=mode,
             actual_exit=actual if isinstance(actual, int) else None,
             expected_exit=claim.eval.expect,
             environment={str(k): str(v) for k, v in env.items()} if isinstance(env, dict) else {},
