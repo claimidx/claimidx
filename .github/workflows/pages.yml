@@ -1,6 +1,8 @@
 name: pages
-# Publish the repository's technical documentation and discovery files.
-# docs/ is the complete Pages tree (storefront included), so a push is safe to publish.
+# Publish the repository's technical documentation and discovery files to a PREVIEW branch.
+# The storefront pages (pricing, homes, terms, thanks) are not in git, so a deploy from this
+# checkout is incomplete and must never become production. Production is deployed by the
+# operator from a complete docs/ tree: `npx wrangler pages deploy docs --project-name claimidx --branch main`.
 on:
   workflow_dispatch:
   push:
@@ -19,4 +21,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy docs --project-name claimidx
+          command: pages deploy docs --project-name claimidx --branch docs-preview
