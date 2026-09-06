@@ -31,7 +31,11 @@ def claim_target(*, cls: str, err: str, dep: list[str] | None = None) -> str:
     if cls == "module_not_found":
         m = _NO_MODULE.search(err or "")
         if m:
-            return m.group(1).strip().rstrip(".")
+            name = m.group(1).strip().rstrip(".")
+            # `./lib`, `../x`, `/abs/path`: a missing local file, not a dependency. Nothing to attribute.
+            if name.startswith((".", "/")) or ":" in name or "<" in name:
+                return ""
+            return name
     for d in dep or []:
         name = _dep_name(d)
         if name:

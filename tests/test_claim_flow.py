@@ -141,3 +141,35 @@ def test_mcp_claim_tool_drafts_then_publishes(tmp_path: Path):
         store,
     )
     assert out["ok"] and out["id"] and out["replay"]["recorded"] is True
+
+
+def test_replay_uses_the_trees_own_venv(tmp_path: Path):
+    """A claim about a project replays under that project's interpreter, not whatever `python` is on PATH."""
+    import subprocess
+
+    from claimidx.sandbox import project_python, replay, resolve_argv
+
+    tree = tmp_path / "proj"
+    tree.mkdir()
+    subprocess.run([sys.executable, "-m", "venv", str(tree / ".venv")], check=True, capture_output=True, timeout=120)
+    own = project_python(tree)
+    assert own and resolve_argv(["python", "-c", "print(1)"], str(tree))[0] == own
+    marker = tree / ".venv" / "cix_marker.txt"
+    marker.write_text("here", encoding="utf-8")
+    # The venv interpreter sees its own prefix; a foreign one would not.
+    res = replay("python -c \"import sys, os; raise SystemExit(0 if os.path.exists(os.path.join(sys.prefix, 'cix_marker.txt')) else 1)\"", 0, cwd=str(tree))
+    assert res.held, res.as_dict()
+
+
+def test_claim_drafts_the_trees_test_as_eval(tmp_path: Path, capsys):
+    tree = tmp_path / "web"
+    tree.mkdir()
+    (tree / "package.json").write_text(json.dumps({"name": "web", "scripts": {"test": "node test.js"}}), encoding="utf-8")
+    db = str(tmp_path / "ix.sqlite")
+    assert (
+        main(["--db", db, "--fmt", "json", "claim", "--err", "Error: Cannot find module './lib'", "--cwd", str(tree), "--no-diff", "--fix", "added lib.js"])
+        == 0
+    )
+    draft = json.loads(capsys.readouterr().out)
+    assert draft["eval"] == "npm test" and draft["inferred"]["eval"] == "tree recipe"
+    assert draft["target"] == ""

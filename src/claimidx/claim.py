@@ -20,7 +20,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .env import infer_env, installed_version, last_failure
+from .env import infer_env, installed_version, last_failure, tree_eval
 from .fingerprint import classify, fingerprint
 from .public import eval_is_proof, ingest_warnings, refine_eval
 from .target import claim_target, suggest_eval
@@ -155,7 +155,7 @@ def draft_claim(
     if guess["rt"] and rt == guess["rt"]:
         inferred["rt"] = "interpreter"
     if target and not dep:
-        pin = installed_version(target.split(".")[0].split("/")[0] if not target.startswith("@") else target, eco)
+        pin = installed_version(target.split(".")[0].split("/")[0] if not target.startswith("@") else target, eco, cwd)
         if pin:
             dep = [pin]
             inferred["dep"] = "installed"
@@ -183,6 +183,10 @@ def draft_claim(
         ev = refine_eval("true", fix_k=fix_k, fix_b=fix_b, dep=dep, eco=eco)
         if ev != "true":
             inferred["eval"] = "dependency pin"
+        else:
+            ev = tree_eval(cwd, eco)
+            if ev:
+                inferred["eval"] = "tree recipe"
     ev = ev or "true"
 
     warns = ingest_warnings(err, ev, cls=cls, dep=dep, eco=eco)

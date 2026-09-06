@@ -299,6 +299,10 @@ def verdict_for(query: Claim | dict, hits: list[tuple[Claim, float]]) -> dict:
     bits = [ann["match"] + " match", ann["evidence"]]
     if ann["evidence"] == "reproduced" and claim.rt:
         bits[-1] = f"reproduced on {claim.rt}"
+    src = getattr(claim, "src", "local")
+    if src != "local":
+        held = int(getattr(claim, "nr", 0) or 0)
+        bits[-1] = f"pulled ({src}), held {held}× elsewhere" if held else f"pulled ({src}), unverified"
     age = ann.get("age_days") or 0
     bits.append("fresh" if age < 30 else f"{int(age)}d old")
     if ann.get("dep_drift"):
@@ -329,6 +333,9 @@ def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
     qerr = query.err if isinstance(query, Claim) else (query.get("err") or "")
     stored_nr = int(getattr(claim, "nr", 0) or 0)
     nr = stored_nr if hold_applies(qrt, claim.rt) else 0
+    # A pulled row's nr is another machine's replay count: hearsay until this consumer replays it.
+    if getattr(claim, "src", "local") != "local":
+        nr = 0
     exact = _query_fp(query) == claim.fp
     ann = {
         "sim": round(sim, 4),

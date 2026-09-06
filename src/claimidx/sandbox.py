@@ -9,17 +9,36 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from .fingerprint import runtime_proof_key
 from .policy import _norm_head, eval_allowed, split_eval
 
 
-def resolve_argv(parts: list[str]) -> list[str]:
+def project_python(cwd: str | os.PathLike[str] | None) -> str | None:
+    """The tree's own interpreter (`.venv`/`venv` under cwd), when it has one.
+
+    A claim about a project is about that project's environment: an agent's
+    shell PATH rarely has the venv active when a hook fires, and replaying
+    `python -c "import x"` under the wrong interpreter turns a real fix into
+    a false miss.
+    """
+    if not cwd:
+        return None
+    root = Path(cwd)
+    for venv in (".venv", "venv"):
+        cand = root / venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        if cand.is_file():
+            return str(cand)
+    return None
+
+
+def resolve_argv(parts: list[str], cwd: str | os.PathLike[str] | None = None) -> list[str]:
     """Map an allowlisted eval recipe onto this OS's real executable.
 
     Unix recipes stay canonical (`python -c`, `npx tsc`). `python`/`python3`
-    follow PATH (venv) or CLAIMIDX_PYTHON, then this interpreter. Other
-    heads resolve via PATHEXT on Windows.
+    follow CLAIMIDX_PYTHON, then the tree's own venv under cwd, then PATH,
+    then this interpreter. Other heads resolve via PATHEXT on Windows.
     """
     if not parts:
         return parts
@@ -28,6 +47,9 @@ def resolve_argv(parts: list[str]) -> list[str]:
         pinned = (os.environ.get("CLAIMIDX_PYTHON") or "").strip()
         if pinned:
             return [pinned, *parts[1:]]
+        own = project_python(cwd)
+        if own:
+            return [own, *parts[1:]]
         found = _which(parts[0])
         if found:
             return [found, *parts[1:]]
@@ -260,7 +282,7 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
     missing = _precondition(_norm_head(parts[0]), cwd, cmd)
     if missing:
         return ReplayResult(True, False, None, expect, False, missing)
-    argv = resolve_argv(parts)
+    argv = resolve_argv(parts, cwd)
     observed = observe_env(argv)
     env = os.environ.copy()
     env.update(extra_env)

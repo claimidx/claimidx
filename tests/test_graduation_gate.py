@@ -450,3 +450,12 @@ def test_ingest_hint_warn_carries_suggestion(tmp_path: Path, capsys):
     assert any(w.endswith('Use: python -c "import json"') for w in warns)
     warns = ingest_warnings("RuntimeError: x", "true", dep=["foo==1.2.3"], eco="py")
     assert any("Use: python -c" in w and "1.2.3" in w for w in warns)
+
+
+def test_local_path_targets_are_not_dependency_targets():
+    from claimidx.target import claim_target
+
+    assert claim_target(cls="module_not_found", err="Error: Cannot find module './lib'") == ""
+    assert claim_target(cls="module_not_found", err="Error: Cannot find module '../x/y'") == ""
+    assert claim_target(cls="module_not_found", err="Error: Cannot find module '/srv/app/lib'") == ""
+    assert claim_target(cls="module_not_found", err="Error: Cannot find module <STR>") == ""

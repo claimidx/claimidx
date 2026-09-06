@@ -81,17 +81,69 @@ def infer_env(cwd: str | os.PathLike[str] | None = None, *, err: str = "") -> di
     return {"eco": eco, "rt": rt, "cwd": str(root)}
 
 
-def installed_version(name: str, eco: str = "") -> str:
-    """`name@ver` for an installed dependency, or "" when unknown."""
+def tree_eval(cwd: str | os.PathLike[str] | None, eco: str = "") -> str:
+    """The tree's own check, when it has one: npm test, pytest, tsc, go build, cargo check. "" otherwise."""
+    root = Path(cwd or os.getcwd())
+    pkg = root / "package.json"
+    if pkg.exists():
+        try:
+            scripts = json.loads(pkg.read_text(encoding="utf-8")).get("scripts") or {}
+        except (OSError, ValueError):
+            scripts = {}
+        if (root / "tsconfig.json").exists() and (root / "node_modules" / ".bin" / "tsc").exists():
+            return "npx tsc --noEmit"
+        if "test" in scripts and "no test specified" not in str(scripts.get("test")):
+            return "npm test"
+        if "build" in scripts:
+            return "npm run build"
+    if eco in ("", "py"):
+        if (
+            any((root / m).exists() for m in ("pytest.ini", "conftest.py", "tests", "test"))
+            or (root / "pyproject.toml").exists()
+            and "pytest" in (root / "pyproject.toml").read_text(encoding="utf-8", errors="replace")
+        ):
+            return "pytest -q"
+    if (root / "go.mod").exists():
+        return "go build ./..."
+    if (root / "Cargo.toml").exists():
+        return "cargo check"
+    return ""
+
+
+def installed_version(name: str, eco: str = "", cwd: str | os.PathLike[str] | None = None) -> str:
+    """`name@ver` for an installed dependency, or "" when unknown.
+
+    Python versions are read from the tree's own venv when it has one — that
+    is the interpreter the claim is about — and only then from this process.
+    """
     if not name:
         return ""
+    root = Path(cwd or os.getcwd())
     if eco in {"npm", "node"} or name.startswith("@"):
-        pkg = Path(os.getcwd()) / "node_modules" / name / "package.json"
+        pkg = root / "node_modules" / name / "package.json"
         try:
             ver = json.loads(pkg.read_text(encoding="utf-8")).get("version")
         except (OSError, ValueError):
             return ""
         return f"{name}@{ver}" if ver else ""
+    from .sandbox import project_python
+
+    own = project_python(root)
+    if own:
+        import subprocess
+
+        try:
+            proc = subprocess.run(
+                [own, "-c", "from importlib.metadata import version; print(version(__import__('sys').argv[1]))", name],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            proc = None
+        if proc is not None and proc.returncode == 0 and proc.stdout.strip():
+            return f"{name}@{proc.stdout.strip()}"
     try:
         from importlib.metadata import version
 

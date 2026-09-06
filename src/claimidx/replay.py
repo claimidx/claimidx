@@ -502,6 +502,10 @@ def decide(c: Claim, *, scratch: Path, trust: str = "local", store: Store | None
             return {"action": "confirm", "reason": "held", "id": c.id, "replay": info, "warn": list(decision.warns)}
         return {"action": "confirm", "reason": "held", "id": c.id, "replay": info}
     blob = (result.stderr or "") + " " + (result.stdout or "")
+    if trust != "local" and _MISSING.search(blob):
+        # A pulled claim's import missing *here* says the fix is not applied here, not that it is wrong.
+        # Only the pin harness (--harness, --trust-eval) can prove a pulled remedy false.
+        return {"action": "skip", "reason": "missing-dep-or-tool", "id": c.id, "replay": info}
     if is_runnable(c):
         return {"action": "fail", "reason": "eval-miss", "id": c.id, "replay": info}
     if _MISSING.search(blob):

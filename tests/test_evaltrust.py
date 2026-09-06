@@ -212,3 +212,16 @@ def test_verify_skips_untrusted_evals_and_pins(tmp_path: Path, capsys, monkeypat
     assert reasons[wide.id].startswith("eval-untrusted")
     assert reasons[pin.id].startswith("eval-untrusted: pin install")
     assert out["counts"].get("confirm", 0) == 0 and out["counts"].get("fail", 0) == 0
+
+
+def test_verify_does_not_fail_a_pulled_claim_for_a_missing_module_here(tmp_path: Path, capsys, monkeypatch):
+    """`import x` missing in this environment is not evidence against a pulled remedy."""
+    monkeypatch.setenv("CLAIMIDX_VERIFY_SEEN", str(tmp_path / "seen.json"))
+    db = str(tmp_path / "ix.sqlite")
+    c = _put_pulled(Store(db), 'python -c "import no_such_module_zzz_cix"')
+    rc = main(["--db", db, "--fmt", "json", "verify", "--apply", "--id", c.id, "-k", "1"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["results"][0]["action"] == "skip" and out["results"][0]["reason"] == "missing-dep-or-tool"
+    assert main(["--db", db, "--fmt", "json", "show", c.id]) == 0
+    assert json.loads(capsys.readouterr().out)["nf"] == 0
