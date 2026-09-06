@@ -150,3 +150,41 @@ def test_pulled_and_never_held_is_review_not_apply(tmp_path: Path, capsys):
     assert main(["--db", db, "--fmt", "json", "ask", "--err", err, "--eco", "py"]) == 0
     v = json.loads(capsys.readouterr().out)["verdict"]
     assert v["action"] == "review" and "unverified" in v["why"]
+
+
+def test_family_match_when_the_asker_did_not_know_the_dep(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    err = "TypeError: load() missing 1 required positional argument: 'Loader'"
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                err,
+                "--eco",
+                "py",
+                "--rt",
+                _py_rt(),
+                "--dep",
+                "PyYAML@6.0.3",
+                "--fix-k",
+                "patch",
+                "--fix-b",
+                "use yaml.safe_load",
+                "--eval",
+                "python -m pytest -q",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    assert main(["--db", db, "--fmt", "json", "ask", "--err", err, "--eco", "py", "--rt", _py_rt()]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["claims"][0]["match"] == "family"
+    assert "family match" in out["verdict"]["why"]
+    assert main(["--db", db, "--fmt", "json", "ask", "--err", err, "--eco", "py", "--rt", _py_rt(), "--dep", "PyYAML@5.4.1"]) == 0
+    assert json.loads(capsys.readouterr().out)["claims"][0]["match"] == "similar"

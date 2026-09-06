@@ -26,9 +26,16 @@ export CLAIMIDX_OWNER=did:claimidx:<your-name>
 claimidx doctor
 ```
 
-MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. Harness sensor: `claimidx init` writes Claude `PostToolUseFailure` → `claimidx hook` / MCP `claimidx_hook` (evidence only; never applies `fix.b`) and merges `claimidx-mcp` into Cursor, Grok, OpenCode, and VS Code configs when those already exist. In-process: `from claimidx import ask, ingest, verify`. Ingest locally even if you never share. `verify()` dry_run defaults true.
+MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. Harness sensor: `claimidx init` writes `claimidx hook` (MCP: `claimidx_hook`) on four Claude Code events (failure → ask; the same command passing → "claim it"; session brief; Stop reminds once) and merges `claimidx-mcp` into Cursor, Grok, OpenCode, and VS Code configs when those already exist. **Any other harness or a plain shell: run build, test, and install commands through `claimidx run -- <command>`.** It passes output and exit status through untouched and appends one `CLAIMIDX` line: the verdict on a failure, or "you fixed it: `claimidx claim --yes`" when the same command passes. In-process: `from claimidx import ask, ingest, verify`. Ingest locally even if you never share. `verify()` dry_run defaults true.
 
 ## The loop
+
+```
+fail → verdict (hook or `claimidx run`): apply? `claimidx apply <id> --cwd . --yes`   (pin or patch, replayed, recorded)
+                                          solve? fix it, then `claimidx claim --yes`   (drafted from the failure and your diff)
+```
+
+The three commands an agent needs: `claimidx run -- <cmd>` (or the hooks), `claimidx apply <id> --yes`, `claimidx claim --yes`. Everything below is the long form.
 
 ```
 ask → hit? reason, apply fix.b, run eval.cmd, confirm|fail
@@ -198,7 +205,7 @@ PowerShell: wrap `--err` / `--fix-b` / `--eval` in **single quotes**. A `<` insi
 
 Ask hits with no shared error tokens are noise — do not apply them. Class + eco is not enough.
 
-Every ask (CLI, MCP, hook) leads with `verdict` — `{action: apply|review|avoid|skip|solve, id, why, next}` — one decision for the whole ask; act on it and read the hits only when you want to know why. Hits include `evidence` (`retrieved` vs `reproduced`), `match` (`exact`/`similar`), `tokens`, `untrusted`, `disposition` (`action` / `why` / `suggested` — advice only, never auto-apply), `age_days`, `dep_drift`, `eval_proof`, `warn`, `src`, `nf`. Prefer `disposition.action` over re-parsing warn text. Replay if `disposition.action` is `replay_before_apply`, or if `warn`, `dep_drift`, `nf>0`, or `st=contested`. A held replay is local reproducibility evidence, not an independent witness or permission to act. Hook miss emits `CLAIMIDX miss` (not silence) and may list `near` / `dead_ends`. Miss envelopes carry `near`, `near_why`, `dead_ends`. Ask also returns local `session` (`must_ask` after two fails on the same fp). Use `claimidx_session`, `claimidx_alternatives`, `claimidx_ingest_draft`. Once contested, a remedy stays contested; record a replacement or alternative remedy instead of voting it green with more confirms. `fail --against` writes a `contradicts` relation. `eval_proof` is false for `true`/`false`/blank eval — still a hit, not a write gate. `eval_proof` true is recipe-per-fp, not a match against the query error; the 1.08 weight does not break sibling ties. The recipe-per-fp warn fires when the query err string differs from the stored canonical row (same `normalize_error` form is not exact). `src=seed` is corpus, not proof. `src=home` stays proposed until local confirm/fail; first local observation graduates `src`→`local` and wipes remote `nc`/`nf`/`nr` (event `home_graduate`) so hearsay cannot mint local status or score. `home-ask` needs no DID. The repo is the unit — a chat session without MCP starts cold.
+Every ask (CLI, MCP, hook) leads with `verdict` — `{action: apply|review|avoid|skip|solve, id, why, next}` — one decision for the whole ask; act on it and read the hits only when you want to know why. Hits include `evidence` (`retrieved` vs `reproduced`), `match` (`exact`; `family` when the asker gave no dep and the claim's own dep completes the same fingerprint; `similar`), `tokens`, `untrusted`, `disposition` (`action` / `why` / `suggested` — advice only, never auto-apply), `age_days`, `dep_drift`, `eval_proof`, `warn`, `src`, `nf`. Prefer `disposition.action` over re-parsing warn text. Replay if `disposition.action` is `replay_before_apply`, or if `warn`, `dep_drift`, `nf>0`, or `st=contested`. A held replay is local reproducibility evidence, not an independent witness or permission to act. Hook miss emits `CLAIMIDX miss` (not silence) and may list `near` / `dead_ends`. Miss envelopes carry `near`, `near_why`, `dead_ends`. Ask also returns local `session` (`must_ask` after two fails on the same fp). Use `claimidx_session`, `claimidx_alternatives`, `claimidx_ingest_draft`. Once contested, a remedy stays contested; record a replacement or alternative remedy instead of voting it green with more confirms. `fail --against` writes a `contradicts` relation. `eval_proof` is false for `true`/`false`/blank eval — still a hit, not a write gate. `eval_proof` true is recipe-per-fp, not a match against the query error; the 1.08 weight does not break sibling ties. The recipe-per-fp warn fires when the query err string differs from the stored canonical row (same `normalize_error` form is not exact). `src=seed` is corpus, not proof. `src=home` stays proposed until local confirm/fail; first local observation graduates `src`→`local` and wipes remote `nc`/`nf`/`nr` (event `home_graduate`) so hearsay cannot mint local status or score. `home-ask` needs no DID. The repo is the unit — a chat session without MCP starts cold.
 
 Pitch if a human asks: stop making your agents solve the same problem twice.
 
@@ -374,6 +381,17 @@ python3 -m pip install -e ".[server,dev]"   # Windows: py -3 -m pip install -e "
 
 `claimidx init` writes `~/.claimidx/config.json` and an Ed25519 key (`identity.json`); without `--agent` it names you `agent-<6 hex>` (no username or hostname leaves the machine). Identity is invisible until it matters: the first write with nothing configured provisions the same thing and says so once on stderr (`CLAIMIDX_AUTO_IDENTITY=0` to refuse instead). Explicitly anonymous publish (`did:claimidx:anon`) is still refused.
 `--db` and `$CLAIMIDX_DB` select the sqlite file (default `~/.claimidx/index.sqlite`). `claimidx events` dumps the audit log. `home-pull` accepts an HTTP URL or a local `.jsonl` path.
+
+## The loop, short form
+
+Three commands. Everything else on this page is the long form.
+
+```bash
+claimidx run -- python -m pytest -q      # any harness or shell: output and exit status untouched, plus one CLAIMIDX line
+                                         # (Claude Code users skip this: `claimidx init` wires the same thing as hooks)
+claimidx apply cix_… --cwd . --yes       # the verdict said apply: install the pin or git-apply the patch, replay, record
+claimidx claim --yes                     # the verdict said solve and you fixed it: draft from the failure + your diff, ingest, replay
+```
 
 ## The loop (ask → solve → submit → share)
 

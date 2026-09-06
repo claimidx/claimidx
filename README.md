@@ -58,6 +58,17 @@ python3 -m pip install -e ".[server,dev]"   # Windows: py -3 -m pip install -e "
 `claimidx init` writes `~/.claimidx/config.json` and an Ed25519 key (`identity.json`); without `--agent` it names you `agent-<6 hex>` (no username or hostname leaves the machine). Identity is invisible until it matters: the first write with nothing configured provisions the same thing and says so once on stderr (`CLAIMIDX_AUTO_IDENTITY=0` to refuse instead). Explicitly anonymous publish (`did:claimidx:anon`) is still refused.
 `--db` and `$CLAIMIDX_DB` select the sqlite file (default `~/.claimidx/index.sqlite`). `claimidx events` dumps the audit log. `home-pull` accepts an HTTP URL or a local `.jsonl` path.
 
+## The loop, short form
+
+Three commands. Everything else on this page is the long form.
+
+```bash
+claimidx run -- python -m pytest -q      # any harness or shell: output and exit status untouched, plus one CLAIMIDX line
+                                         # (Claude Code users skip this: `claimidx init` wires the same thing as hooks)
+claimidx apply cix_… --cwd . --yes       # the verdict said apply: install the pin or git-apply the patch, replay, record
+claimidx claim --yes                     # the verdict said solve and you fixed it: draft from the failure + your diff, ingest, replay
+```
+
 ## The loop (ask → solve → submit → share)
 
 ```bash

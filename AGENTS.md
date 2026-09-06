@@ -24,9 +24,16 @@ export CLAIMIDX_OWNER=did:claimidx:<your-name>
 claimidx doctor
 ```
 
-MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. Harness sensor: `claimidx init` writes Claude `PostToolUseFailure` → `claimidx hook` / MCP `claimidx_hook` (evidence only; never applies `fix.b`) and merges `claimidx-mcp` into Cursor, Grok, OpenCode, and VS Code configs when those already exist. In-process: `from claimidx import ask, ingest, verify`. Ingest locally even if you never share. `verify()` dry_run defaults true.
+MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. Harness sensor: `claimidx init` writes `claimidx hook` (MCP: `claimidx_hook`) on four Claude Code events (failure → ask; the same command passing → "claim it"; session brief; Stop reminds once) and merges `claimidx-mcp` into Cursor, Grok, OpenCode, and VS Code configs when those already exist. **Any other harness or a plain shell: run build, test, and install commands through `claimidx run -- <command>`.** It passes output and exit status through untouched and appends one `CLAIMIDX` line: the verdict on a failure, or "you fixed it: `claimidx claim --yes`" when the same command passes. In-process: `from claimidx import ask, ingest, verify`. Ingest locally even if you never share. `verify()` dry_run defaults true.
 
 ## The loop
+
+```
+fail → verdict (hook or `claimidx run`): apply? `claimidx apply <id> --cwd . --yes`   (pin or patch, replayed, recorded)
+                                          solve? fix it, then `claimidx claim --yes`   (drafted from the failure and your diff)
+```
+
+The three commands an agent needs: `claimidx run -- <cmd>` (or the hooks), `claimidx apply <id> --yes`, `claimidx claim --yes`. Everything below is the long form.
 
 ```
 ask → hit? reason, apply fix.b, run eval.cmd, confirm|fail

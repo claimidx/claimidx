@@ -343,6 +343,13 @@ def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
     if getattr(claim, "src", "local") != "local":
         nr = 0
     exact = _query_fp(query) == claim.fp
+    match = "exact" if exact else "similar"
+    if not exact and not qdep and claim.dep and not isinstance(query, Claim):
+        # The asker did not know the dependency; the claim does. Same error, class, eco and rt
+        # under the claim's own dep is the same failure, not a lookalike.
+        qcls = query.get("cls") or classify(qerr)
+        if fingerprint(err=qerr, cls=qcls, eco=query.get("eco") or "", rt=qrt, dep=claim.dep) == claim.fp:
+            match = "family"
     ann = {
         "sim": round(sim, 4),
         "score": round(claim.score(), 4),
@@ -353,7 +360,7 @@ def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
         "nr": nr,
         "warn": hit_warn(query, claim),
         "evidence": "reproduced" if nr > 0 else "retrieved",
-        "match": "exact" if exact else "similar",
+        "match": match,
         "tokens": match_tokens(qerr, claim.err),
         "untrusted": untrusted(query, claim, nr=nr),
     }

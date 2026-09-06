@@ -550,6 +550,24 @@ def cmd_claim(ns: argparse.Namespace) -> int:
     return 0 if out.get("ok") else 2
 
 
+def cmd_run(ns: argparse.Namespace) -> int:
+    """Run a command; on failure ask and remember, on the fix say `claim --yes`. Exit status is the command's."""
+    from .runwrap import after_run, run_command
+
+    argv = list(ns.argv or [])
+    if argv and argv[0] == "--":
+        argv = argv[1:]
+    if not argv:
+        print("usage: claimidx run -- <command> [args...]", file=sys.stderr)
+        return 2
+    rc, output = run_command(argv, cwd=ns.cwd)
+    try:
+        after_run(_store(ns), argv, rc, output, cwd=ns.cwd, k=ns.k)
+    except Exception as e:  # the wrapper must never change the command's outcome
+        print(f"claimidx run: {e}", file=sys.stderr)
+    return rc
+
+
 def cmd_apply(ns: argparse.Namespace) -> int:
     """Apply a pin or patch remedy in --cwd, then replay and record. Prints the plan without --yes."""
     from .apply import apply_claim, render_plan
@@ -1081,6 +1099,12 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
             by_eco[c.eco or "other"] = by_eco.get(c.eco or "other", 0) + 1
         add("tree-cwd", root.is_dir(), str(root.resolve()) if root.exists() else cwd)
         add("tree-markers", True, ",".join(markers) if markers else "none")
+        from .env import tree_eval
+        from .sandbox import project_python
+
+        own_py = project_python(root)
+        add("tree-venv", True, f"{own_py} (replays use it)" if own_py else "none: replays use PATH python; a .venv under the tree keys claims to the project")
+        add("tree-eval", True, tree_eval(root) or "none drafted; pass --eval to claim")
         add("tree-eco-counts", True, json.dumps(by_eco))
         sess = store.session_summary()
         add("session", True, f"id={sess.get('session_id')} asks={sess.get('asks')} must_ask={sess.get('must_ask')}")
@@ -1121,7 +1145,11 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
             hooked = isinstance(hook_data, dict) and settings_has_claimidx(hook_data)
         except (OSError, json.JSONDecodeError):
             hooked = False
-        add("claude-hook", True, f"{'installed' if hooked else 'missing PostToolUseFailure'} {hp}")
+        add(
+            "claude-hook",
+            True,
+            f"{'installed (failure, success, session, stop)' if hooked else 'partial or missing; claimidx hook --install wires all four events'} {hp}",
+        )
     else:
         add("claude-hook", True, f"not installed ({hp}); claimidx init writes it")
     cp = cursor_mcp_path()
@@ -1268,6 +1296,11 @@ def build_parser() -> argparse.ArgumentParser:
     cl.add_argument("--no-diff", action="store_true", help="never read git diff for fix.b")
     cl.add_argument("--no-replay", action="store_true", help="publish without replaying the eval")
     cl.set_defaults(func=cmd_claim)
+    rn = sub.add_parser("run", help="Run a command through the sensor: failure → ask + remember; the fix → `claim --yes` nudge. Exit status is the command's")
+    rn.add_argument("--cwd")
+    rn.add_argument("-k", type=int, default=5)
+    rn.add_argument("argv", nargs=argparse.REMAINDER, help="-- <command> [args...]")
+    rn.set_defaults(func=cmd_run)
     ap = sub.add_parser("apply", help="Apply a pin or patch remedy in --cwd, then confirm --replay; prints the plan without --yes")
     ap.add_argument("id")
     ap.add_argument("--cwd", help="tree to apply in (default: current directory)")

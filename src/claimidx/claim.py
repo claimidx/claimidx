@@ -28,7 +28,7 @@ from .target import claim_target, suggest_eval
 _INSTALL_HEAD = re.compile(r"^(?:pip3?|uv pip|uv|poetry|pipx|npm|pnpm|yarn|bun|cargo|go|gem|composer)\s+(?:install|add|get|i)\b", re.I)
 _CONFIG_HINT = re.compile(r"\b(?:export|set|setx)\s+[A-Z_]+=|\.env\b|\.(?:toml|ya?ml|json|ini|cfg)\b|config", re.I)
 _PIN_HINT = re.compile(r"(?:==|~=|>=|<=|@\d)")
-_DIFF_LIMIT = 1800
+_DIFF_LIMIT = 3900  # Fix.b caps at 4000; a diff that fits is applied verbatim by `claimidx apply`
 
 
 _INSTALL_SPEC = re.compile(r"^(?:pip3?|uv pip|uv|poetry|pipx|npm|pnpm|yarn|bun|cargo|go|gem|composer)\s+(?:install|add|get|i)\s+(?:-[-\w]+\s+)*([^\s]+)", re.I)
