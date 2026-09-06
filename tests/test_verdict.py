@@ -57,7 +57,7 @@ def test_hit_verdict_replay_then_apply(tmp_path: Path, capsys):
     v = out["verdict"]
     assert v["action"] == "apply" and v["id"] == cid
     assert "exact match" in v["why"] and "retrieved" in v["why"]
-    assert v["next"].startswith("apply fix.b, then") and f"confirm --replay {cid}" in v["next"]
+    assert v["next"].startswith(f"claimidx apply {cid}")
     # Reproduced: apply.
     assert main(["--db", db, "--fmt", "json", "confirm", "--replay", cid]) == 0
     capsys.readouterr()

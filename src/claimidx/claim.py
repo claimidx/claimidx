@@ -267,6 +267,19 @@ def draft_claim(
         if ev != "true":
             inferred["eval"] = "dependency pin"
     ev = ev or "true"
+    if not rt:
+        # The eval's own head decides the runtime a hold is keyed to, whatever the tree looked like.
+        from .env import _node_rt, _py_rt
+        from .policy import _norm_head
+
+        head = _norm_head(ev.split()[0]) if ev.split() else ""
+        if head in {"python", "python3", "pytest", "uv"}:
+            rt = _py_rt()
+            inferred["rt"] = "eval interpreter"
+        elif head in {"node", "npx", "npm"}:
+            rt = _node_rt()
+            if rt:
+                inferred["rt"] = "eval interpreter"
 
     warns = ingest_warnings(err, ev, cls=cls, dep=dep, eco=eco)
     if not fix_b:
@@ -338,7 +351,8 @@ def publish_draft(draft: dict[str, Any], *, db: str | os.PathLike[str] | None, o
     return out
 
 
-def _replay_now(claim_id: str, *, db, own: str | None, cwd: str) -> dict[str, Any]:
+def _replay_now(claim_id: str, *, db, own: str | None, cwd: str, trust_eval: bool = False) -> dict[str, Any]:
+    from .evaltrust import eval_trust
     from .gate import graduation_gate
     from .sandbox import replay
     from .store import DEFAULT_DB, Store
@@ -348,7 +362,7 @@ def _replay_now(claim_id: str, *, db, own: str | None, cwd: str) -> dict[str, An
     c = store.get(claim_id)
     if not c:
         return {"held": False, "recorded": False, "reason": "missing"}
-    result = replay(c.eval.cmd, c.eval.expect, cwd=cwd or None)
+    result = replay(c.eval.cmd, c.eval.expect, cwd=cwd or None, trust=eval_trust(store, c, override=trust_eval))
     info = result.as_dict()
     if result.is_hint() or not result.ran:
         from .gate import hint_refusal
@@ -367,7 +381,17 @@ def _replay_now(claim_id: str, *, db, own: str | None, cwd: str) -> dict[str, An
         return {"held": True, "recorded": False, **decision.refusal(), "replay": info}
     detail = {"ms": int(result.ms or 0), "held": True, "env": {"rt": result.env} if result.env else {}}
     confirmed = store.confirm(claim_id, resolve_owner(own), replayed=True, detail=detail)
-    return {"held": True, "recorded": True, "nr": confirmed.nr, "replay": info}
+    from .home import maybe_share, share_observation
+
+    shared = maybe_share(store, confirmed)
+    if (shared or {}).get("status") in {"already", "pushed"}:
+        shared = share_observation(store, confirmed, held=True, actor=resolve_owner(own)) or shared
+    out: dict[str, Any] = {"held": True, "recorded": True, "nr": confirmed.nr, "st": confirmed.st, "replay": info}
+    if decision.warns:
+        out["warn"] = list(decision.warns)
+    if shared:
+        out["share"] = shared
+    return out
 
 
 def render_draft(draft: dict[str, Any]) -> str:

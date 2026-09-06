@@ -356,6 +356,32 @@ TOOLS: list[dict[str, Any]] = [
         "annotations": _ann(read_only=False, destructive=False, idempotent=False),
     },
     {
+        "name": "claimidx_apply",
+        "title": "Apply a pin or patch, then replay",
+        "description": (
+            "From a verdict to a recorded hold in one call. For a pin/constraint remedy it installs the spec with the tree's own "
+            "package manager (.venv pip or npm in cwd); for a diff --git patch it runs git apply --check then git apply; then it "
+            "replays the eval under cwd and records the result through the same gate as claimidx_confirm with replay. cmd, config "
+            "and prose remedies are never executed: the result carries `manual` with what to do by hand. Without yes=true it only "
+            "returns the plan (exact argv). A claim not published on this machine is flagged trusted=false in the plan — installing "
+            "its pin is another agent's choice of package, so read fix_b first. Returns id, plan, trusted, applied, and replay "
+            "(recorded, nr, st, or reason and suggest), or manual/error."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+                "id": _ID,
+                "cwd": {"type": "string", "description": "Tree to apply in. Defaults to the server's working directory."},
+                "own": _OWN,
+                "yes": {"type": "boolean", "default": False, "description": "Execute the plan and replay. Default false: plan only."},
+                "trust_eval": _TRUST_EVAL,
+            },
+        },
+        "outputSchema": _out(id=_S, plan=_O, trusted=_B, applied=_B, replay=_O, manual=_S, error=_S, hint=_S, run=_O),
+        "annotations": _ann(read_only=False, destructive=False, idempotent=False, open_world=True),
+    },
+    {
         "name": "claimidx_ingest_draft",
         "title": "Stash or promote a draft",
         "description": (
@@ -1191,6 +1217,20 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         if not draft.get("ok") or not args.get("yes"):
             return draft
         return publish_draft(draft, db=store.path, own=resolve_owner(args.get("own")))
+    if name == "claimidx_apply":
+        from .apply import apply_claim
+
+        current = store.get(args["id"])
+        if not current:
+            raise KeyError(args["id"])
+        return apply_claim(
+            store,
+            current,
+            cwd=args.get("cwd") or os.getcwd(),
+            own=resolve_owner(args.get("own")),
+            yes=bool(args.get("yes")),
+            trust_eval=bool(args.get("trust_eval")),
+        )
     if name == "claimidx_ingest_draft":
         from .drafts import promote_draft, stash_draft
 

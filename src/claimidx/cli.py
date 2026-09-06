@@ -534,6 +534,48 @@ def cmd_claim(ns: argparse.Namespace) -> int:
     return 0 if out.get("ok") else 2
 
 
+def cmd_apply(ns: argparse.Namespace) -> int:
+    """Apply a pin or patch remedy in --cwd, then replay and record. Prints the plan without --yes."""
+    from .apply import apply_claim, render_plan
+
+    store = _store(ns)
+    c = store.get(ns.id)
+    if not c:
+        print("missing", file=sys.stderr)
+        return 1
+    out = apply_claim(store, c, cwd=ns.cwd or os.getcwd(), own=resolve_owner(ns.own), yes=bool(ns.yes), trust_eval=bool(ns.trust_eval))
+    if ns.fmt == "json":
+        print(json.dumps(out, default=str))
+    else:
+        print(render_plan(out["plan"], trusted=out["trusted"], own=c.own, src=getattr(c, "src", "local")))
+        if out.get("manual"):
+            pass
+        elif not out["applied"]:
+            print("# " + (out.get("error") or out.get("hint") or ""), file=sys.stderr)
+            for step in (out.get("run") or {}).get("steps") or []:
+                if step.get("rc") not in (0, None):
+                    print(f"# {shlex_join(step['argv'])} -> rc {step['rc']}: {step.get('stderr', '')[-200:]}", file=sys.stderr)
+        else:
+            rp = out.get("replay") or {}
+            if rp.get("recorded"):
+                print(f"applied and held: {c.id} nr={rp.get('nr')} st={rp.get('st')}")
+            else:
+                print(f"applied, not recorded: {rp.get('reason')}", file=sys.stderr)
+                if (rp.get("suggest") or {}).get("hint"):
+                    print(f"suggest: {rp['suggest']['hint']}", file=sys.stderr)
+    if out.get("manual"):
+        return 3
+    if not out["applied"]:
+        return 2 if ns.yes else 0
+    return 0 if (out.get("replay") or {}).get("recorded") else 2
+
+
+def shlex_join(argv: list[str]) -> str:
+    import shlex
+
+    return shlex.join(argv)
+
+
 def cmd_ingest_draft(ns: argparse.Namespace) -> int:
     from .drafts import promote_draft, stash_draft
 
@@ -1210,6 +1252,13 @@ def build_parser() -> argparse.ArgumentParser:
     cl.add_argument("--no-diff", action="store_true", help="never read git diff for fix.b")
     cl.add_argument("--no-replay", action="store_true", help="publish without replaying the eval")
     cl.set_defaults(func=cmd_claim)
+    ap = sub.add_parser("apply", help="Apply a pin or patch remedy in --cwd, then confirm --replay; prints the plan without --yes")
+    ap.add_argument("id")
+    ap.add_argument("--cwd", help="tree to apply in (default: current directory)")
+    ap.add_argument("--own")
+    ap.add_argument("--yes", "-y", action="store_true", help="execute the plan")
+    ap.add_argument("--trust-eval", action="store_true", help="also run a non-portable eval from a claim not published here")
+    ap.set_defaults(func=cmd_apply)
     pub = sub.add_parser("publish")
     pub.add_argument("--err", required=True)
     pub.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"])

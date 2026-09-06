@@ -325,8 +325,8 @@ def verdict_for(query: Claim | dict, hits: list[tuple[Claim, float]]) -> dict:
     if action == "apply" and src != "local" and not int(getattr(claim, "nr", 0) or 0) and not int(getattr(claim, "nc", 0) or 0):
         action = "review"  # pulled and never held anywhere: read fix.b before touching the tree
     nxt = {
-        "apply": f"apply fix.b, then claimidx confirm --replay {claim.id} --cwd <tree> to record whether it held here",
-        "review": f"claimidx explain {claim.id}; read fix.b and compare err tokens, then apply and confirm --replay",
+        "apply": f"claimidx apply {claim.id} --cwd <tree> --yes (installs the pin or git-applies the patch, then replays and records); or apply fix.b by hand and confirm --replay",
+        "review": f"claimidx explain {claim.id}; read fix.b and compare err tokens, then claimidx apply {claim.id} --cwd <tree> --yes",
         "avoid": f"claimidx alternatives {claim.fp}",
         "skip": f"claimidx alternatives {claim.fp}",
     }[action]
