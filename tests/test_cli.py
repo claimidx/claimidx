@@ -287,7 +287,7 @@ def test_force_resets_nr_and_surfaces_previous(tmp_path: Path, capsys):
                 "id",
                 "publish",
                 "--err",
-                "ModuleNotFoundError: No module named 'force_nr'",
+                "RuntimeError: force_nr contract broken",
                 "--eco",
                 "py",
                 "--rt",
@@ -315,7 +315,7 @@ def test_force_resets_nr_and_surfaces_previous(tmp_path: Path, capsys):
             "publish",
             "--force",
             "--err",
-            "ModuleNotFoundError: No module named 'force_nr'",
+            "RuntimeError: force_nr contract broken",
             "--eco",
             "py",
             "--rt",
@@ -355,7 +355,7 @@ def test_exists_same_fp_is_noop(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
     rt = _py_rt()
     eval_cmd = 'python -c "import sys"'
-    err = "ModuleNotFoundError: No module named 'exists_noop'"
+    err = "RuntimeError: exists_noop contract broken"
     assert (
         main(
             [
@@ -439,7 +439,7 @@ def test_second_force_appends_force_reset_keeps_history(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
     rt = _py_rt()
     eval_cmd = 'python -c "import sys"'
-    err = "ModuleNotFoundError: No module named 'force_twice'"
+    err = "RuntimeError: force_twice contract broken"
 
     def _ingest(*, force: bool, fix_b: str) -> int:
         argv = [
@@ -589,7 +589,7 @@ def test_confirm_replay_logs_eval_ms(tmp_path: Path, capsys):
                 "id",
                 "publish",
                 "--err",
-                "ModuleNotFoundError: No module named 'evalms_mod'",
+                "RuntimeError: evalms_mod contract broken",
                 "--eco",
                 "py",
                 "--rt",
@@ -683,7 +683,7 @@ def test_exists_still_rejects_bad_eval(tmp_path: Path, capsys):
 
 def test_confirm_replay_python_hold_requires_matching_rt(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
-    err = "ModuleNotFoundError: No module named 'holdenv'"
+    err = "RuntimeError: holdenv contract broken"
     eval_cmd = 'python -c "print(1)"'
     assert (
         main(
@@ -728,7 +728,7 @@ def test_confirm_replay_python_hold_requires_matching_rt(tmp_path: Path, capsys)
                 "id",
                 "publish",
                 "--err",
-                "ModuleNotFoundError: No module named 'holdok'",
+                "RuntimeError: holdok contract broken",
                 "--eco",
                 "py",
                 "--rt",
@@ -760,7 +760,7 @@ def test_confirm_replay_python_hold_requires_matching_rt(tmp_path: Path, capsys)
                 "id",
                 "publish",
                 "--err",
-                "ModuleNotFoundError: No module named 'holdmiss'",
+                "RuntimeError: holdmiss contract broken",
                 "--eco",
                 "py",
                 "--rt",

@@ -42,7 +42,7 @@ def stash_draft(
     proof = eval_is_proof(eval_cmd or "")
     if not proof:
         warnings.append("eval_proof: false; discriminating eval required before share")
-    warnings.extend(ingest_warnings(err, eval_cmd or "true"))
+    warnings.extend(ingest_warnings(err, eval_cmd or "true", dep=dep, eco=eco or ""))
     cls = classify(err)
     fp = fingerprint(err=err, cls=cls, eco=eco or "", rt=rt or "", dep=dep)
     did = _draft_id()

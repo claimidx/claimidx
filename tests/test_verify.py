@@ -376,7 +376,7 @@ def test_verify_confirms_python_c(tmp_path: Path, capsys, monkeypatch):
 
     monkeypatch.setenv("CLAIMIDX_VERIFY_SEEN", str(tmp_path / "seen.json"))
     db = str(tmp_path / "ix.sqlite")
-    err = "ModuleNotFoundError: No module named 'vok'"
+    err = "RuntimeError: vok contract broken"
     rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
     assert (
         main(["--db", db, "--fmt", "id", "publish", "--err", err, "--eco", "py", "--rt", rt, "--fix-k", "patch", "--fix-b", "pass", "--eval", "python -c pass"])
@@ -402,7 +402,7 @@ def test_verify_cwd_replays_tree_recipe(tmp_path: Path, capsys, monkeypatch):
     tree = tmp_path / "tree"
     tree.mkdir()
     (tree / "marker.txt").write_text("ok", encoding="utf-8")
-    err = "ModuleNotFoundError: No module named 'vcwd'"
+    err = "RuntimeError: vcwd contract broken"
     rt = f"py@{sys.version_info.major}.{sys.version_info.minor}"
     eval_cmd = "python -c \"open('marker.txt').read()\""
     assert (

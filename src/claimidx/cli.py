@@ -262,7 +262,7 @@ def cmd_publish(ns: argparse.Namespace) -> int:
     from .public import eval_is_proof, ingest_warnings
 
     proof = eval_is_proof(claim.eval.cmd)
-    warns = ingest_warnings(err, claim.eval.cmd)
+    warns = ingest_warnings(err, claim.eval.cmd, cls=claim.cls, dep=claim.dep, eco=claim.eco)
     for w in warns:
         print(f"# {w}", file=sys.stderr)
     if force_reset_emits(reset):
@@ -325,13 +325,15 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
                 print(json.dumps(replay_info), file=sys.stderr)
                 print(_dumps(failed, ns.fmt))
             return 2
-        ok, why = graduation_gate(c, result, cwd=getattr(ns, "cwd", None), store=store).as_tuple()
-        if not ok:
+        decision = graduation_gate(c, result, cwd=getattr(ns, "cwd", None), store=store)
+        if not decision.mint_nr:
             if ns.fmt == "json":
-                print(json.dumps({"held": True, "replay": replay_info, "recorded": False, "reason": why}, default=str))
+                print(json.dumps({"held": True, "replay": replay_info, "recorded": False, **decision.refusal()}, default=str))
             else:
                 print(json.dumps(replay_info), file=sys.stderr)
-                print(f"not recorded: {why}", file=sys.stderr)
+                print(f"not recorded: {decision.reason}", file=sys.stderr)
+                if decision.suggest.get("eval"):
+                    print(f"suggest eval: {decision.suggest['eval']}", file=sys.stderr)
             return 2
     confirm_detail = None
     if replay_info or ns.trust_domain or ns.sensor_plane:

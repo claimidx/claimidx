@@ -189,7 +189,7 @@ def ingest(
         "nr": claim.nr,
         "eval_proof": eval_is_proof(claim.eval.cmd),
     }
-    warns = ingest_warnings(err, claim.eval.cmd)
+    warns = ingest_warnings(err, claim.eval.cmd, cls=claim.cls, dep=claim.dep, eco=claim.eco)
     if warns:
         out["warn"] = "; ".join(warns)
     if force_reset_emits(reset):

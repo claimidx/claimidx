@@ -134,7 +134,6 @@ def test_gate_is_the_only_nr_path_in_cli_and_mcp():
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason=NOT_YET)
 def test_x1_confirm_replay_refuses_eval_that_ignores_claimed_target(tmp_path: Path, capsys):
     """Claim target is module 'bind_target'; eval print(1) never observes it."""
     db = str(tmp_path / "ix.sqlite")
@@ -149,7 +148,89 @@ def test_x1_confirm_replay_refuses_eval_that_ignores_claimed_target(tmp_path: Pa
     assert rc != 0, out
     assert out.get("recorded") is False
     assert "bind_target" in out.get("reason", "")
+    assert out["suggest"]["eval"] == 'python -c "import bind_target"'
     assert _nr(db, capsys, cid) == 0
+
+
+def test_x1_publish_warns_when_eval_ignores_target(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "json",
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'warn_target'",
+                "--eco",
+                "py",
+                "--rt",
+                _py_rt(),
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "ok",
+                "--eval",
+                'python -c "print(1)"',
+            ]
+        )
+        == 0
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert "warn_target" in out.get("warn", "")
+    assert 'python -c "import warn_target"' in out["warn"]
+
+
+def test_x1_v2_proof_naming_target_satisfies_gate(tmp_path: Path, capsys):
+    """An attached v2 proof with expect_package for the target counts as observing it."""
+    from claimidx.gate import graduation_gate
+    from claimidx.store import Store
+
+    db = str(tmp_path / "ix.sqlite")
+    proof_path = tmp_path / "proof.json"
+    proof_path.write_text(
+        json.dumps(
+            {
+                "v": 2,
+                "steps": [
+                    {"op": "run", "program": "python", "args": ["-c", "print(1)"]},
+                    {"op": "expect_exit", "code": 0},
+                    {"op": "expect_package", "package": "bind_target", "specifier": ">=1"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cid = _publish(
+        db,
+        capsys,
+        err="ModuleNotFoundError: No module named 'bind_target'",
+        eval_cmd='python -c "print(1)"',
+        extra=["--proof", str(proof_path)],
+    )
+    store = Store(db)
+    claim = store.get(cid)
+    assert claim is not None
+    held = ReplayResult(True, True, 0, 0, True, "held", env=_py_rt())
+    assert graduation_gate(claim, held, store=store).mint_nr is True
+    assert graduation_gate(claim, held, store=None).mint_nr is False
+
+
+def test_target_helpers():
+    from claimidx.target import claim_target, eval_observes_target, suggest_eval
+
+    assert claim_target(cls="module_not_found", err="ModuleNotFoundError: No module named yaml.loader") == "yaml.loader"
+    assert claim_target(cls="module_not_found", err="Error: Cannot find module 'next/navigation'") == "next/navigation"
+    assert claim_target(cls="browser_dep", err="playwright: chromium missing", dep=["playwright@1.40.0"]) == "playwright"
+    assert claim_target(cls="other", err="boom", dep=["x@1"]) == ""
+    assert eval_observes_target('python -c "import yaml"', "yaml.loader")
+    assert eval_observes_target('python -c "import bind_target"', "bind-target")
+    assert eval_observes_target("node -e \"require('next/navigation')\"", "next/navigation")
+    assert not eval_observes_target('python -c "print(1)"', "bind_target")
+    assert suggest_eval("bind-target", "py") == 'python -c "import bind_target"'
+    assert suggest_eval("next/navigation", "npm") == 'node -e "require("next/navigation")"'
 
 
 def test_x1_eval_naming_the_target_still_graduates(tmp_path: Path, capsys):

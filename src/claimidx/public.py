@@ -52,13 +52,28 @@ HINT_WARN = "eval is a hint; confirm --replay cannot prove this claim. Supply a 
 PLACEHOLDER_WARN = "err contains placeholders; ingest the raw error string, normalize_error keeps identifiers and error codes"
 
 
-def ingest_warnings(raw_err: str, eval_cmd: str) -> list[str]:
+def target_warning(raw_err: str, eval_cmd: str, *, cls: str = "", dep: list[str] | None = None, eco: str = "") -> str:
+    """Warn when the eval never names the module/package the claim is about; suggests the passing eval."""
+    from .fingerprint import classify
+    from .target import claim_target, eval_observes_target, suggest_eval
+
+    target = claim_target(cls=cls or classify(raw_err or ""), err=raw_err or "", dep=dep)
+    if not target or not eval_is_proof(eval_cmd) or eval_observes_target(eval_cmd, target):
+        return ""
+    hint = suggest_eval(target, eco)
+    return f"eval does not observe claimed target '{target}'; confirm --replay will not mint nr" + (f". Use: {hint}" if hint else "")
+
+
+def ingest_warnings(raw_err: str, eval_cmd: str, *, cls: str = "", dep: list[str] | None = None, eco: str = "") -> list[str]:
     """What the author should fix before this claim is worth sharing."""
     from .fingerprint import PLACEHOLDERS
 
     warns: list[str] = []
     if not eval_is_proof(eval_cmd):
         warns.append(HINT_WARN)
+    tw = target_warning(raw_err, eval_cmd, cls=cls, dep=dep, eco=eco)
+    if tw:
+        warns.append(tw)
     if any(tok in (raw_err or "") for tok in PLACEHOLDERS):
         warns.append(PLACEHOLDER_WARN)
     return warns

@@ -401,11 +401,11 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
                 "held-pin",
                 env=observe_env([str(py)]),
             )
-            ok, why = graduation_gate(c, probe, cwd=str(tmp)).as_tuple()
-            if not ok:
+            decision = graduation_gate(c, probe, cwd=str(tmp))
+            if not decision.mint_nr:
                 return {
                     "action": "skip",
-                    "reason": why,
+                    **decision.refusal(),
                     "id": c.id,
                     "rc": proc.returncode,
                     "stderr": (proc.stderr or "")[-300:],
@@ -476,9 +476,9 @@ def decide(c: Claim, *, scratch: Path) -> dict:
     if not result.ran:
         return {"action": "skip", "reason": result.reason, "id": c.id, "replay": info}
     if result.held:
-        ok, why = graduation_gate(c, result, cwd=str(scratch)).as_tuple()
-        if not ok:
-            return {"action": "skip", "reason": why, "id": c.id, "replay": info}
+        decision = graduation_gate(c, result, cwd=str(scratch))
+        if not decision.mint_nr:
+            return {"action": "skip", **decision.refusal(), "id": c.id, "replay": info}
         return {"action": "confirm", "reason": "held", "id": c.id, "replay": info}
     blob = (result.stderr or "") + " " + (result.stdout or "")
     if is_runnable(c):

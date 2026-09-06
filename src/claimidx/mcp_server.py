@@ -818,7 +818,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
 
         shared = maybe_share(store, c)
         out = {"exists": False, "id": c.id, "fp": c.fp, "st": c.st, "own": c.own, "nr": c.nr, "eval_proof": eval_is_proof(c.eval.cmd)}
-        warns = ingest_warnings(err, c.eval.cmd)
+        warns = ingest_warnings(err, c.eval.cmd, cls=c.cls, dep=c.dep, eco=c.eco)
         if warns:
             out["warn"] = "; ".join(warns)
         if shared:
@@ -849,14 +849,14 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             if not result.held:
                 failed = store.fail(args["id"], resolve_owner(args.get("own")), detail=eval_detail)
                 return {"id": failed.id, "st": failed.st, "nc": failed.nc, "nf": failed.nf, "replay": result.as_dict(), "held": False}
-            ok, why = graduation_gate(current, result, cwd=args.get("cwd"), store=store).as_tuple()
-            if not ok:
+            decision = graduation_gate(current, result, cwd=args.get("cwd"), store=store)
+            if not decision.mint_nr:
                 return {
                     "id": current.id,
                     "st": current.st,
                     "held": True,
                     "recorded": False,
-                    "reason": why,
+                    **decision.refusal(),
                     "replay": result.as_dict(),
                 }
         confirm_detail = None
