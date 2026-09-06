@@ -339,7 +339,13 @@ def _publish_argv(err: str, fix_k: str, fix_b: str, ev: str, eco: str, rt: str, 
 
 
 def publish_draft(
-    draft: dict[str, Any], *, db: str | os.PathLike[str] | None, own: str | None = None, replay: bool = True, clean_room: bool = True
+    draft: dict[str, Any],
+    *,
+    db: str | os.PathLike[str] | None,
+    own: str | None = None,
+    replay: bool = True,
+    clean_room: bool = True,
+    local: bool = False,
 ) -> dict[str, Any]:
     """Write the draft as a claim, then prove it.
 
@@ -398,11 +404,19 @@ def publish_draft(
     from .home import maybe_share
     from .store import DEFAULT_DB, Store
 
-    published = Store(db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)).get(out["id"])
+    store_ = Store(db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB))
+    published = store_.get(out["id"])
     if published is not None:
-        shared = maybe_share(Store(db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)), published)
-        if shared:
-            out["share"] = shared
+        if local:
+            # A durable decision, not a switch for this run: bulk shares and later replays skip it.
+            from .home import local_status, mark_local
+
+            mark_local(store_, published.id, published.own)
+            out["share"] = local_status(published.id)
+        else:
+            shared = maybe_share(store_, published)
+            if shared:
+                out["share"] = shared
     if replay and draft.get("eval_proof"):
         cwd = str(draft.get("cwd") or "")
         warns = list(draft.get("warn") or [])

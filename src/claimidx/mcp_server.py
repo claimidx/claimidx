@@ -336,7 +336,11 @@ TOOLS: list[dict[str, Any]] = [
                     "default": False,
                     "description": "Skip the fresh-clone proof of fix_b; nr then comes from the working tree only, flagged in warn.",
                 },
-                "local": {"type": "boolean", "default": False, "description": "Keep this claim on this machine: no home, no commons."},
+                "local": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Keep this claim on this machine, durably: no home, no commons, and later syncs and replays skip it until claimidx_share is called with its id.",
+                },
             },
         },
         "outputSchema": _out(
@@ -1227,7 +1231,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             to_share = store.get(args["id"])
             if not to_share:
                 raise KeyError(args["id"])
-            return share_claim(store, to_share, force=bool(args.get("force")))
+            return share_claim(store, to_share, force=bool(args.get("force")), explicit=True)
         return share_pending(store, force=bool(args.get("force")))
     if name == "claimidx_sync":
         from .home import pull, share_pending
@@ -1298,9 +1302,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         )
         if not draft.get("ok") or not args.get("yes"):
             return draft
-        if args.get("local"):
-            os.environ["CLAIMIDX_SHARE"] = "0"
-        return publish_draft(draft, db=store.path, own=resolve_owner(args.get("own")), clean_room=not args.get("no_clean_room"))
+        return publish_draft(draft, db=store.path, own=resolve_owner(args.get("own")), clean_room=not args.get("no_clean_room"), local=bool(args.get("local")))
     if name == "claimidx_apply":
         from .apply import apply_claim
 

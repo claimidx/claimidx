@@ -223,7 +223,7 @@ def success_nudge(raw: str, store) -> str | None:
 
 def unshared_claims(store, limit: int = 500) -> list[str]:
     """Local, live, replayable claims that have reached neither a home nor the commons."""
-    from .home import already_shared, api_url, commons_enabled, commons_shared, share_enabled
+    from .home import already_shared, api_url, commons_enabled, commons_shared, keep_local, share_enabled
     from .public import eval_is_proof
 
     if not share_enabled():
@@ -238,7 +238,7 @@ def unshared_claims(store, limit: int = 500) -> list[str]:
     except Exception:
         return []
     for c in rows:
-        if getattr(c, "src", "local") != "local" or c.st == "rejected" or not eval_is_proof(c.eval.cmd):
+        if getattr(c, "src", "local") != "local" or c.st == "rejected" or not eval_is_proof(c.eval.cmd) or keep_local(store, c.id):
             continue
         if (want_private and not already_shared(store, c.id)) or (want_commons and not commons_shared(store, c.id)):
             out.append(c.id)

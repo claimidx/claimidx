@@ -316,6 +316,10 @@ def cmd_publish(ns: argparse.Namespace) -> int:
         except ValueError as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
+    if getattr(ns, "local", False):
+        from .home import mark_local
+
+        mark_local(store, claim.id, claim.own)
     bound = store.bind_after_publish(claim, cwd=getattr(ns, "cwd", None), observe_digest=bool(getattr(ns, "observe_digest", False)), digests=digests)
     if existing and ns.alternative:
         from .graph import Relation
@@ -543,7 +547,7 @@ def cmd_claim(ns: argparse.Namespace) -> int:
     if not ns.yes:
         print(json.dumps(draft, default=str) if ns.fmt == "json" else render_draft(draft))
         return 0
-    out = publish_draft(draft, db=_db_path(ns), own=resolve_owner(ns.own), replay=not ns.no_replay, clean_room=not ns.no_clean_room)
+    out = publish_draft(draft, db=_db_path(ns), own=resolve_owner(ns.own), replay=not ns.no_replay, clean_room=not ns.no_clean_room, local=bool(ns.local))
     if ns.fmt == "json":
         print(json.dumps(out, default=str))
     else:
@@ -560,12 +564,34 @@ def cmd_claim(ns: argparse.Namespace) -> int:
             print(f"{out['id']} {out.get('fp', '')[:16]}{tail}")
             for w in out.get("warn") or []:
                 print(f"warn {w}", file=sys.stderr)
-            sh = out.get("share") or {}
-            if sh.get("status") in {"commons", "pushed", "outbox"}:
-                print(f"# shared: {sh.get('status')}", file=sys.stderr)
+            print(_destination_line(out.get("share") or {}, out["id"]), file=sys.stderr)
             if rp.get("suggest", {}).get("eval"):
                 print(f"suggest eval: {rp['suggest']['eval']}", file=sys.stderr)
     return 0 if out.get("ok") else 2
+
+
+def _destination_line(share: dict, claim_id: str) -> str:
+    """Where the claim went, in one line. A network failure must not read as private."""
+    status = share.get("status")
+    if status == "local":
+        return f"# kept on this machine (--local): not shared; `claimidx share {claim_id}` publishes it"
+    parts = []
+    if share.get("home") and (share.get("home") or {}).get("status") != "error" and status in {"pushed", "commons", "already"}:
+        parts.append("private home")
+    commons = share.get("commons") or {}
+    cstatus = commons.get("status") or (status if status in {"commons", "outbox"} else "")
+    if cstatus == "commons":
+        parts.append("commons")
+    if status == "pushed" and "private home" not in parts:
+        parts.append("private home")
+    if cstatus == "outbox":
+        queued = "queued for the commons (unreachable now): `claimidx sync` sends it; this claim is approved for publication, not private"
+        return ("# shared: " + ", ".join(parts) + "; " if parts else "# ") + queued
+    if parts:
+        return "# shared: " + ", ".join(parts)
+    if not share:
+        return f"# not shared: sharing is off (CLAIMIDX_SHARE=0 or the commons disabled); `claimidx share {claim_id}` publishes it"
+    return f"# share: {status or 'unknown'}" + (f" ({share.get('reason') or share.get('hint')})" if share.get("reason") or share.get("hint") else "")
 
 
 def cmd_run(ns: argparse.Namespace) -> int:
@@ -1000,7 +1026,7 @@ def cmd_share(ns: argparse.Namespace) -> int:
             if not c:
                 print("missing", file=sys.stderr)
                 return 1
-            result = share_claim(store, c, api=ns.api, token=ns.token, force=ns.force)
+            result = share_claim(store, c, api=ns.api, token=ns.token, force=ns.force, explicit=True)
         else:
             result = share_pending(store, api=ns.api, token=ns.token, force=ns.force)
     except HomeError as e:
@@ -1646,12 +1672,21 @@ def main(argv: list[str] | None = None) -> int:
     ns = build_parser().parse_args(raw)
     try:
         if getattr(ns, "scratch", False):
+            # Process-local: restored on the way out so an in-process caller (tests, MCP) is not left switched off.
             d = _scratch_dir()
+            saved = {k: os.environ.get(k) for k in ("CLAIMIDX_SHARE", "CLAIMIDX_COMMONS", "CLAIMIDX_OUTBOX")}
             os.environ["CLAIMIDX_SHARE"] = "0"
             os.environ["CLAIMIDX_COMMONS"] = "0"
             os.environ["CLAIMIDX_OUTBOX"] = os.path.join(d, "outbox.jsonl")
-        if getattr(ns, "local", False):
-            os.environ["CLAIMIDX_SHARE"] = "0"
+            try:
+                return int(ns.func(ns))
+            finally:
+                for k, v in saved.items():
+                    if v is None:
+                        os.environ.pop(k, None)
+                    else:
+                        os.environ[k] = v
+        # --local is handled by the command itself (a durable keep-local mark), never by flipping the share switch.
         return int(ns.func(ns))
     except BrokenPipeError:
         return 0

@@ -302,6 +302,21 @@ def publish_home(claim: Claim, api: str | None = None, token: str | None = None,
     return _post(f"{base}/api/publish", body, token=token if token is not None else api_token())
 
 
+def keep_local(store, claim_id: str) -> bool:
+    """The claim was recorded with --local: it stays on this machine until shared by id."""
+    if hasattr(store, "has_event"):
+        return store.has_event(claim_id, ("keep-local",)) and not store.has_event(claim_id, ("share-explicit",))
+    return False
+
+
+def mark_local(store, claim_id: str, actor: str) -> None:
+    store.log("keep-local", actor, claim_id, {"hint": f"claimidx share {claim_id} publishes it"})
+
+
+def local_status(claim_id: str) -> dict[str, Any]:
+    return {"status": "local", "id": claim_id, "hint": f"kept on this machine; `claimidx share {claim_id}` publishes it"}
+
+
 def commons_shared(store, claim_id: str) -> bool:
     if hasattr(store, "has_event"):
         return store.has_event(claim_id, ("commons-push",))
@@ -381,10 +396,17 @@ def already_shared(store, claim_id: str) -> bool:
     return False
 
 
-def share_claim(store, claim: Claim, *, api: str | None = None, token: str | None = None, force: bool = False) -> dict[str, Any]:
+def share_claim(store, claim: Claim, *, api: str | None = None, token: str | None = None, force: bool = False, explicit: bool = False) -> dict[str, Any]:
     """Push a local claim: the full record to a private home when one is configured, and the public
     projection to the commons unless it is switched off. With neither, the projection is queued.
+
+    A claim recorded with --local is skipped unless `explicit` (the agent named it): that is the
+    separate publication decision, and it clears the keep-local mark.
     """
+    if keep_local(store, claim.id):
+        if not explicit:
+            return local_status(claim.id)
+        store.log("share-explicit", claim.own, claim.id)
     base = (api if api is not None else api_url()).rstrip("/")
     out: dict[str, Any] = {"status": "already", "id": claim.id}
     if base and (force or not already_shared(store, claim.id)):
@@ -447,6 +469,9 @@ def share_pending(store, *, api: str | None = None, token: str | None = None, fo
         if c.st == "rejected":
             skipped += 1
             continue
+        if keep_local(store, c.id):
+            skipped += 1
+            continue
         done_private = already_shared(store, c.id) or not (api if api is not None else api_url())
         done_commons = commons_shared(store, c.id) or not commons_enabled()
         if done_private and done_commons and not force:
@@ -468,6 +493,8 @@ def maybe_share(store, claim: Claim) -> dict[str, Any] | None:
     """Auto-submit after ingest/confirm when a live home is configured."""
     if not share_enabled():
         return None
+    if keep_local(store, claim.id):
+        return local_status(claim.id)
     if not api_url() and not commons_enabled():
         return None
     try:
@@ -484,7 +511,7 @@ def share_observation(store, claim: Claim, *, held: bool, actor: str, replayed: 
     are what `impact` reads back. Live home only; the public jsonl is a
     projection that only PR lines can change. Never raises.
     """
-    if not share_enabled() or not replayed:
+    if not share_enabled() or not replayed or keep_local(store, claim.id):
         return None
     from urllib.parse import quote
 

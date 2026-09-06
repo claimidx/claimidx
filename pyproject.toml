@@ -64,7 +64,7 @@ pythonpath = ["src"]
 line-length = 160
 target-version = "py311"
 src = ["src", "tests", "scripts"]
-extend-exclude = ["build", "dist", ".venv"]
+extend-exclude = ["build", "dist", ".venv", "scratch", "INTERNAL"]  # scratch/ and INTERNAL/ are operator-private, never linted or shipped
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]

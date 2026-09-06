@@ -132,7 +132,7 @@ def test_claim_yes_shares_to_the_commons_and_local_opts_out(tmp_path: Path, comm
     remember_failure("ModuleNotFoundError: No module named 'csv'", cwd=str(tree), eco="py")
     assert main(["--db", db, "--fmt", "json", "claim", "--yes", "--no-diff", "--no-clean-room", "--local", "--fix", "pip install csv"]) == 0
     out = json.loads(capsys.readouterr().out)
-    assert not out.get("share") and len(commons) == 2
+    assert out["share"]["status"] == "local" and len(commons) == 2
 
 
 def test_scratch_uses_a_throwaway_index_and_never_shares(tmp_path: Path, commons, capsys, monkeypatch):
@@ -201,3 +201,59 @@ def test_a_private_home_refusal_does_not_keep_the_claim_off_the_commons(tmp_path
     assert out["status"] == "commons" and out["home"]["status"] == "error"
     pending = home.share_pending(store)
     assert pending["n"] == 1 and posted == [a.id, b.id]  # the run went on past the refusal
+
+
+def test_local_is_a_durable_decision_not_a_flag_for_one_run(tmp_path: Path, commons, capsys, monkeypatch):
+    """Record with --local, come back later, sync: the claim stays on this machine until someone shares it by id."""
+    from claimidx.env import remember_failure
+    from claimidx.hook import unshared_claims
+
+    db = str(tmp_path / "ix.sqlite")
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    remember_failure("ModuleNotFoundError: No module named 'json'", cwd=str(tree), eco="py")
+    assert main(["--db", db, "--fmt", "json", "claim", "--yes", "--no-diff", "--no-clean-room", "--local", "--fix", "pip install json"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    cid = out["id"]
+    assert out["share"] == {"status": "local", "id": cid, "hint": f"kept on this machine; `claimidx share {cid}` publishes it"}
+    assert not commons
+    # A new process, a reconnect, a bulk share: still local.
+    monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
+    store = Store(db)
+    assert home.keep_local(store, cid)
+    assert unshared_claims(store) == []
+    assert main(["--db", db, "--fmt", "json", "sync", "--no-pull"]) == 0
+    assert not commons
+    assert main(["--db", db, "--fmt", "json", "share"]) == 0
+    assert not commons
+    # A replay of the claim later does not leak it either.
+    assert home.share_observation(store, store.get(cid), held=True, actor="did:claimidx:test") is None
+    # The separate publication decision: share by id.
+    assert main(["--db", db, "--fmt", "json", "share", cid]) == 0
+    assert [u for u, _ in commons] == [home.COMMONS_API + "/api/publish"]
+    assert not home.keep_local(store, cid)
+
+
+def test_success_output_names_the_destination(tmp_path: Path, commons, capsys, monkeypatch):
+    from claimidx.env import remember_failure
+
+    db = str(tmp_path / "ix.sqlite")
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    remember_failure("ModuleNotFoundError: No module named 'json'", cwd=str(tree), eco="py")
+    assert main(["--db", db, "claim", "--yes", "--no-diff", "--no-clean-room", "--fix", "pip install json"]) == 0
+    err = capsys.readouterr().err
+    assert "shared: commons" in err
+    remember_failure("ModuleNotFoundError: No module named 'csv'", cwd=str(tree), eco="py")
+    assert main(["--db", db, "claim", "--yes", "--no-diff", "--no-clean-room", "--local", "--fix", "pip install csv"]) == 0
+    err = capsys.readouterr().err
+    assert "kept on this machine" in err and "claimidx share cix_" in err
+
+    def down(url, payload, token="", timeout=20.0):
+        raise home.HomeError("connection refused")
+
+    monkeypatch.setattr(home, "_post", down)
+    remember_failure("ModuleNotFoundError: No module named 'abc'", cwd=str(tree), eco="py")
+    assert main(["--db", db, "claim", "--yes", "--no-diff", "--no-clean-room", "--fix", "pip install abc"]) == 0
+    err = capsys.readouterr().err
+    assert "queued" in err and "claimidx sync" in err and "not private" in err

@@ -141,3 +141,23 @@ def test_doctor_reports_the_commons(tmp_path: Path, monkeypatch, capsys):
     monkeypatch.setenv("CLAIMIDX_COMMONS", "0")
     main(["--db", str(tmp_path / "ix.sqlite"), "--fmt", "json", "doctor"])
     assert "nothing leaves this machine" in capsys.readouterr().out
+
+
+def test_render_board_shows_eval_classes():
+    board = {
+        "days": 30,
+        "authors": [
+            {
+                "rank": 1,
+                "own": "did:claimidx:grok",
+                "holds": 3,
+                "verifiers": 2,
+                "claims_held": 3,
+                "claims": 5,
+                "by_eval": {"presence": 1, "version": 1, "recipe": 1},
+            }
+        ],
+        "verifiers": [],
+    }
+    text = render_board(board)
+    assert "recipe 1" in text and "version 1" in text and "presence 1" in text
