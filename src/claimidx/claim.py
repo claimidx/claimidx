@@ -175,11 +175,20 @@ def deps_from_diff(diff: str, cwd: str, eco: str = "") -> list[str]:
     return sorted(set(pins))[:3]
 
 
-def _install_fix(target: str, eco: str, dep: list[str]) -> tuple[str, str]:
-    """(fix_k, fix_b): the pin for the claimed target when its version is known, else a bare constraint."""
+def _install_fix(target: str, eco: str, dep: list[str], installed: str = "") -> tuple[str, str]:
+    """(fix_k, fix_b): the pin for the claimed target when its version is known, else a bare constraint.
+
+    `installed` is the `Dist@ver` the tree reports for the target; its name wins
+    over the import name (`yaml` -> `PyYAML==6.0.3`) because pip installs
+    distributions, not modules.
+    """
     name = target if target.startswith("@") else target.split(".")[0].split("/")[0]
-    pin = next((d for d in dep if d.lower().startswith(name.lower() + "@")), "")
-    ver = pin[len(name) + 1 :] if pin else ""
+    pin = installed or next((d for d in dep if d.lower().startswith(name.lower() + "@")), "")
+    if pin and "@" in pin.lstrip("@"):
+        head, _, ver = pin.rpartition("@")
+        name, ver = (head or name), ver
+    else:
+        ver = ""
     if eco in {"npm", "node"} or target.startswith("@"):
         return ("pin", f"{name}@{ver}") if ver else ("constraint", name)
     return ("pin", f"{name}=={ver}") if ver else ("constraint", name)
@@ -245,7 +254,7 @@ def draft_claim(
                 if dep:
                     inferred["dep"] = "packages touched by the diff"
     if not fix_b and target:
-        k, fix_b = _install_fix(target, eco, [installed] if installed else dep)
+        k, fix_b = _install_fix(target, eco, dep, installed=installed)
         fix_k = fix_k or k
         inferred["fix_b"] = "pin for claimed target" + (" (installed version)" if installed else "")
     if fix and not fix_k:
@@ -339,6 +348,26 @@ def publish_draft(draft: dict[str, Any], *, db: str | os.PathLike[str] | None, o
         cwd=str(draft.get("cwd") or "") or None,
         observe_digest=True,
     )
+    if out.get("exists") and str(out.get("st") or "") == "rejected":
+        # The fingerprint's only claim was rejected: this draft is the correction, not a duplicate.
+        # A live claim (proposed/confirmed) is still never overwritten from here; that is `publish --force`.
+        out = ingest(
+            str(draft["err"]),
+            fix_k=str(draft["fix_k"]),
+            fix_b=str(draft["fix_b"]),
+            eval=str(draft["eval"]),
+            eco=str(draft.get("eco") or "other"),
+            rt=str(draft.get("rt") or ""),
+            dep=list(draft.get("dep") or []),
+            note=str(draft.get("note") or ""),
+            own=own,
+            db=db,
+            cwd=str(draft.get("cwd") or "") or None,
+            observe_digest=True,
+            force=True,
+        )
+        out = dict(out)
+        out["superseded"] = "rejected"
     out = dict(out)
     out["ok"] = True
     if out.get("exists"):

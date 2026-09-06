@@ -246,9 +246,13 @@ def test_project_bin_and_tree_eval(tmp_path: Path):
     from claimidx.env import tree_eval
     from claimidx.sandbox import project_bin, resolve_argv
 
+    import os
+
     tree = tmp_path / "t"
-    (tree / ".venv" / "bin").mkdir(parents=True)
-    fake = tree / ".venv" / "bin" / "pytest"
+    # The tree's own tool lives under .venv/bin on POSIX and .venv/Scripts/<tool>.exe on Windows.
+    bin_dir, exe = (".venv/Scripts", "pytest.exe") if os.name == "nt" else (".venv/bin", "pytest")
+    (tree / bin_dir).mkdir(parents=True)
+    fake = tree / bin_dir / exe
     fake.write_text("", encoding="utf-8")
     assert project_bin("pytest", tree) == str(fake)
     assert resolve_argv(["pytest", "-q"], str(tree))[0] == str(fake)
@@ -298,3 +302,53 @@ def test_hook_infers_dep_from_traceback_for_the_fingerprint(tmp_path: Path, caps
         err=err, cls=classify(err), eco="py", rt=f"py@{sys.version_info.major}.{sys.version_info.minor}", dep=[f"pydantic@{version('pydantic')}"]
     )
     assert rec["fp"] == with_dep
+
+
+def test_claim_pins_the_distribution_not_the_import_name(tmp_path: Path, capsys):
+    """`import yaml` is provided by PyYAML: the draft must pin what pip can install, not the module name."""
+    import pytest
+
+    pytest.importorskip("yaml")
+    from importlib.metadata import version
+
+    from claimidx.env import installed_version
+
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (tree / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
+    ver = version("PyYAML")
+    assert installed_version("yaml", "py", str(tree)) == f"PyYAML@{ver}"
+    remember_failure("ModuleNotFoundError: No module named 'yaml'", cwd=str(tree))
+    db = str(tmp_path / "ix.sqlite")
+    assert main(["--db", db, "--fmt", "json", "claim", "--no-diff"]) == 0
+    draft = json.loads(capsys.readouterr().out)
+    assert draft["ok"] is True
+    assert draft["fix_k"] == "pin" and draft["fix_b"] == f"PyYAML=={ver}"
+    assert draft["eval"] == 'python -c "import yaml"'
+
+
+def test_claim_yes_supersedes_a_rejected_claim_on_the_same_fingerprint(tmp_path: Path, capsys):
+    """A wrong remedy was published, then rejected. The corrected `claim --yes` must land, not stop at `exists`."""
+    db = str(tmp_path / "ix.sqlite")
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    err = "ModuleNotFoundError: No module named 'json'"
+    remember_failure(err, cwd=str(tree), eco="py", rt=_py_rt())
+    assert main(["--db", db, "--fmt", "json", "claim", "--yes", "--no-diff", "--fix", "pip install jsn"]) == 0
+    first = json.loads(capsys.readouterr().out)["id"]
+    assert main(["--db", db, "--fmt", "json", "reject", first]) == 0
+    capsys.readouterr()
+    remember_failure(err, cwd=str(tree), eco="py", rt=_py_rt())
+    assert main(["--db", db, "--fmt", "json", "claim", "--yes", "--no-diff", "--fix", "pip install json"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["ok"] is True and not out.get("exists"), out
+    assert out["replay"]["recorded"] is True
+    assert last_failure() is None
+    assert main(["--db", db, "--fmt", "json", "show", out["id"]]) == 0
+    shown = json.loads(capsys.readouterr().out)
+    assert shown["fix"]["b"] == "json" and shown["st"] != "rejected" and shown["nr"] == 1
+    # A live claim on the fingerprint is still never overwritten by claim --yes.
+    remember_failure(err, cwd=str(tree), eco="py", rt=_py_rt())
+    assert main(["--db", db, "--fmt", "json", "claim", "--yes", "--no-diff", "--fix", "pip install json5"]) == 0
+    again = json.loads(capsys.readouterr().out)
+    assert again.get("exists") and again["id"] == out["id"]

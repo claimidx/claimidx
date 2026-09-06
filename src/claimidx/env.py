@@ -184,23 +184,49 @@ def installed_version(name: str, eco: str = "", cwd: str | os.PathLike[str] | No
         import subprocess
 
         try:
-            proc = subprocess.run(
-                [own, "-c", "from importlib.metadata import version; print(version(__import__('sys').argv[1]))", name],
-                capture_output=True,
-                text=True,
-                timeout=15,
-                check=False,
-            )
+            proc = subprocess.run([own, "-c", _DIST_VERSION_CODE, name], capture_output=True, text=True, timeout=15, check=False)
         except (OSError, subprocess.TimeoutExpired):
             proc = None
         if proc is not None and proc.returncode == 0 and proc.stdout.strip():
-            return f"{name}@{proc.stdout.strip()}"
-    try:
-        from importlib.metadata import version
+            return proc.stdout.strip()
+    return _dist_version(name)
 
+
+# `import yaml` is provided by PyYAML: a pin names what pip installs, not the module.
+# Try the name as a distribution first, then map it as an import name.
+_DIST_VERSION_CODE = (
+    "import sys\n"
+    "from importlib.metadata import packages_distributions, version\n"
+    "n = sys.argv[1]\n"
+    "try:\n"
+    "    print(n + '@' + version(n))\n"
+    "except Exception:\n"
+    "    for d in packages_distributions().get(n) or []:\n"
+    "        try:\n"
+    "            print(d + '@' + version(d)); break\n"
+    "        except Exception:\n"
+    "            pass\n"
+)
+
+
+def _dist_version(name: str) -> str:
+    """`Dist@ver` from this interpreter: `name` as a distribution, else as an import name."""
+    from importlib.metadata import packages_distributions, version
+
+    try:
         return f"{name}@{version(name)}"
     except Exception:
+        pass
+    try:
+        dists = packages_distributions().get(name) or []
+    except Exception:
         return ""
+    for d in dists:
+        try:
+            return f"{d}@{version(d)}"
+        except Exception:
+            continue
+    return ""
 
 
 # --- last failure ---------------------------------------------------------

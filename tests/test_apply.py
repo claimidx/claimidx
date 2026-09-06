@@ -52,11 +52,16 @@ def test_apply_plan_then_yes_for_a_patch(tmp_path: Path, capsys):
     out = json.loads(capsys.readouterr().out)
     assert out["applied"] is False and out["plan"]["steps"][0][:2] == ["git", "apply"] and out["plan"]["stdin"].startswith("diff --git")
     assert "encoding=" in (other / "mod.py").read_text(encoding="utf-8")
-    # Execute.
+    # Execute. The sensor remembered this failure in `other`; a recorded hold consumes it,
+    # or the next run/Stop hook nudges the agent to claim what apply just recorded.
+    from claimidx.env import last_failure, remember_failure
+
+    remember_failure("TypeError: loads() got an unexpected keyword argument 'encoding'", cwd=str(other), eco="py")
     assert main(["--db", db, "--fmt", "json", "apply", cid, "--cwd", str(other), "--yes"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["applied"] is True and out["replay"]["recorded"] is True and out["replay"]["nr"] == 1
     assert "encoding=" not in (other / "mod.py").read_text(encoding="utf-8")
+    assert last_failure() is None
 
 
 def test_apply_never_executes_cmd_or_prose(tmp_path: Path, capsys):
@@ -123,8 +128,11 @@ def test_apply_refuses_pin_specs_that_are_not_plain(tmp_path: Path):
         err = "ModuleNotFoundError: No module named 'x'"
         return Claim(fp=fingerprint(err=err, eco="py"), cls="module_not_found", err=err, eco="py", fix=Fix(k="pin", b=spec), eval=EvalSpec(cmd="true"))
 
-    (tmp_path / ".venv" / "bin").mkdir(parents=True)
-    (tmp_path / ".venv" / "bin" / "python").write_text("", encoding="utf-8")
+    import os
+
+    bin_dir, exe = (".venv/Scripts", "python.exe") if os.name == "nt" else (".venv/bin", "python")
+    (tmp_path / bin_dir).mkdir(parents=True)
+    (tmp_path / bin_dir / exe).write_text("", encoding="utf-8")
     assert plan(claim("x==1.2.3"), str(tmp_path))["steps"][0][-1] == "x==1.2.3"
     assert plan(claim("x[extra]>=1,<2"), str(tmp_path))["steps"]
     for bad in ("git+https://evil/x.git", "-e .", "x --index-url https://evil", "x; rm -rf /"):
