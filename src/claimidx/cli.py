@@ -298,7 +298,8 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
         return 2
     replay_info = None
     if getattr(ns, "replay", False):
-        from .sandbox import replay, replay_records_hold
+        from .gate import graduation_gate
+        from .sandbox import replay
 
         result = replay(c.eval.cmd, c.eval.expect, cwd=getattr(ns, "cwd", None))
         replay_info = result.as_dict()
@@ -324,7 +325,7 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
                 print(json.dumps(replay_info), file=sys.stderr)
                 print(_dumps(failed, ns.fmt))
             return 2
-        ok, why = replay_records_hold(c.rt, result, c.eval.cmd)
+        ok, why = graduation_gate(c, result, cwd=getattr(ns, "cwd", None), store=store).as_tuple()
         if not ok:
             if ns.fmt == "json":
                 print(json.dumps({"held": True, "replay": replay_info, "recorded": False, "reason": why}, default=str))

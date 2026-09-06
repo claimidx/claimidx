@@ -19,9 +19,10 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .gate import graduation_gate
 from .models import Claim
 from .policy import _norm_head, eval_allowed, split_eval
-from .sandbox import ReplayResult, observe_env, replay, replay_records_hold
+from .sandbox import ReplayResult, observe_env, replay
 from .store import Store
 from .team import resolve_owner
 
@@ -400,7 +401,7 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
                 "held-pin",
                 env=observe_env([str(py)]),
             )
-            ok, why = replay_records_hold(c.rt, probe, c.eval.cmd)
+            ok, why = graduation_gate(c, probe, cwd=str(tmp)).as_tuple()
             if not ok:
                 return {
                     "action": "skip",
@@ -475,7 +476,7 @@ def decide(c: Claim, *, scratch: Path) -> dict:
     if not result.ran:
         return {"action": "skip", "reason": result.reason, "id": c.id, "replay": info}
     if result.held:
-        ok, why = replay_records_hold(c.rt, result, cmd)
+        ok, why = graduation_gate(c, result, cwd=str(scratch)).as_tuple()
         if not ok:
             return {"action": "skip", "reason": why, "id": c.id, "replay": info}
         return {"action": "confirm", "reason": "held", "id": c.id, "replay": info}

@@ -833,7 +833,8 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         if getattr(current, "src", "local") == "home" and not args.get("replay"):
             raise ValueError("quarantine: home claims require confirm with replay=true")
         if args.get("replay"):
-            from .sandbox import replay, replay_records_hold
+            from .gate import graduation_gate
+            from .sandbox import replay
 
             result = replay(current.eval.cmd, current.eval.expect, cwd=args.get("cwd"))
             eval_detail = {
@@ -848,7 +849,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             if not result.held:
                 failed = store.fail(args["id"], resolve_owner(args.get("own")), detail=eval_detail)
                 return {"id": failed.id, "st": failed.st, "nc": failed.nc, "nf": failed.nf, "replay": result.as_dict(), "held": False}
-            ok, why = replay_records_hold(current.rt, result, current.eval.cmd)
+            ok, why = graduation_gate(current, result, cwd=args.get("cwd"), store=store).as_tuple()
             if not ok:
                 return {
                     "id": current.id,
