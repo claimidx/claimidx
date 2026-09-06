@@ -112,7 +112,7 @@ ECOS: dict[str, dict] = {
             "pom.xml": (
                 '<?xml version="1.0" encoding="UTF-8"?>\n<project xmlns="http://maven.apache.org/POM/4.0.0">\n  <modelVersion>4.0.0</modelVersion>\n'
                 "  <groupId>example</groupId>\n  <artifactId>tiny</artifactId>\n  <version>1.0</version>\n  <properties>\n"
-                "    <maven.compiler.release>21</maven.compiler.release>\n    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>\n  </properties>\n</project>\n"
+                "    <maven.compiler.release>${java.specification.version}</maven.compiler.release>\n    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>\n  </properties>\n</project>\n"
             ),
             "src/main/java/App.java": 'import org.apache.commons.lang3.StringUtils;\n\npublic class App {\n    public static void main(String[] a) { System.out.println(StringUtils.capitalize("hi")); }\n}\n',
             ".gitignore": "target/\n",
