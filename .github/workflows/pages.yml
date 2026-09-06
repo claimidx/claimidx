@@ -1,8 +1,8 @@
 name: pages
 # Publish the repository's technical documentation and discovery files to a PREVIEW branch.
-# The storefront pages (pricing, homes, terms, thanks) are not in git, so a deploy from this
-# checkout is incomplete and must never become production. Production is deployed by the
-# operator from a complete docs/ tree: `npx wrangler pages deploy docs --project-name claimidx --branch main`.
+# The operator's site carries files this checkout does not, so a deploy from here is incomplete
+# and must never become production. Production is deployed by the operator from a complete
+# docs/ tree with `python scripts/gate.py deploy-site`.
 on:
   workflow_dispatch:
   push:

@@ -85,7 +85,7 @@ python scripts/gate.py install-hooks   # once per clone: core.hooksPath -> .gith
 - **lint** — `ruff check .`, `ruff format --check src tests scripts`, `mypy`. **verify** — lint + `python -m pytest -q`.
 - **mcp** — a real stdio session against the MCP server: `initialize` echoes the protocol version and the pyproject version; every tool is titled, described, annotated, and has described parameters; `tools/list`, `prompts/list`, `resources/list` match `.well-known/mcp/server-card.json`; `server.json` versions match; `claimidx_doctor` answers.
 - **build** — `python -m build`, `twine check`, `python scripts/audit_artifacts.py` on the wheel and sdist.
-- **site** — `docs/` is a complete Pages tree: the storefront pages that are deliberately not in git are present beside the tracked ones, the CSP lets the leaderboard page reach the commons, and the main pages link `/leaderboard`. The `pages` workflow deploys only a preview branch for this reason.
+- **site** — `docs/` is a complete Pages tree: every tracked public page, every file the operator manifest (`INTERNAL/site-required.txt`, never in git) requires beside them, a CSP that lets the leaderboard page reach the commons, and the main pages linking `/leaderboard`. The `pages` workflow deploys only a preview branch for this reason.
 - **commons** — `home.claimidx.com/t/commons` answers: health ok with claims, and the leaderboard states its rules. A release must not ship pointing at a dead commons.
 - **smoke** — `python scripts/live_smoke.py` against whatever toolchains are on PATH (CI runs all five).
 

@@ -93,24 +93,26 @@ def test_contributing_and_briefs_name_the_gates():
 
 
 def test_site_gate_refuses_an_incomplete_pages_tree(tmp_path: Path):
-    """The storefront lives outside git; a deploy without it once replaced production. The gate refuses that."""
+    """The operator's site carries files git does not; a deploy without them once replaced production. The gate refuses that."""
     gate = _gate()
     docs = tmp_path / "docs"
     docs.mkdir()
-    errors = gate.site_errors(docs)
-    assert any("pricing.html missing" in e for e in errors) and any("_headers missing" in e for e in errors)
-    for rel in gate.SITE_REQUIRED:
+    manifest = tmp_path / "site-required.txt"
+    manifest.write_text("# operator files beyond git\nextra-a.html\nextra-b.html\n", encoding="utf-8")
+    errors = gate.site_errors(docs, manifest)
+    assert any("extra-a.html missing" in e for e in errors) and any("_headers missing" in e for e in errors)
+    for rel in gate.site_required(manifest):
         f = docs / rel
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text('<a href="/leaderboard">x</a>' if rel.endswith(".html") else "{}", encoding="utf-8")
     (docs / "_headers").write_text("/*\n  Content-Security-Policy: default-src 'self'; connect-src 'self' https://pypi.org; img-src 'self'\n", encoding="utf-8")
-    errors = gate.site_errors(docs)
+    errors = gate.site_errors(docs, manifest)
     assert errors == ["_headers: CSP connect-src does not allow https://home.claimidx.com (the leaderboard page fetches the commons)"], errors
     (docs / "_headers").write_text(
         "/*\n  Content-Security-Policy: default-src 'self'; connect-src 'self' https://home.claimidx.com; img-src 'self'\n", encoding="utf-8"
     )
-    assert gate.site_errors(docs) == []
-    # The real tree on this machine passes only when the storefront is present next to the tracked pages.
+    assert gate.site_errors(docs, manifest) == []
+    # The real tree passes only where the operator manifest and the files it names are present.
     real = gate.site_errors()
     assert real == [] or all("missing" in e for e in real), real
 

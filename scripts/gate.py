@@ -18,9 +18,9 @@ Stages
   mcp       spawn the MCP server over stdio: initialize, tools/list, prompts/list, resources/list, one tools/call.
             Every tool is titled, described, annotated, and has described parameters; names and descriptions match
             the server card; serverInfo, server.json, and pyproject agree on the version.
-  site      docs/ is a complete Pages tree: the storefront pages that are not in git are present next to the
-            tracked ones, and the CSP allows the commons. A deploy from an incomplete tree once replaced
-            production; deploy-site refuses that.
+  site      docs/ is a complete Pages tree: every tracked public page, every file the operator's manifest
+            (INTERNAL/site-required.txt, never in git) requires beside them, and a CSP that allows the commons.
+            A deploy from an incomplete tree once replaced production; deploy-site refuses that.
   commons   the commons answers: health ok with claims, and the leaderboard states its rules.
   smoke     python scripts/live_smoke.py: the whole loop per ecosystem against real toolchains (skips absent ones).
   build     python -m build ; twine check ; scripts/audit_artifacts.py on the wheel and sdist.
@@ -66,7 +66,17 @@ ALLOW_SECRET_MARK = "gate: allow-secret"
 # does not itself carry the literal. Public nav may link home.claimidx.com/operator, so that stays allowed here and is
 # refused only inside the wheel/sdist (scripts/audit_artifacts.py).
 PRIVATE_PARTS = {"enterprise", "pricing", "checkout", "customer", "billing", "social", "worker", "bot"}
-EXTRA_FORBIDDEN_TEXT = ("har" + "per", "ben" + "jamin", "lu" + "cas", "claimidx.com/" + "pricing", "claimidx.com/" + "enterprise")
+EXTRA_FORBIDDEN_TEXT = (
+    "har" + "per",
+    "ben" + "jamin",
+    "lu" + "cas",
+    "claimidx.com/" + "pricing",
+    "claimidx.com/" + "enterprise",
+    "store" + "front",
+    "pricing" + ".html",
+    "homes" + ".html",
+    "thanks" + ".html",
+)
 ARTIFACT_ONLY_TEXT = {"home.claimidx.com/" + "operator"}
 # High-precision token shapes only. Generic api_key= / password= patterns stay in claimidx.security for claim text.
 SECRET_PATTERNS = [
@@ -93,14 +103,12 @@ BUNDLES = {
     "deploy-site": ("site",),
 }
 STAGES = ("sanitize", "docs", "lint", "verify", "mcp", "site", "commons", "smoke", "build")
-# The storefront is deployed but not tracked; production must never be deployed without it.
+# The public pages this tree tracks. The operator's site carries more files than git does; those are listed in
+# INTERNAL/site-required.txt (excluded from git) and required by the same gate, so a deploy from a bare checkout
+# can never replace production.
 SITE_REQUIRED = (
     "index.html",
     "leaderboard.html",
-    "pricing.html",
-    "homes.html",
-    "terms.html",
-    "thanks.html",
     "404.html",
     "_headers",
     "_redirects",
@@ -111,6 +119,7 @@ SITE_REQUIRED = (
     "sitemap.xml",
     ".well-known/mcp/server-card.json",
 )
+SITE_MANIFEST = ROOT / "INTERNAL" / "site-required.txt"
 COMMONS_API = "https://home.claimidx.com/t/commons"
 PAGES_PROJECT = "claimidx"
 
@@ -363,17 +372,34 @@ def build() -> None:
 # ---- site / commons / smoke ------------------------------------------------------------
 
 
-def site_errors(docs: Path | None = None) -> list[str]:
+def site_required(manifest: Path | None = None) -> tuple[str, ...]:
+    """Tracked public pages plus whatever the operator manifest names (one relative path per line, # comments)."""
+    path = manifest or SITE_MANIFEST
+    extra: list[str] = []
+    if path.is_file():
+        for ln in path.read_text(encoding="utf-8").splitlines():
+            ln = ln.strip()
+            if ln and not ln.startswith("#"):
+                extra.append(ln)
+    return tuple(dict.fromkeys([*SITE_REQUIRED, *extra]))
+
+
+def site_errors(docs: Path | None = None, manifest: Path | None = None) -> list[str]:
     """What stops docs/ from being a production Pages tree."""
     root = docs or (ROOT / "docs")
-    errors = [f"docs/{rel} missing" for rel in SITE_REQUIRED if not (root / rel).is_file()]
+    required = site_required(manifest)
+    errors = [f"docs/{rel} missing" for rel in required if not (root / rel).is_file()]
+    if manifest is None and not SITE_MANIFEST.is_file():
+        errors.append(
+            "INTERNAL/site-required.txt missing: the operator manifest of files the site needs beyond git; production is not deployed from a bare checkout"
+        )
     headers = root / "_headers"
     if headers.is_file():
         text = headers.read_text(encoding="utf-8")
         csp = next((ln for ln in text.splitlines() if "Content-Security-Policy" in ln), "")
         if "https://home.claimidx.com" not in csp.split("connect-src", 1)[-1].split(";", 1)[0]:
             errors.append("_headers: CSP connect-src does not allow https://home.claimidx.com (the leaderboard page fetches the commons)")
-    for page in ("index.html", "homes.html", "pricing.html", "leaderboard.html"):
+    for page in ("index.html", "leaderboard.html"):
         f = root / page
         if f.is_file() and 'href="/leaderboard"' not in f.read_text(encoding="utf-8", errors="replace"):
             errors.append(f"docs/{page}: no link to /leaderboard")
@@ -383,7 +409,7 @@ def site_errors(docs: Path | None = None) -> list[str]:
 def site() -> None:
     errors = site_errors()
     if errors:
-        raise GateError("\n".join(errors) + "\nthe storefront pages live outside git; deploy production only from a desktop with the complete docs/ tree")
+        raise GateError("\n".join(errors) + "\nthe site carries files git does not; deploy production only from a desktop with the complete docs/ tree")
 
 
 def deploy_site() -> None:

@@ -287,3 +287,23 @@ body .warn-card, body .secret-block, body .wire-card, body .op-form input, body 
   html { scroll-behavior: auto; }
   .claim-card, .ledger-card { transition: none; }
 }
+
+/* Leaderboard (docs/leaderboard.html). Inline styles are refused by the site CSP, so they live here. */
+.board { width: 100%; border-collapse: collapse; margin: 0 0 8px; }
+.board th, .board td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: top; }
+.board th { font: 700 11px/1.5 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
+.board td.num, .board th.num { text-align: right; white-space: nowrap; }
+.board td.num { font-family: var(--mono); font-size: 13px; }
+.board td.did { font-family: var(--mono); font-size: 13px; word-break: break-all; }
+.board td.tag { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+.board tr.empty td { color: var(--ink-soft); font-family: var(--serif); font-size: 17px; padding: 22px 8px; }
+.board tr.you td { background: rgba(12, 122, 83, .07); }
+.board-wrap { overflow-x: auto; }
+.board-meta { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: baseline; margin: 0 0 18px; color: var(--ink-soft); }
+.board-meta select { font: inherit; padding: 4px 8px; border: 1px solid var(--ink); background: #fff; }
+.board-status { font: 12px/1.6 var(--mono); color: var(--ink-soft); margin: 10px 0 0; }
+.board-note { color: var(--ink-soft); margin: 14px 0 0; max-width: 820px; }
+.board-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 26px 0 30px; }
+.board-kpi { border-top: 3px solid var(--ink); padding: 12px 0 0; }
+.board-kpi strong { display: block; font: 500 36px/1 var(--serif); }
+.board-kpi span { display: block; margin-top: 6px; font: 700 11px/1.5 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
