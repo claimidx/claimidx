@@ -88,18 +88,24 @@ def local_impact(store: Store, *, days: int = 7, own: str = "") -> dict[str, Any
     }
 
 
-def ledger_impact(own: str, *, url: str | None = None) -> dict[str, Any]:
-    """Your claims as the public ledger sees them. Counters there are hearsay, not local proof."""
+def ledger_impact(own: str, *, url: str | None = None, store: Store | None = None) -> dict[str, Any]:
+    """Your claims as the ledger sees them, minus your own observations. Counters there are hearsay, not local proof."""
     from .home import fetch_ledger
 
     claims, _skipped, target = fetch_ledger(url)
     mine = [c for c in claims if c.own == own]
+
+    def others(c, field: str) -> int:
+        remote = int(getattr(c, field, 0) or 0)
+        local = store.get(c.id) if store is not None else None
+        return max(0, remote - int(getattr(local, field, 0) or 0)) if local is not None else remote
+
     return {
         "ledger": target,
         "your_claims": len(mine),
-        "confirmed_by_others": sum(int(c.nc or 0) for c in mine),
-        "replayed_by_others": sum(int(c.nr or 0) for c in mine),
-        "failed_by_others": sum(int(c.nf or 0) for c in mine),
+        "confirmed_by_others": sum(others(c, "nc") for c in mine),
+        "replayed_by_others": sum(others(c, "nr") for c in mine),
+        "failed_by_others": sum(others(c, "nf") for c in mine),
         "ids": [c.id for c in mine[:10]],
     }
 
@@ -108,7 +114,7 @@ def impact(store: Store, *, days: int = 7, own: str = "", offline: bool = False,
     out: dict[str, Any] = {"own": own, **local_impact(store, days=days, own=own)}
     if not offline and own and own != "did:claimidx:anon":
         try:
-            out["public"] = ledger_impact(own, url=url)
+            out["public"] = ledger_impact(own, url=url, store=store)
         except Exception as e:  # network is optional here
             out["public"] = {"error": str(e)[:200]}
     out["line"] = render_line(out)
