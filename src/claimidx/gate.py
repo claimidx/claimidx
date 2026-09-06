@@ -59,6 +59,48 @@ def _proof_steps(store: Store | None, claim_id: str) -> list[dict]:
     return list(proof.get("steps") or [])
 
 
+def _env_suggestion(claim: Claim, result: ReplayResult, why: str) -> dict[str, str]:
+    """What would make this hold count: the rt the replay actually observed."""
+    observed = (result.env or "").strip()
+    if not observed:
+        return {"hint": "run the eval with a python/node head so the executing runtime is observed"}
+    if "requires rt" in why or "requires observed env" in why:
+        return {"rt": observed, "hint": f"re-publish with --rt {observed} (claimidx publish --force ...) or run confirm under the claimed runtime"}
+    if "mismatch" in why:
+        return {
+            "rt": observed,
+            "hint": f"claim.rt={claim.rt} but this replay ran under {observed}: confirm under {claim.rt}, or re-publish --force --rt {observed}",
+        }
+    return {}
+
+
+def hint_refusal(claim: Claim, result: ReplayResult, *, cwd: str | None = None) -> dict:
+    """Payload for a replay that could not run as proof: reason plus the passing form."""
+    reason = result.reason or "eval is a hint"
+    out: dict = {"reason": reason}
+    suggest: dict[str, str] = {}
+    if reason.startswith("eval-precondition"):
+        want = reason.split("no ", 1)[-1].split(" in cwd")[0] if "no " in reason else ""
+        suggest["hint"] = f"run confirm --replay --cwd <tree with {want or 'the project markers'}>"
+        if cwd:
+            suggest["cwd"] = cwd
+    else:
+        target = claim_target(cls=claim.cls, err=claim.err, dep=claim.dep)
+        ev = suggest_eval(target, claim.eco) if target else ""
+        if not ev:
+            from .public import refine_eval
+
+            refined = refine_eval(claim.eval.cmd, fix_k=claim.fix.k, fix_b=claim.fix.b, dep=claim.dep, eco=claim.eco)
+            ev = refined if refined != claim.eval.cmd else ""
+        if ev:
+            suggest["eval"] = ev
+            suggest["hint"] = f"re-publish with --force --eval {ev!r}; `{claim.eval.cmd}` cannot discriminate held from miss"
+        else:
+            suggest["hint"] = "supply a discriminating eval that observes the failure (import, build, or test command)"
+    out["suggest"] = suggest
+    return out
+
+
 def graduation_gate(
     claim: Claim,
     result: ReplayResult,
@@ -73,13 +115,15 @@ def graduation_gate(
     """
     ok, why = replay_records_hold(claim.rt, result, claim.eval.cmd)
     if not ok:
-        return GateDecision(False, why)
+        return GateDecision(False, why, suggest=_env_suggestion(claim, result, why))
     target = claim_target(cls=claim.cls, err=claim.err, dep=claim.dep)
     if target and not eval_observes_target(claim.eval.cmd, target) and not proof_observes_target(_proof_steps(store, claim.id), target):
         suggest = suggest_eval(target, claim.eco)
         return GateDecision(
             False,
             f"eval does not observe claimed target '{target}'",
-            suggest={"eval": suggest} if suggest else {},
+            suggest={"eval": suggest, "hint": f"re-publish with --force --eval {suggest!r}"}
+            if suggest
+            else {"hint": f"use an eval that imports or exercises {target}"},
         )
     return GateDecision(True, "held")

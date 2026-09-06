@@ -373,3 +373,67 @@ def test_i1_observed_digest_warns_digest_drift_under_same_pin(tmp_path: Path, ca
     rc, out = _confirm(db, capsys, cid, cwd=str(tree))
     # Default is warn-only: the hold still records, the drift is surfaced.
     assert "digest_drift" in json.dumps(out), out
+
+
+# --------------------------------------------------------------------------
+# Refusals carry the passing form
+# --------------------------------------------------------------------------
+
+
+def test_hint_refusal_suggests_target_eval(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    cid = _publish(db, capsys, err="ModuleNotFoundError: No module named 'json'", eval_cmd="true")
+    rc, out = _confirm(db, capsys, cid)
+    assert rc == 2 and out["recorded"] is False
+    assert out["suggest"]["eval"] == 'python -c "import json"'
+    assert "--force --eval" in out["suggest"]["hint"]
+
+
+def test_precondition_refusal_points_at_cwd(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    cid = _publish(db, capsys, err="RuntimeError: build contract broken", eval_cmd="npx tsc --noEmit")
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    rc, out = _confirm(db, capsys, cid, cwd=str(empty))
+    assert rc == 2 and out["reason"].startswith("eval-precondition")
+    assert "--cwd" in out["suggest"]["hint"]
+
+
+def test_env_refusal_suggests_observed_rt(tmp_path: Path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "id",
+                "publish",
+                "--err",
+                "RuntimeError: env contract broken",
+                "--eco",
+                "py",
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "ok",
+                "--eval",
+                'python -c "print(1)"',
+            ]
+        )
+        == 0
+    )
+    cid = capsys.readouterr().out.strip()
+    rc, out = _confirm(db, capsys, cid)
+    assert rc == 2 and "hold requires rt" in out["reason"]
+    assert out["suggest"]["rt"] == _py_rt()
+    assert "--rt " + _py_rt() in out["suggest"]["hint"]
+
+
+def test_ingest_hint_warn_carries_suggestion(tmp_path: Path, capsys):
+    from claimidx.public import ingest_warnings
+
+    warns = ingest_warnings("ModuleNotFoundError: No module named 'json'", "true", eco="py")
+    assert any(w.endswith('Use: python -c "import json"') for w in warns)
+    warns = ingest_warnings("RuntimeError: x", "true", dep=["foo==1.2.3"], eco="py")
+    assert any("Use: python -c" in w and "1.2.3" in w for w in warns)

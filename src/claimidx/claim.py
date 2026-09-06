@@ -243,7 +243,9 @@ def _replay_now(claim_id: str, *, db, own: str | None, cwd: str) -> dict[str, An
     result = replay(c.eval.cmd, c.eval.expect, cwd=cwd or None)
     info = result.as_dict()
     if result.is_hint() or not result.ran:
-        return {"held": False, "recorded": False, "reason": result.reason, "replay": info}
+        from .gate import hint_refusal
+
+        return {"held": False, "recorded": False, **hint_refusal(c, result, cwd=cwd), "replay": info}
     if not result.held:
         # The agent says it is fixed; the eval disagrees. Record nothing, say so loudly.
         return {"held": False, "recorded": False, "reason": "eval-miss: the fix did not hold under this eval", "replay": info}

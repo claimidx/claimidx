@@ -322,11 +322,16 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
             "sensor_plane": ns.sensor_plane or "",
         }
         if result.is_hint():
+            from .gate import hint_refusal
+
+            refusal = hint_refusal(c, result, cwd=getattr(ns, "cwd", None))
             if ns.fmt == "json":
-                print(json.dumps({"held": False, "replay": replay_info, "recorded": False}, default=str))
+                print(json.dumps({"held": False, "replay": replay_info, "recorded": False, **refusal}, default=str))
             else:
                 print(json.dumps(replay_info), file=sys.stderr)
-                print("not recorded: eval is a hint or preconditions unmet", file=sys.stderr)
+                print(f"not recorded: {refusal['reason']}", file=sys.stderr)
+                if refusal["suggest"].get("hint"):
+                    print(f"suggest: {refusal['suggest']['hint']}", file=sys.stderr)
             return 2
         if not result.held:
             failed = store.fail(ns.id, resolve_owner(ns.own), detail=eval_detail)
@@ -343,8 +348,8 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
             else:
                 print(json.dumps(replay_info), file=sys.stderr)
                 print(f"not recorded: {decision.reason}", file=sys.stderr)
-                if decision.suggest.get("eval"):
-                    print(f"suggest eval: {decision.suggest['eval']}", file=sys.stderr)
+                if decision.suggest.get("hint") or decision.suggest.get("eval"):
+                    print(f"suggest: {decision.suggest.get('hint') or 'eval ' + decision.suggest['eval']}", file=sys.stderr)
             return 2
     confirm_detail = None
     if replay_info or ns.trust_domain or ns.sensor_plane:

@@ -906,7 +906,16 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                 "sensor_plane": args.get("sensor_plane") or "",
             }
             if result.is_hint():
-                return {"id": current.id, "st": current.st, "held": False, "recorded": False, "replay": result.as_dict()}
+                from .gate import hint_refusal
+
+                return {
+                    "id": current.id,
+                    "st": current.st,
+                    "held": False,
+                    "recorded": False,
+                    **hint_refusal(current, result, cwd=args.get("cwd")),
+                    "replay": result.as_dict(),
+                }
             if not result.held:
                 failed = store.fail(args["id"], resolve_owner(args.get("own")), detail=eval_detail)
                 return {"id": failed.id, "st": failed.st, "nc": failed.nc, "nf": failed.nf, "replay": result.as_dict(), "held": False}

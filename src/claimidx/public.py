@@ -52,6 +52,19 @@ HINT_WARN = "eval is a hint; confirm --replay cannot prove this claim. Supply a 
 PLACEHOLDER_WARN = "err contains placeholders; ingest the raw error string, normalize_error keeps identifiers and error codes"
 
 
+def _hint_suggestion(raw_err: str, *, cls: str = "", dep: list[str] | None = None, eco: str = "") -> str:
+    """ ". Use: <eval>" when a discriminating eval can be drafted from the claim target or a pin."""
+    from .fingerprint import classify
+    from .target import claim_target, suggest_eval
+
+    target = claim_target(cls=cls or classify(raw_err or ""), err=raw_err or "", dep=dep)
+    ev = suggest_eval(target, eco) if target else ""
+    if not ev:
+        refined = refine_eval("true", dep=dep, eco=eco)
+        ev = refined if refined != "true" else ""
+    return f". Use: {ev}" if ev else ""
+
+
 def target_warning(raw_err: str, eval_cmd: str, *, cls: str = "", dep: list[str] | None = None, eco: str = "") -> str:
     """Warn when the eval never names the module/package the claim is about; suggests the passing eval."""
     from .fingerprint import classify
@@ -70,7 +83,7 @@ def ingest_warnings(raw_err: str, eval_cmd: str, *, cls: str = "", dep: list[str
 
     warns: list[str] = []
     if not eval_is_proof(eval_cmd):
-        warns.append(HINT_WARN)
+        warns.append(HINT_WARN + _hint_suggestion(raw_err, cls=cls, dep=dep, eco=eco))
     tw = target_warning(raw_err, eval_cmd, cls=cls, dep=dep, eco=eco)
     if tw:
         warns.append(tw)
