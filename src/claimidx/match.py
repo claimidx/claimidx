@@ -271,8 +271,8 @@ def disposition_for(query: Claim | dict, claim: Claim, ann: dict) -> dict:
 
 _VERDICT_ACTION = {
     "apply_with_caution": "apply",
-    "replay_before_apply": "replay",
-    "reason_only": "reason",
+    "replay_before_apply": "apply",
+    "reason_only": "review",
     "fail_or_alternative": "avoid",
     "skip": "skip",
 }
@@ -281,8 +281,13 @@ _VERDICT_ACTION = {
 def verdict_for(query: Claim | dict, hits: list[tuple[Claim, float]]) -> dict:
     """One decision for the whole ask, first in the payload, readable by a cheap model.
 
-    action: apply | replay | reason | avoid | skip | solve (miss).
+    action: apply | review | avoid | skip | solve (miss).
     why: ten words, the signals that decided it. next: the one command to run.
+
+    `eval.cmd` is the post-fix contract (`import tomli` holds only once tomli
+    is installed), so the loop is always apply, then `confirm --replay` to
+    record whether it held here. "Replay before applying" would miss by
+    construction and record a false fail; the verdict never says it.
     Advice only; the per-hit disposition underneath carries the full reasoning.
     """
     if not hits:
@@ -317,10 +322,11 @@ def verdict_for(query: Claim | dict, hits: list[tuple[Claim, float]]) -> dict:
         bits.append("eval is a hint")
     if len(hits) > 1 and abs(hits[0][1] - hits[1][1]) <= 0.01:
         bits.append(f"near-tie with {hits[1][0].id}")
+    if action == "apply" and src != "local" and not int(getattr(claim, "nr", 0) or 0) and not int(getattr(claim, "nc", 0) or 0):
+        action = "review"  # pulled and never held anywhere: read fix.b before touching the tree
     nxt = {
-        "apply": f"apply fix.b, then claimidx confirm --replay {claim.id}",
-        "replay": f"claimidx confirm --replay {claim.id} before applying",
-        "reason": f"claimidx explain {claim.id}; compare err tokens first",
+        "apply": f"apply fix.b, then claimidx confirm --replay {claim.id} --cwd <tree> to record whether it held here",
+        "review": f"claimidx explain {claim.id}; read fix.b and compare err tokens, then apply and confirm --replay",
         "avoid": f"claimidx alternatives {claim.fp}",
         "skip": f"claimidx alternatives {claim.fp}",
     }[action]

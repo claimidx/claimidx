@@ -33,6 +33,28 @@ def project_python(cwd: str | os.PathLike[str] | None) -> str | None:
     return None
 
 
+def project_bin(head: str, cwd: str | os.PathLike[str] | None) -> str | None:
+    """`<cwd>/.venv/bin/<head>` or `<cwd>/node_modules/.bin/<head>` when the tree ships the tool itself."""
+    if not cwd:
+        return None
+    root = Path(cwd)
+    base = _norm_head(head)
+    candidates = []
+    for venv in (".venv", "venv"):
+        if os.name == "nt":
+            candidates += [root / venv / "Scripts" / f"{base}.exe", root / venv / "Scripts" / f"{base}.cmd"]
+        else:
+            candidates.append(root / venv / "bin" / base)
+    if os.name == "nt":
+        candidates.append(root / "node_modules" / ".bin" / f"{base}.cmd")
+    else:
+        candidates.append(root / "node_modules" / ".bin" / base)
+    for cand in candidates:
+        if cand.is_file():
+            return str(cand)
+    return None
+
+
 def resolve_argv(parts: list[str], cwd: str | os.PathLike[str] | None = None) -> list[str]:
     """Map an allowlisted eval recipe onto this OS's real executable.
 
@@ -54,6 +76,9 @@ def resolve_argv(parts: list[str], cwd: str | os.PathLike[str] | None = None) ->
         if found:
             return [found, *parts[1:]]
         return [sys.executable, *parts[1:]]
+    own = project_bin(parts[0], cwd)
+    if own:
+        return [own, *parts[1:]]
     found = _which(parts[0])
     return [found or parts[0], *parts[1:]]
 

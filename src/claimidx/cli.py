@@ -371,6 +371,17 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
                     print(f"suggest: {refusal['suggest']['hint']}", file=sys.stderr)
             return 2
         if not result.held:
+            from .gate import unapplied_refusal
+
+            unapplied = unapplied_refusal(c, result, cwd=getattr(ns, "cwd", None))
+            if unapplied:
+                if ns.fmt == "json":
+                    print(json.dumps({"held": False, "replay": replay_info, "recorded": False, **unapplied}, default=str))
+                else:
+                    print(json.dumps(replay_info), file=sys.stderr)
+                    print(f"not recorded: {unapplied['reason']}", file=sys.stderr)
+                    print(f"suggest: {unapplied['suggest']['hint']}", file=sys.stderr)
+                return 2
             failed = store.fail(ns.id, resolve_owner(ns.own), detail=eval_detail)
             if ns.fmt == "json":
                 print(json.dumps({"held": False, "replay": replay_info, "claim": json.loads(failed.model_dump_json())}, default=str))

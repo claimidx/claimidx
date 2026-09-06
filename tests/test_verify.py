@@ -296,7 +296,10 @@ def test_decide_runnable_python_miss_is_fail(tmp_path: Path):
         fix_b="install it",
     )
     d = decide(c, scratch=scratch)
-    assert d["action"] == "fail"
+    # The claimed module missing in an empty scratch is the fix not being applied, not the remedy being wrong.
+    assert d["action"] == "skip" and d["reason"].startswith("fix-not-applied")
+    real_miss = _claim("RuntimeError: contract broken zzz", 'python -c "import json; raise SystemExit(1)"', fix_k="patch", fix_b="x")
+    assert decide(real_miss, scratch=scratch)["action"] == "fail"
 
 
 def test_pick_skips_true_and_rejected():

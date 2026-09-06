@@ -40,7 +40,12 @@ def normalize_fix(fix_b: str, fix_k: str = "") -> tuple[str, str]:
     Returns (fix_k, fix_b). Install commands collapse to their package spec:
     versioned -> pin, bare -> constraint. Everything else passes through.
     """
-    s = (fix_b or "").strip()
+    raw = fix_b or ""
+    if raw.lstrip().startswith("diff --git"):
+        # A patch is bytes for `git apply`: keep every context line and the final newline.
+        body = raw.lstrip()
+        return "patch", body if body.endswith("\n") else body + "\n"
+    s = raw.strip()
     m = _INSTALL_SPEC.match(s)
     if m and fix_k in ("", "cmd", "pin", "constraint"):
         spec = m.group(1).strip("'\"")
@@ -98,10 +103,76 @@ def _git_diff(cwd: str) -> str:
         reject_secrets(hunks)
     except SecretError:
         return stat_text + "\n(diff hunks withheld: secret-shaped token; describe the change with --fix)"
-    body = stat_text + "\n" + hunks
-    if len(body) > _DIFF_LIMIT:
-        body = body[:_DIFF_LIMIT].rstrip() + "\n... (truncated)"
-    return body
+    if len(hunks) <= _DIFF_LIMIT:
+        return hunks  # exactly what `git apply` takes; the stat is derivable
+    return stat_text + "\n" + hunks[:_DIFF_LIMIT].rstrip() + "\n... (truncated: too large to apply from fix.b; describe the change with --fix)"
+
+
+_DIFF_MODULE = re.compile(
+    r"^[+-](?!\+\+|--).*?\b(?:import\s+([A-Za-z_][A-Za-z0-9_]*)|from\s+([A-Za-z_][A-Za-z0-9_]*)|([A-Za-z_][A-Za-z0-9_]*)\.[A-Za-z_])", re.M
+)
+
+
+def deps_from_diff(diff: str, cwd: str, eco: str = "") -> list[str]:
+    """Third-party packages the changed lines touch, as installed `name@ver` pins.
+
+    `yaml.load` -> `yaml.safe_load` is a claim about PyYAML's API; the version
+    is context the next agent needs for a match. Import names map to
+    distributions through the tree's own interpreter.
+    """
+    if not diff or eco not in ("", "py"):
+        return []
+    names: list[str] = []
+    for m in _DIFF_MODULE.finditer(diff):
+        tok = next((g for g in m.groups() if g), "")
+        if (
+            tok
+            and tok not in names
+            and tok
+            not in {
+                "self",
+                "cls",
+                "os",
+                "sys",
+                "re",
+                "json",
+                "typing",
+                "pathlib",
+                "datetime",
+                "logging",
+                "math",
+                "time",
+                "io",
+                "collections",
+                "functools",
+                "itertools",
+                "subprocess",
+                "unittest",
+                "pytest",
+            }
+        ):
+            names.append(tok)
+    if not names:
+        return []
+    from .sandbox import project_python
+
+    py = project_python(cwd) or None
+    code = (
+        "import json,sys\nfrom importlib.metadata import packages_distributions, version\n"
+        "pd=packages_distributions(); out={}\n"
+        "for n in sys.argv[1:]:\n"
+        "    for d in pd.get(n) or []:\n"
+        "        try: out[n]=d+'@'+version(d)\n"
+        "        except Exception: pass\n"
+        "print(json.dumps(out))"
+    )
+    try:
+        proc = subprocess.run([py or "python", "-c", code, *names[:12]], capture_output=True, text=True, timeout=20, check=False, cwd=cwd)
+        found = json.loads(proc.stdout or "{}") if proc.returncode == 0 else {}
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return []
+    pins = [v for v in found.values() if not v.lower().startswith(("pip@", "setuptools@", "wheel@"))]
+    return sorted(set(pins))[:3]
 
 
 def _install_fix(target: str, eco: str, dep: list[str]) -> tuple[str, str]:
@@ -140,6 +211,7 @@ def draft_claim(
         cwd = cwd or str(remembered.get("cwd") or "")
         eco = eco or str(remembered.get("eco") or "")
         rt = rt or str(remembered.get("rt") or "")
+    err = re.sub(r"^E\s+", "", err.strip())  # pytest's E-prefix is not part of the error
     cwd = cwd or os.getcwd()
     guess = infer_env(cwd, err=err)
     eco = eco or guess["eco"] or "other"
@@ -154,11 +226,13 @@ def draft_claim(
         inferred["eco"] = "tree/err"
     if guess["rt"] and rt == guess["rt"]:
         inferred["rt"] = "interpreter"
-    if target and not dep:
-        pin = installed_version(target.split(".")[0].split("/")[0] if not target.startswith("@") else target, eco, cwd)
-        if pin:
-            dep = [pin]
-            inferred["dep"] = "installed"
+    installed = ""
+    if target:
+        installed = installed_version(target.split(".")[0].split("/")[0] if not target.startswith("@") else target, eco, cwd)
+    if installed and not dep and cls != "module_not_found":
+        # For a missing module the package was absent when it failed: the version is the fix (below), not the context.
+        dep = [installed]
+        inferred["dep"] = "installed"
 
     fix_b = (fix or "").strip()
     if not fix_b and use_diff:
@@ -166,10 +240,14 @@ def draft_claim(
         if fix_b:
             inferred["fix_b"] = "git diff"
             fix_k = fix_k or "patch"
+            if not dep and cls != "module_not_found":
+                dep = deps_from_diff(fix_b, cwd, eco)
+                if dep:
+                    inferred["dep"] = "packages touched by the diff"
     if not fix_b and target:
-        k, fix_b = _install_fix(target, eco, dep)
+        k, fix_b = _install_fix(target, eco, [installed] if installed else dep)
         fix_k = fix_k or k
-        inferred["fix_b"] = "pin for claimed target"
+        inferred["fix_b"] = "pin for claimed target" + (" (installed version)" if installed else "")
     if fix and not fix_k:
         inferred["fix_k"] = "from fix text"
     fix_k, fix_b = normalize_fix(fix_b, fix_k)
@@ -180,13 +258,14 @@ def draft_claim(
         if ev:
             inferred["eval"] = "claim target"
     if not ev:
+        ev = tree_eval(cwd, eco)
+        if ev:
+            inferred["eval"] = "tree recipe"
+    if not ev and fix_k in {"pin", "constraint"}:
+        # Only a pin fix is proven by a version check; for a patch that would be a tautology.
         ev = refine_eval("true", fix_k=fix_k, fix_b=fix_b, dep=dep, eco=eco)
         if ev != "true":
             inferred["eval"] = "dependency pin"
-        else:
-            ev = tree_eval(cwd, eco)
-            if ev:
-                inferred["eval"] = "tree recipe"
     ev = ev or "true"
 
     warns = ingest_warnings(err, ev, cls=cls, dep=dep, eco=eco)
@@ -276,6 +355,11 @@ def _replay_now(claim_id: str, *, db, own: str | None, cwd: str) -> dict[str, An
 
         return {"held": False, "recorded": False, **hint_refusal(c, result, cwd=cwd), "replay": info}
     if not result.held:
+        from .gate import unapplied_refusal
+
+        unapplied = unapplied_refusal(c, result, cwd=cwd or None)
+        if unapplied:
+            return {"held": False, "recorded": False, **unapplied, "replay": info}
         # The agent says it is fixed; the eval disagrees. Record nothing, say so loudly.
         return {"held": False, "recorded": False, "reason": "eval-miss: the fix did not hold under this eval", "replay": info}
     decision = graduation_gate(c, result, cwd=cwd or None, store=store, actor=resolve_owner(own))

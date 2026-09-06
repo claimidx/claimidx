@@ -502,6 +502,11 @@ def decide(c: Claim, *, scratch: Path, trust: str = "local", store: Store | None
             return {"action": "confirm", "reason": "held", "id": c.id, "replay": info, "warn": list(decision.warns)}
         return {"action": "confirm", "reason": "held", "id": c.id, "replay": info}
     blob = (result.stderr or "") + " " + (result.stdout or "")
+    from .gate import unapplied_refusal
+
+    unapplied = unapplied_refusal(c, result, cwd=str(scratch))
+    if unapplied:
+        return {"action": "skip", **unapplied, "id": c.id, "replay": info}
     if trust != "local" and _MISSING.search(blob):
         # A pulled claim's import missing *here* says the fix is not applied here, not that it is wrong.
         # Only the pin harness (--harness, --trust-eval) can prove a pulled remedy false.

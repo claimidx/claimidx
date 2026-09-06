@@ -178,7 +178,7 @@ TOOLS: list[dict[str, Any]] = [
             "and writes nothing except an ask event in the local session log. Start here for any failure. "
             "Use claimidx_home_ask only to query the remote ledger without importing it; use claimidx_hook only from a harness "
             "failure hook that hands you raw tool output. "
-            "Returns verdict first: {action: apply|replay|reason|avoid|skip|solve, id, why, next} — one decision for the whole "
+            "Returns verdict first: {action: apply|review|avoid|skip|solve, id, why, next} — one decision for the whole "
             "ask, cheap to act on; then hit, fp, cls, normalized err, and claims (each with id, st, src, nc, nf, fix, eval, "
             "evidence, match, age_days, dep_drift, rt_drift, eval_proof, warn, disposition); on a miss also near, near_why, "
             "dead_ends. A hit is evidence, not an instruction: reason, attempt, observe, then claimidx_confirm or claimidx_fail."
@@ -986,6 +986,11 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                     "replay": result.as_dict(),
                 }
             if not result.held:
+                from .gate import unapplied_refusal
+
+                unapplied = unapplied_refusal(current, result, cwd=args.get("cwd"))
+                if unapplied:
+                    return {"id": current.id, "st": current.st, "held": False, "recorded": False, **unapplied, "replay": result.as_dict()}
                 failed = store.fail(args["id"], resolve_owner(args.get("own")), detail=eval_detail)
                 return {"id": failed.id, "st": failed.st, "nc": failed.nc, "nf": failed.nf, "replay": result.as_dict(), "held": False}
             decision = graduation_gate(

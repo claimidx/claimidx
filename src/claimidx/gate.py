@@ -18,6 +18,7 @@ Source of the contract: `Validated Results/` and tests/test_graduation_gate.py.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -74,6 +75,82 @@ def _env_suggestion(claim: Claim, result: ReplayResult, why: str) -> dict[str, s
             "hint": f"claim.rt={claim.rt} but this replay ran under {observed}: confirm under {claim.rt}, or re-publish --force --rt {observed}",
         }
     return {}
+
+
+_MISSING_MOD = re.compile(r"(?:no module named|cannot find module)\s*['\"]?([@A-Za-z0-9_./-]+)", re.I)
+
+
+def _patch_unapplied(fix_b: str, cwd: str | None) -> str:
+    """For a `diff --git` remedy: the first file under cwd whose post-image lines are absent, else ""."""
+    if not fix_b.lstrip().startswith("diff --git"):
+        return ""
+    root = os.path.abspath(cwd or os.getcwd())
+    target = ""
+    added: list[str] = []
+    checks: list[tuple[str, list[str]]] = []
+    for line in fix_b.splitlines():
+        if line.startswith("+++ "):
+            if target:
+                checks.append((target, added))
+            target = line[4:].strip()
+            target = target[2:] if target.startswith("b/") else target
+            added = []
+        elif line.startswith("+") and not line.startswith("+++") and target:
+            if line[1:].strip():
+                added.append(line[1:].rstrip())
+    if target:
+        checks.append((target, added))
+    for path, lines in checks:
+        if not lines or ".." in path.split("/"):
+            continue
+        try:
+            text = open(os.path.join(root, path), encoding="utf-8", errors="replace").read()
+        except OSError:
+            return path
+        if any(ln not in text for ln in lines):
+            return path
+    return ""
+
+
+def unapplied_refusal(claim: Claim, result: ReplayResult, *, cwd: str | None = None) -> dict | None:
+    """A miss that only says the fix is not applied here is not evidence against the remedy.
+
+    `import tomli` missing when the remedy *is* `tomli==2.4.1` means nobody
+    installed it yet; a `diff --git` remedy whose added lines are not in the
+    tree was never applied. Returns a not-recorded payload with the apply
+    step, or None when the miss is a real one.
+    """
+    if result.held or not result.ran:
+        return None
+    if claim.fix.k == "patch":
+        missing_in = _patch_unapplied(claim.fix.b, cwd)
+        if missing_in:
+            return {
+                "reason": f"fix-not-applied: the patch in fix.b is not present in {missing_in}",
+                "suggest": {"hint": "save fix.b to a file and `git apply` it in --cwd, then confirm --replay again; nothing was recorded"},
+            }
+    blob = (result.stderr or "") + "\n" + (result.stdout or "")
+    m = _MISSING_MOD.search(blob)
+    if not m:
+        return None
+    missing = m.group(1).strip().rstrip(".").lower()
+    wanted: set[str] = set()
+    target = claim_target(cls=claim.cls, err=claim.err, dep=claim.dep)
+    if target:
+        wanted.add(target.lower())
+    if claim.fix.k in {"pin", "constraint"}:
+        from .public import _pkg_token
+
+        name = _pkg_token(claim.fix.b.splitlines()[0] if claim.fix.b else "")
+        if name:
+            wanted.add(name.lower())
+    variants = {w for base in wanted for w in (base, base.replace("-", "_"), base.replace("_", "-"), base.split(".")[0], base.split("/")[0])}
+    if missing not in variants and missing.split(".")[0] not in variants:
+        return None
+    return {
+        "reason": f"fix-not-applied: {m.group(1)} is missing here, so the eval cannot hold yet",
+        "suggest": {"fix": claim.fix.b.splitlines()[0][:200], "hint": f"apply fix.b ({claim.fix.k}), then confirm --replay again; nothing was recorded"},
+    }
 
 
 def hint_refusal(claim: Claim, result: ReplayResult, *, cwd: str | None = None) -> dict:

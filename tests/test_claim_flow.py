@@ -173,3 +173,84 @@ def test_claim_drafts_the_trees_test_as_eval(tmp_path: Path, capsys):
     draft = json.loads(capsys.readouterr().out)
     assert draft["eval"] == "npm test" and draft["inferred"]["eval"] == "tree recipe"
     assert draft["target"] == ""
+
+
+def _broken_repo(tmp_path: Path) -> Path:
+    import subprocess
+
+    tree = tmp_path / "repo"
+    tree.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=tree, check=True)
+    (tree / "pyproject.toml").write_text('[project]\nname="t"\nversion="0"\n', encoding="utf-8")
+    (tree / "mod.py").write_text("import json\n\ndef load(t):\n    return json.loads(t, encoding='utf-8')\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tree, check=True)
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "broken"], cwd=tree, check=True)
+    return tree
+
+
+def test_patch_fix_is_git_apply_clean_and_unapplied_replay_is_not_a_fail(tmp_path: Path, capsys):
+    import subprocess
+
+    tree = _broken_repo(tmp_path)
+    (tree / "mod.py").write_text("import json\n\ndef load(t):\n    return json.loads(t)\n", encoding="utf-8")
+    db = str(tmp_path / "ix.sqlite")
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "json",
+                "claim",
+                "--err",
+                "TypeError: loads() got an unexpected keyword argument 'encoding'",
+                "--cwd",
+                str(tree),
+                "--eval",
+                "python -c \"import mod; mod.load('{}')\"",
+                "--yes",
+                "--no-replay",
+            ]
+        )
+        == 0
+    )
+    out = json.loads(capsys.readouterr().out)
+    cid = out["id"]
+    assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
+    fix_b = json.loads(capsys.readouterr().out)["fix"]["b"]
+    assert fix_b.startswith("diff --git") and fix_b.endswith("\n") and "1 file changed" not in fix_b
+    # A second checkout at the broken commit: replay before applying is not a fail.
+    other = tmp_path / "other"
+    subprocess.run(["git", "clone", "-q", str(tree), str(other)], check=True)
+    rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", "--cwd", str(other), cid])
+    res = json.loads(capsys.readouterr().out)
+    assert rc == 2 and res["recorded"] is False and res["reason"].startswith("fix-not-applied") and "mod.py" in res["reason"]
+    # Apply it mechanically; now the replay holds and binds.
+    patch = other / "fix.patch"
+    patch.write_text(fix_b, encoding="utf-8")
+    subprocess.run(["git", "apply", "fix.patch"], cwd=other, check=True)
+    assert "encoding=" not in (other / "mod.py").read_text(encoding="utf-8")
+    assert main(["--db", db, "--fmt", "json", "confirm", "--replay", "--cwd", str(other), cid]) == 0
+    assert json.loads(capsys.readouterr().out)["held"] is True
+
+
+def test_hook_strips_pytest_error_prefix(tmp_path: Path):
+    from claimidx.hook import extract_hook_err
+
+    body = "tests/test_x.py:3: in test\n>   load()\nE       TypeError: load() missing 1 required positional argument: 'Loader'\n"
+    err, _ = extract_hook_err(json.dumps({"hook_event_name": "PostToolUseFailure", "tool_response": {"stdout": body}}))
+    assert err == "TypeError: load() missing 1 required positional argument: 'Loader'"
+
+
+def test_project_bin_and_tree_eval(tmp_path: Path):
+    from claimidx.env import tree_eval
+    from claimidx.sandbox import project_bin, resolve_argv
+
+    tree = tmp_path / "t"
+    (tree / ".venv" / "bin").mkdir(parents=True)
+    fake = tree / ".venv" / "bin" / "pytest"
+    fake.write_text("", encoding="utf-8")
+    assert project_bin("pytest", tree) == str(fake)
+    assert resolve_argv(["pytest", "-q"], str(tree))[0] == str(fake)
+    (tree / "tests").mkdir()
+    assert tree_eval(tree, "py") == "python -m pytest -q"

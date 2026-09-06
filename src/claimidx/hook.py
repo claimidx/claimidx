@@ -82,10 +82,13 @@ def extract_hook_context(raw: str) -> dict[str, str]:
     return out
 
 
+_PYTEST_E = re.compile(r"^E\s+")
+
+
 def _first_err_line(body: str) -> str | None:
     fallback = None
     for line in body.splitlines():
-        s = line.strip()
+        s = _PYTEST_E.sub("", line.strip())  # pytest's `E   TypeError: ...` is the same error as the bare traceback line
         if not s or s.lower().startswith("traceback"):
             continue
         if not _ERR_LINE.search(s):

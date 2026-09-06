@@ -102,7 +102,7 @@ def tree_eval(cwd: str | os.PathLike[str] | None, eco: str = "") -> str:
             or (root / "pyproject.toml").exists()
             and "pytest" in (root / "pyproject.toml").read_text(encoding="utf-8", errors="replace")
         ):
-            return "pytest -q"
+            return "python -m pytest -q"  # the interpreter puts cwd on sys.path; a bare `pytest` in an uninstalled tree does not
     if (root / "go.mod").exists():
         return "go build ./..."
     if (root / "Cargo.toml").exists():
