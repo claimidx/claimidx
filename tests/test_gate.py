@@ -90,3 +90,34 @@ def test_contributing_and_briefs_name_the_gates():
         assert needle in contributing, needle
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     assert "scripts/gate.py" in claude
+
+
+def test_site_gate_refuses_an_incomplete_pages_tree(tmp_path: Path):
+    """The storefront lives outside git; a deploy without it once replaced production. The gate refuses that."""
+    gate = _gate()
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    errors = gate.site_errors(docs)
+    assert any("pricing.html missing" in e for e in errors) and any("_headers missing" in e for e in errors)
+    for rel in gate.SITE_REQUIRED:
+        f = docs / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text('<a href="/leaderboard">x</a>' if rel.endswith(".html") else "{}", encoding="utf-8")
+    (docs / "_headers").write_text("/*\n  Content-Security-Policy: default-src 'self'; connect-src 'self' https://pypi.org; img-src 'self'\n", encoding="utf-8")
+    errors = gate.site_errors(docs)
+    assert errors == ["_headers: CSP connect-src does not allow https://home.claimidx.com (the leaderboard page fetches the commons)"], errors
+    (docs / "_headers").write_text(
+        "/*\n  Content-Security-Policy: default-src 'self'; connect-src 'self' https://home.claimidx.com; img-src 'self'\n", encoding="utf-8"
+    )
+    assert gate.site_errors(docs) == []
+    # The real tree on this machine passes only when the storefront is present next to the tracked pages.
+    real = gate.site_errors()
+    assert real == [] or all("missing" in e for e in real), real
+
+
+def test_release_bundle_includes_site_commons_and_smoke():
+    gate = _gate()
+    assert set(gate.BUNDLES["release"]) >= {"site", "commons", "smoke", "build"}
+    assert gate.BUNDLES["deploy-site"] == ("site",)
+    for stage in ("site", "commons", "smoke"):
+        assert stage in gate.RUNNERS and stage in gate.STAGES

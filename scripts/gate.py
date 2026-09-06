@@ -3,8 +3,9 @@
     python scripts/gate.py pre-commit      # staged paths: sanitize, docs, lint          (seconds)
     python scripts/gate.py pre-push        # tracked tree: sanitize, docs, verify, mcp   (minutes)
     python scripts/gate.py ci              # what the GitHub lint job runs: sanitize, docs, lint, mcp
-    python scripts/gate.py release         # pre-push + build (wheel/sdist, twine check, artifact audit)
-    python scripts/gate.py sanitize|docs|lint|verify|mcp|build
+    python scripts/gate.py release         # pre-push + site + commons + smoke + build
+    python scripts/gate.py deploy-site     # site gate, then the production Pages deploy (the only way production is deployed)
+    python scripts/gate.py sanitize|docs|lint|verify|mcp|site|commons|smoke|build
     python scripts/gate.py commit-msg <file>
     python scripts/gate.py install-hooks   # once per clone: core.hooksPath -> .githooks
 
@@ -17,6 +18,11 @@ Stages
   mcp       spawn the MCP server over stdio: initialize, tools/list, prompts/list, resources/list, one tools/call.
             Every tool is titled, described, annotated, and has described parameters; names and descriptions match
             the server card; serverInfo, server.json, and pyproject agree on the version.
+  site      docs/ is a complete Pages tree: the storefront pages that are not in git are present next to the
+            tracked ones, and the CSP allows the commons. A deploy from an incomplete tree once replaced
+            production; deploy-site refuses that.
+  commons   the commons answers: health ok with claims, and the leaderboard states its rules.
+  smoke     python scripts/live_smoke.py: the whole loop per ecosystem against real toolchains (skips absent ones).
   build     python -m build ; twine check ; scripts/audit_artifacts.py on the wheel and sdist.
 """
 
@@ -83,9 +89,30 @@ BUNDLES = {
     "pre-commit": ("sanitize", "docs", "lint"),
     "pre-push": ("sanitize", "docs", "verify", "mcp"),
     "ci": ("sanitize", "docs", "lint", "mcp"),
-    "release": ("sanitize", "docs", "verify", "mcp", "build"),
+    "release": ("sanitize", "docs", "verify", "mcp", "site", "commons", "smoke", "build"),
+    "deploy-site": ("site",),
 }
-STAGES = ("sanitize", "docs", "lint", "verify", "mcp", "build")
+STAGES = ("sanitize", "docs", "lint", "verify", "mcp", "site", "commons", "smoke", "build")
+# The storefront is deployed but not tracked; production must never be deployed without it.
+SITE_REQUIRED = (
+    "index.html",
+    "leaderboard.html",
+    "pricing.html",
+    "homes.html",
+    "terms.html",
+    "thanks.html",
+    "404.html",
+    "_headers",
+    "_redirects",
+    "site.css",
+    "AGENTS.md",
+    "llms.txt",
+    "llms-full.txt",
+    "sitemap.xml",
+    ".well-known/mcp/server-card.json",
+)
+COMMONS_API = "https://home.claimidx.com/t/commons"
+PAGES_PROJECT = "claimidx"
 
 
 class GateError(Exception):
@@ -193,8 +220,8 @@ def sanitize(*, staged: bool) -> None:
 # ---- docs / lint / verify ----------------------------------------------------------
 
 
-def _check(name: str, cmd: list[str]) -> None:
-    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+def _check(name: str, cmd: list[str], *, shell: bool = False) -> None:
+    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", shell=shell)
     if proc.returncode != 0:
         tail = "\n".join((proc.stdout + "\n" + proc.stderr).strip().splitlines()[-40:])
         raise GateError(f"{name} failed ({' '.join(cmd)})\n{tail}")
@@ -333,6 +360,71 @@ def build() -> None:
     _check("audit_artifacts", [PY, "scripts/audit_artifacts.py", *artifacts])
 
 
+# ---- site / commons / smoke ------------------------------------------------------------
+
+
+def site_errors(docs: Path | None = None) -> list[str]:
+    """What stops docs/ from being a production Pages tree."""
+    root = docs or (ROOT / "docs")
+    errors = [f"docs/{rel} missing" for rel in SITE_REQUIRED if not (root / rel).is_file()]
+    headers = root / "_headers"
+    if headers.is_file():
+        text = headers.read_text(encoding="utf-8")
+        csp = next((ln for ln in text.splitlines() if "Content-Security-Policy" in ln), "")
+        if "https://home.claimidx.com" not in csp.split("connect-src", 1)[-1].split(";", 1)[0]:
+            errors.append("_headers: CSP connect-src does not allow https://home.claimidx.com (the leaderboard page fetches the commons)")
+    for page in ("index.html", "homes.html", "pricing.html", "leaderboard.html"):
+        f = root / page
+        if f.is_file() and 'href="/leaderboard"' not in f.read_text(encoding="utf-8", errors="replace"):
+            errors.append(f"docs/{page}: no link to /leaderboard")
+    return errors
+
+
+def site() -> None:
+    errors = site_errors()
+    if errors:
+        raise GateError("\n".join(errors) + "\nthe storefront pages live outside git; deploy production only from a desktop with the complete docs/ tree")
+
+
+def deploy_site() -> None:
+    """The only sanctioned production Pages deploy: after the site gate, with --branch main."""
+    site()
+    if not (os.environ.get("CLOUDFLARE_API_TOKEN") and os.environ.get("CLOUDFLARE_ACCOUNT_ID")):
+        raise GateError("CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not set (source ~/.claimidx/cloudflare.env)")
+    _check(
+        "pages deploy",
+        ["npx", "--yes", "wrangler", "pages", "deploy", "docs", "--project-name", PAGES_PROJECT, "--branch", "main", "--commit-dirty=true"],
+        shell=(os.name == "nt"),
+    )
+
+
+def commons_errors(api: str = COMMONS_API) -> list[str]:
+    # The client's fetch, not bare urllib: Cloudflare answers urllib's default User-Agent with 403.
+    from claimidx.home import _get
+
+    errors: list[str] = []
+    try:
+        health = json.loads(_get(api + "/api/health", timeout=15).decode("utf-8"))
+        if not health.get("ok") or int(health.get("claims") or 0) <= 0:
+            errors.append(f"commons health: {health}")
+        board = json.loads(_get(api + "/api/leaderboard?days=7&limit=1", timeout=15).decode("utf-8"))
+        if not board.get("rules"):
+            errors.append("commons leaderboard states no rules")
+    except Exception as e:  # noqa: BLE001 - any failure is the finding
+        errors.append(f"commons unreachable: {str(e)[:200]}")
+    return errors
+
+
+def commons() -> None:
+    errors = commons_errors()
+    if errors:
+        raise GateError("\n".join(errors))
+
+
+def smoke() -> None:
+    _check("live smoke", [PY, "scripts/live_smoke.py"])
+
+
 # ---- commit-msg / hooks ---------------------------------------------------------------
 
 NARRATION = re.compile(r"(?i)\b(as discussed|keep working|per (our|the) (chat|conversation)|wip)\b")
@@ -368,6 +460,9 @@ RUNNERS = {
     "lint": lint,
     "verify": verify,
     "mcp": mcp,
+    "site": site,
+    "commons": commons,
+    "smoke": smoke,
     "build": build,
 }
 
@@ -408,6 +503,14 @@ def main(argv: list[str] | None = None) -> int:
         for e in errors:
             print(f"commit-msg: {e}", file=sys.stderr)
         return 1 if errors else 0
+    if ns.target == "deploy-site":
+        try:
+            deploy_site()
+        except GateError as e:
+            print(f"FAIL deploy-site\n{e}\n", file=sys.stderr)
+            return 1
+        print("  ok  deploy-site (production Pages deploy from a complete docs/ tree)")
+        return 0
     stages = BUNDLES.get(ns.target, (ns.target,))
     return run(stages, staged=(ns.target == "pre-commit"))
 
