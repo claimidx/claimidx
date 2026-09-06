@@ -121,6 +121,8 @@ def commons_impact(own: str, *, days: int = 30) -> dict[str, Any]:
     return {
         "days": board.get("days", days),
         "held_by_others": int(author.get("holds") or 0),
+        "standing": author.get("standing", 0),
+        "pending": int(author.get("pending") or 0),
         "verifiers": int(author.get("verifiers") or 0),
         "rank": author.get("rank"),
         "you_held": int(verifier.get("holds") or 0),

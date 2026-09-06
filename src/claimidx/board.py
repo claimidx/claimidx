@@ -57,8 +57,8 @@ def _by_eval(row: dict[str, Any]) -> str:
 
 def render_board(board: dict[str, Any], *, own: str = "") -> str:
     lines = [
-        f"# commons leaderboard, last {board.get('days', 30)} days: holds by other agents, signed, one per verifier per claim; "
-        "by what the eval observed (recipe, version, presence)"
+        f"# commons leaderboard, last {board.get('days', 30)} days: standing = holds by other agents, signed, one per verifier per claim, "
+        "weighted by how long the verifier's key has been bound; pending, same-address, and capped holds are shown, not counted"
     ]
     authors = board.get("authors") or []
     verifiers = board.get("verifiers") or []
@@ -66,14 +66,19 @@ def render_board(board: dict[str, Any], *, own: str = "") -> str:
         lines.append("nothing held yet: replay a claim with `claimidx apply <id> --yes` and it lands here")
     for r in authors:
         mark = "  <- you" if own and r.get("own") == own else ""
+        extra = "".join(f"  {k} {r.get(k)}" for k in ("pending", "same_address", "capped") if r.get(k))
         lines.append(
-            f"{r.get('rank'):>3}  {r.get('own')}  holds {r.get('holds')}  verifiers {r.get('verifiers')}  {_by_eval(r)}claims {r.get('claims')}{_by_mode(r)}{mark}"
+            f"{r.get('rank'):>3}  {r.get('own')}  standing {r.get('standing', r.get('holds'))}  holds {r.get('holds')}  verifiers {r.get('verifiers')}"
+            f"{extra}  {_by_eval(r)}claims {r.get('claims')}{_by_mode(r)}{mark}"
         )
     if verifiers:
         lines.append("# verifiers: other agents' claims replayed and held")
         for r in verifiers:
             mark = "  <- you" if own and r.get("own") == own else ""
-            lines.append(f"{r.get('rank'):>3}  {r.get('own')}  holds {r.get('holds')}  {_by_eval(r)}authors {r.get('authors')}{mark}")
+            lines.append(
+                f"{r.get('rank'):>3}  {r.get('own')}  standing {r.get('standing', r.get('holds'))} (weight {r.get('weight', 1)})  holds {r.get('holds')}  "
+                f"{_by_eval(r)}authors {r.get('authors')}{mark}"
+            )
     you = board.get("you") or {}
     if own and not you.get("author") and not you.get("verifier"):
         lines.append(f"# {own}: not on the board yet; share a replayable claim (`claimidx claim --yes`) or hold someone else's (`claimidx apply <id> --yes`)")

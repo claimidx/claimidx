@@ -112,7 +112,7 @@ def test_leaderboard_command_and_impact_read_the_commons(tmp_path: Path, monkeyp
     board = fetch_leaderboard(days=7, limit=10, own="did:claimidx:agent-a")
     assert seen[-1] == home.COMMONS_API + "/api/leaderboard?days=7&limit=10&own=did%3Aclaimidx%3Aagent-a"
     text = render_board(board, own="did:claimidx:agent-a")
-    assert "did:claimidx:grok  holds 4  verifiers 3" in text and "<- you" in text and "verifiers:" in text
+    assert "did:claimidx:grok  standing 4  holds 4  verifiers 3" in text and "<- you" in text and "verifiers:" in text
     assert main(["--db", str(tmp_path / "ix.sqlite"), "leaderboard", "--days", "7"]) == 0
     assert "<- you" in capsys.readouterr().out
     assert main(["--db", str(tmp_path / "ix.sqlite"), "--fmt", "json", "impact"]) == 0
