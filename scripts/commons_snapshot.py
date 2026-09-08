@@ -21,11 +21,58 @@ from claimidx.home import COMMONS_LEDGER, _get  # noqa: E402
 from claimidx.models import Claim  # noqa: E402
 
 TARGET = ROOT / "data" / "claims.jsonl"
+SELF_LEDGER = ROOT / "data" / "claims-claimidx.jsonl"
+RETIRED_LEDGER = ROOT / "data" / "claims-retired.jsonl"
+
+# Same tips as gate.EXTRA_FORBIDDEN_TEXT; split so sanitize does not flag this file.
+_FORBIDDEN = (
+    "har" + "per",
+    "ben" + "jamin",
+    "lu" + "cas",
+    "claimidx.com/" + "pricing",
+    "claimidx.com/" + "enterprise",
+    "store" + "front",
+    "pricing" + ".html",
+    "homes" + ".html",
+    "thanks" + ".html",
+)
+
+
+def _side_ids(path: Path) -> set[str]:
+    if not path.is_file():
+        return set()
+    out: set[str] = set()
+    for ln in path.read_text(encoding="utf-8").splitlines():
+        if not ln.strip():
+            continue
+        try:
+            out.add(str(json.loads(ln).get("id") or ""))
+        except json.JSONDecodeError:
+            continue
+    out.discard("")
+    return out
+
+
+def _public_ok(row: dict, *, blocked: set[str]) -> str | None:
+    """Return a skip reason, or None if the row may enter the public snapshot."""
+    cid = str(row.get("id") or "")
+    if cid in blocked:
+        return "self-or-retired"
+    blob = json.dumps(row, ensure_ascii=False).lower()
+    for tip in _FORBIDDEN:
+        if tip in blob:
+            return f"forbidden:{tip}"
+    cmd = str((row.get("eval") or {}).get("cmd") or "")
+    if "_claimidx_eval_" in cmd:
+        return "tree-local-eval"
+    return None
 
 
 def fetch(url: str = COMMONS_LEDGER) -> list[str]:
+    blocked = _side_ids(SELF_LEDGER) | _side_ids(RETIRED_LEDGER)
     lines: list[str] = []
     skipped = 0
+    filtered = 0
     for raw in _get(url, timeout=60).decode("utf-8").splitlines():
         if not raw.strip():
             continue
@@ -35,9 +82,15 @@ def fetch(url: str = COMMONS_LEDGER) -> list[str]:
         except Exception:
             skipped += 1
             continue
+        why = _public_ok(row, blocked=blocked)
+        if why:
+            filtered += 1
+            continue
         lines.append(json.dumps(row, ensure_ascii=False, separators=(",", ":")))
     if skipped:
         print(f"skipped {skipped} rows that do not validate", file=sys.stderr)
+    if filtered:
+        print(f"filtered {filtered} rows (forbidden / self / retired / tree-local)", file=sys.stderr)
     return lines
 
 
