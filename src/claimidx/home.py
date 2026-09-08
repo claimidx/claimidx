@@ -338,9 +338,49 @@ def _public_payload(claim: Claim) -> dict[str, Any]:
     return payload
 
 
+# Clear content/policy judgments from the commons. Rate limits, timeouts, and
+# mid-flight auth expiry are transport. Ambiguous edge codes (403/404 from a
+# WAF or wrong URL) only refuse when the body looks like a row judgment.
+_REFUSAL_CODES = frozenset({400, 409, 410, 422})
+_TRANSPORT_4XX = frozenset({401, 408, 425, 429})
+_REFUSAL_BODY_TIPS = (
+    "hint",
+    "replayable",
+    "anonymous",
+    "not allowlisted",
+    "refused",
+    "rejected",
+    "eval is a hint",
+)
+
+
+def _home_post_status(err: str) -> int | None:
+    m = re.search(r"home POST (\d{3})\b", err or "")
+    return int(m.group(1)) if m else None
+
+
 def _is_refusal(err: str) -> bool:
-    """A 4xx from the home is a decision about the row; anything else is transport and worth a retry."""
-    return bool(re.search(r"home POST 4\d\d", err))
+    """Whether a home POST error is a permanent decision about the row.
+
+    Hard refusals (400/409/410/422) become `commons-refused` and are never
+    retried. Transient 4xx (401/408/425/429) stay in the outbox like transport
+    failures. Other 4xx (including bare 403/404 from a proxy) default to
+    transport unless the response body is clearly a commons row judgment —
+    otherwise a forged edge status must not tombstone the claim.
+    """
+    code = _home_post_status(err)
+    if code is None:
+        return False
+    if code in _TRANSPORT_4XX:
+        return False
+    if code in _REFUSAL_CODES:
+        return True
+    if 400 <= code < 500:
+        low = (err or "").lower()
+        if "retry-after" in low or "rate limit" in low or "too many" in low:
+            return False
+        return any(tip in low for tip in _REFUSAL_BODY_TIPS)
+    return False
 
 
 def commons_travels(claim: Claim) -> tuple[bool, str]:
@@ -357,8 +397,10 @@ def commons_travels(claim: Claim) -> tuple[bool, str]:
 def push_commons(store, claim: Claim, *, force: bool = False) -> dict[str, Any]:
     """Push the public projection to the commons; queue it in the outbox only when the commons is unreachable.
 
-    A refusal (4xx) is recorded as `commons-refused` and never retried; a projection with no replayable eval is
-    recorded as `commons-skip` before any request. Both stop the hooks nudging about the claim.
+    A policy refusal (400/403/404/409/410/422) is recorded as `commons-refused` and never
+    retried; transient 4xx (401/408/425/429) stay in the outbox like transport failures.
+    A projection with no replayable eval is recorded as `commons-skip` before any request.
+    Settled skips/refusals stop the hooks nudging about the claim.
     """
     from .public import PublicSkip
 

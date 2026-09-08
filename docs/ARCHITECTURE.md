@@ -2,7 +2,7 @@
 
 Current shape, then dated notes. Newer notes first.
 
-## Current (v0.7.2)
+## Current (v0.7.3)
 
 **Planes**
 - Local index: SQLite (`~/.claimidx/index.sqlite`), WAL. Agents on one machine share it at the default path.
@@ -13,10 +13,11 @@ Current shape, then dated notes. Newer notes first.
 - `inspect_claim` at the door: secrets, droppers, packed blobs, eval allowlist, DID.
 - Inbound HTTP publish is `src=home` → quarantined `proposed`. Confirm requires `--replay`. First local confirm/fail graduates `src` to `local` and resets remote `nc`/`nf`/`nr` (audit on the event as `home_graduate`).
 - `fix.b` is data. Eval is a recipe (allowlisted heads, 45s timeout). Replay is opt-in.
-- Ask surfaces `evidence` (`retrieved` vs `reproduced` when this consumer's `nr` held), `match` (`exact` fp vs `similar`), overlapping error `tokens`, `untrusted`, `age_days`, `dep_drift`, `eval_proof` (recipe-per-fp, not query-err match; 1.08 does not break sibling ties; the recipe-per-fp warn fires when the query err string differs from the stored canonical row), `nr`, `src`, `nf`, `warn` (`normalization_risk`, `nc without replay`, `rt omitted`). A hit is evidence, not a command: retrieve → reason → attempt → observe → verify → update. Hook miss prints `CLAIMIDX miss`; empty extract stays silent.
+- Ask surfaces `evidence` (`retrieved` vs `reproduced` when this consumer's `nr` held), `match` (`exact` fp vs `similar`), `lights` (`prior_art` / `integrity` / `recovery` — keep independent), overlapping error `tokens`, `untrusted`, `age_days`, `dep_drift`, `eval_proof` (recipe-per-fp, not query-err match; 1.08 does not break sibling ties; the recipe-per-fp warn fires when the query err string differs from the stored canonical row), `nr`, `src`, `nf`, `warn` (`normalization_risk`, `nc without replay`, `rt omitted`). A hit is evidence, not a command: retrieve → reason → attempt → observe → verify → update. Hook miss prints `CLAIMIDX miss`; empty extract stays silent.
+- Commons share: policy refusals (`400`/`409`/`410`/`422`, or other 4xx with a clear row-judgment body) become `commons-refused`; transient 4xx (`401`/`408`/`425`/`429`) and bare proxy/WAF `403`/`404` stay in the outbox.
 - Public tree evals blank (not rewritten as `true`). Pin ingest with `eval=true` upgrades to a portable import/require.
 - Pulled rows whose stored `fp` does not recompute from claimed fields are skipped. `confirm --replay` that holds increments `nr`; `nr` is a local replay count, not an independent-witness count.
-- Contradiction is `fail` on the same `fp`. Contestation is sticky for that remedy; same-domain confirms cannot vote it green. A replacement or alternative remedy is the resolution path. A different dep pin is a different fingerprint.
+- Contradiction is `fail` on the same `fp`. Contestation is sticky for that remedy; same-domain confirms cannot vote it green; there is no quiet-day decay and no same-fp unstick vote. A replacement or alternative remedy (different fingerprint) is the only resolution path. A different dep pin is a different fingerprint. Leaderboard standing is a calendar-weighted signal a person reviews, not Sybil resistance.
 - V2 observations carry optional declared `trust_domain` and `sensor_plane` metadata. These fields preserve provenance but do not create cryptographic quorum or host-compromise resistance.
 - `st` is a rank weight, not a write lock. Confirmed goes `stale` at `exp` or 90 days after `ts`. Same package + different pin still ranks (×0.82).
 

@@ -264,6 +264,39 @@ def test_hit_surfaces_evidence_match_and_untrusted():
     assert "src=home" not in held["untrusted"]
 
 
+def test_annotate_surfaces_three_independent_lights():
+    from claimidx.match import annotate, confirm_lights
+
+    err = "ModuleNotFoundError: No module named 'lights_demo'"
+    c = _claim(err, eco="py", dep=["lights@1"])
+    c.src = "local"
+    c.nr = 0
+    c.eval.cmd = 'python -c "import lights"'
+    q = {"err": err, "eco": "py", "dep": ["lights@1"], "rt": "py@3.12", "fp": c.fp}
+    meta = annotate(q, c, 0.9)
+    assert meta["lights"] == {
+        "prior_art": "exact",
+        "integrity": "unchecked",
+        "recovery": "retrieved",
+    }
+    c.nr = 2
+    held = annotate(q, c, 0.95)
+    assert held["lights"]["recovery"] == "reproduced"
+    contested = _claim(err, eco="py", dep=["lights@1"])
+    contested.st = "contested"
+    contested.nf = 2
+    contested.eval.cmd = 'python -c "import lights"'
+    cmeta = annotate(q, contested, 0.9)
+    assert cmeta["lights"]["recovery"] == "contested"
+    assert cmeta["lights"]["integrity"] == "unchecked"
+    ok = confirm_lights(held=True, recorded=True, warns=["digest_drift: local bytes differ"])
+    assert ok["prior_art"] == "selected"
+    assert ok["integrity"] == "digest_drift"
+    assert ok["recovery"] == "reproduced"
+    miss = confirm_lights(held=False, recorded=True, contested=True)
+    assert miss["recovery"] == "contested"
+
+
 def test_fail_count_and_contested_surface_on_ask():
     from claimidx.match import hit_warn
 

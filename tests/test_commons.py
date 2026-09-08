@@ -324,3 +324,37 @@ def test_flush_outbox_drops_refused_lines_and_keeps_transport_failures(tmp_path:
     monkeypatch.setattr(home, "_post", post)
     assert home.flush_outbox(store) == {"sent": 0, "kept": 1, "refused": 1}
     assert [json.loads(ln)["id"] for ln in outbox.read_text(encoding="utf-8").splitlines() if ln.strip()] == ["cix_00000000000000b2"]
+
+
+def test_is_refusal_splits_policy_from_transient_4xx():
+    assert home._is_refusal("home POST 400: eval is a hint")
+    assert home._is_refusal('home POST 422: {"error":"anonymous"}')
+    assert home._is_refusal("home POST 409: refused")
+    assert not home._is_refusal("home POST 429: rate limited")
+    assert not home._is_refusal('home POST 429: {"Retry-After":30}')
+    assert not home._is_refusal("home POST 408: request timeout")
+    assert not home._is_refusal("home POST 401: unauthorized")
+    assert not home._is_refusal("home POST 425: too early")
+    # bare proxy/WAF statuses are transport until the body looks like a row judgment
+    assert not home._is_refusal("home POST 403: Forbidden")
+    assert not home._is_refusal("home POST 404: not found")
+    assert home._is_refusal('home POST 403: {"error":"eval is a hint; the commons keeps claims that can be replayed"}')
+    assert not home._is_refusal("connection refused")
+    assert not home._is_refusal("home unreachable: timed out")
+
+
+def test_transient_4xx_stays_in_outbox(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
+    store = Store(str(tmp_path / "ix.sqlite"))
+    c = store.put(_claim())
+
+    def rate_limit(url, payload, token="", timeout=20.0):
+        raise home.HomeError('home POST 429: {"Retry-After":60}')
+
+    monkeypatch.setattr(home, "_post", rate_limit)
+    out = home.share_claim(store, c)
+    assert out["commons"]["status"] == "outbox", out
+    assert Path(home.outbox_path()).is_file()
+    from claimidx.hook import unshared_claims
+
+    assert unshared_claims(store) == [c.id]

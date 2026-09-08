@@ -130,6 +130,9 @@ def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidate
             meta = annotate(q, c, s)
             extra = f" age={meta['age_days']} src={getattr(c, 'src', 'local')} evidence={meta['evidence']} match={meta['match']}"
             print(f"# hit {i} sim={s:.3f} score={c.score():.3f}{extra}")
+            lights = meta.get("lights") or {}
+            if lights:
+                print(f"# lights prior_art={lights.get('prior_art')} integrity={lights.get('integrity')} recovery={lights.get('recovery')}")
             disp = meta.get("disposition") or {}
             if disp:
                 why = ",".join(disp.get("why") or [])
@@ -397,37 +400,46 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
         }
         if result.is_hint():
             from .gate import hint_refusal
+            from .match import confirm_lights
 
             refusal = hint_refusal(c, result, cwd=getattr(ns, "cwd", None))
+            lights = confirm_lights(held=False, recorded=False, reason=str(refusal.get("reason") or ""), contested=c.st == "contested")
             if ns.fmt == "json":
-                print(json.dumps({"held": False, "replay": replay_info, "recorded": False, **refusal}, default=str))
+                print(json.dumps({"held": False, "replay": replay_info, "recorded": False, "lights": lights, **refusal}, default=str))
             else:
                 print(json.dumps(replay_info), file=sys.stderr)
+                print(f"# lights prior_art={lights['prior_art']} integrity={lights['integrity']} recovery={lights['recovery']}", file=sys.stderr)
                 print(f"not recorded: {refusal['reason']}", file=sys.stderr)
                 if refusal["suggest"].get("hint"):
                     print(f"suggest: {refusal['suggest']['hint']}", file=sys.stderr)
             return 2
         if not result.held:
             from .gate import unapplied_refusal
+            from .match import confirm_lights
 
             unapplied = unapplied_refusal(c, result, cwd=getattr(ns, "cwd", None))
             if unapplied:
+                lights = confirm_lights(held=False, recorded=False, reason=str(unapplied.get("reason") or ""), contested=c.st == "contested")
                 if ns.fmt == "json":
-                    print(json.dumps({"held": False, "replay": replay_info, "recorded": False, **unapplied}, default=str))
+                    print(json.dumps({"held": False, "replay": replay_info, "recorded": False, "lights": lights, **unapplied}, default=str))
                 else:
                     print(json.dumps(replay_info), file=sys.stderr)
+                    print(f"# lights prior_art={lights['prior_art']} integrity={lights['integrity']} recovery={lights['recovery']}", file=sys.stderr)
                     print(f"not recorded: {unapplied['reason']}", file=sys.stderr)
                     print(f"suggest: {unapplied['suggest']['hint']}", file=sys.stderr)
                 return 2
             failed = store.fail(ns.id, resolve_owner(ns.own), detail=eval_detail)
             from .home import already_shared, share_observation
+            from .match import confirm_lights
 
             if already_shared(store, failed.id) or getattr(c, "src", "local") == "home":
                 share_observation(store, failed, held=False, actor=resolve_owner(ns.own))
+            lights = confirm_lights(held=False, recorded=True, contested=failed.st == "contested")
             if ns.fmt == "json":
-                print(json.dumps({"held": False, "replay": replay_info, "claim": json.loads(failed.model_dump_json())}, default=str))
+                print(json.dumps({"held": False, "replay": replay_info, "lights": lights, "claim": json.loads(failed.model_dump_json())}, default=str))
             else:
                 print(json.dumps(replay_info), file=sys.stderr)
+                print(f"# lights prior_art={lights['prior_art']} integrity={lights['integrity']} recovery={lights['recovery']}", file=sys.stderr)
                 print(_dumps(failed, ns.fmt))
             return 2
         decision = graduation_gate(
@@ -440,10 +452,21 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
         )
         gate_warns = list(decision.warns)
         if not decision.mint_nr:
+            from .match import confirm_lights
+
+            refusal = decision.refusal()
+            lights = confirm_lights(
+                held=True,
+                recorded=False,
+                warns=gate_warns,
+                reason=str(decision.reason or ""),
+                contested=c.st == "contested",
+            )
             if ns.fmt == "json":
-                print(json.dumps({"held": True, "replay": replay_info, "recorded": False, **decision.refusal()}, default=str))
+                print(json.dumps({"held": True, "replay": replay_info, "recorded": False, "lights": lights, **refusal}, default=str))
             else:
                 print(json.dumps(replay_info), file=sys.stderr)
+                print(f"# lights prior_art={lights['prior_art']} integrity={lights['integrity']} recovery={lights['recovery']}", file=sys.stderr)
                 print(f"not recorded: {decision.reason}", file=sys.stderr)
                 if decision.suggest.get("hint") or decision.suggest.get("eval"):
                     print(f"suggest: {decision.suggest.get('hint') or 'eval ' + decision.suggest['eval']}", file=sys.stderr)
@@ -472,7 +495,15 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
     if ns.fmt == "json":
         body = json.loads(confirmed.model_dump_json())
         if replay_info:
-            out = {"held": True, "replay": replay_info, "claim": body}
+            from .match import confirm_lights
+
+            lights = confirm_lights(
+                held=True,
+                recorded=True,
+                warns=gate_warns,
+                contested=confirmed.st == "contested",
+            )
+            out = {"held": True, "replay": replay_info, "lights": lights, "claim": body}
             if gate_warns:
                 out["warn"] = gate_warns
             if shared:
@@ -484,7 +515,19 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
             print(json.dumps(body, default=str))
     else:
         if replay_info:
+            from .match import confirm_lights
+
+            lights = confirm_lights(
+                held=True,
+                recorded=True,
+                warns=gate_warns,
+                contested=confirmed.st == "contested",
+            )
             print(json.dumps(replay_info), file=sys.stderr)
+            print(
+                f"# lights prior_art={lights['prior_art']} integrity={lights['integrity']} recovery={lights['recovery']}",
+                file=sys.stderr,
+            )
         for w in gate_warns:
             print(f"# warn {w}", file=sys.stderr)
         print(_dumps(confirmed, ns.fmt))

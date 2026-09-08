@@ -355,6 +355,15 @@ def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
         qcls = query.get("cls") or classify(qerr)
         if fingerprint(err=qerr, cls=qcls, eco=query.get("eco") or "", rt=qrt, dep=claim.dep) == claim.fp:
             match = "family"
+    evidence = "reproduced" if nr > 0 else "retrieved"
+    untrusted_codes = untrusted(query, claim, nr=nr)
+    # Three independent lights (Johnny-5): do not fold into one green.
+    # prior_art = fingerprint match; integrity = digest/binding (unchecked on ask);
+    # recovery = whether this consumer has a held local replay.
+    if getattr(claim, "st", "") == "contested" or "st=contested" in untrusted_codes:
+        recovery = "contested"
+    else:
+        recovery = evidence
     ann = {
         "sim": round(sim, 4),
         "score": round(claim.score(), 4),
@@ -364,10 +373,15 @@ def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
         "eval_proof": eval_is_proof(claim.eval.cmd),
         "nr": nr,
         "warn": hit_warn(query, claim),
-        "evidence": "reproduced" if nr > 0 else "retrieved",
+        "evidence": evidence,
         "match": match,
         "tokens": match_tokens(qerr, claim.err),
-        "untrusted": untrusted(query, claim, nr=nr),
+        "untrusted": untrusted_codes,
+        "lights": {
+            "prior_art": match,
+            "integrity": "unchecked",
+            "recovery": recovery,
+        },
     }
     ann["disposition"] = disposition_for(query, claim, ann)
     return ann
@@ -560,6 +574,40 @@ def dead_end_claims(query: Claim | dict, claims: list[Claim], *, k: int = 5) -> 
         if len(out) >= k:
             break
     return out
+
+
+def confirm_lights(
+    *,
+    held: bool,
+    recorded: bool,
+    warns: list[str] | None = None,
+    reason: str = "",
+    contested: bool = False,
+) -> dict[str, str]:
+    """Three independent statuses after confirm --replay (same shape as ask lights)."""
+    integrity = "ok"
+    blob = " ".join(warns or [])
+    if reason:
+        blob = f"{blob} {reason}"
+    if "proof-artifact-drift" in blob:
+        integrity = "proof-artifact-drift"
+    elif "digest_drift" in blob:
+        integrity = "digest_drift"
+    elif not held and not recorded and reason:
+        integrity = "unchecked"
+    if contested:
+        recovery = "contested"
+    elif recorded and held:
+        recovery = "reproduced"
+    elif held and not recorded:
+        recovery = "held_unrecorded"
+    else:
+        recovery = "miss"
+    return {
+        "prior_art": "selected",
+        "integrity": integrity,
+        "recovery": recovery,
+    }
 
 
 def hit_row(query: Claim | dict, claim: Claim, sim: float) -> dict:
