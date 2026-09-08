@@ -87,3 +87,65 @@ def test_mcp_impact_tool(tmp_path: Path):
 
     out = _call("claimidx_impact", {"offline": True, "days": 30}, Store(tmp_path / "ix.sqlite"))
     assert out["days"] == 30 and out["asks"] == 0 and out["line"].startswith("# impact 30d")
+
+
+def test_commons_funnel_counts_and_first_share(tmp_path: Path):
+    from datetime import UTC, datetime, timedelta
+
+    from claimidx.impact import commons_funnel, render_line
+    from claimidx.store import Store
+
+    store = Store(tmp_path / "ix.sqlite")
+    a = "did:claimidx:alice"
+    b = "did:claimidx:bob"
+    c = "did:claimidx:carol"
+    now = datetime.now(UTC)
+    old = (now - timedelta(days=60)).isoformat()
+    recent = (now - timedelta(days=2)).isoformat()
+    with store._conn() as con:
+        for claim_id, kind, actor, ts in (
+            ("c1", "commons-push", a, old),  # alice's first push is outside the window
+            ("c2", "commons-push", a, recent),
+            ("c3", "commons-refused", a, recent),
+            ("c4", "commons-skip", b, recent),
+            ("c5", "commons-push", b, recent),  # bob's first push is in-window
+            ("c6", "commons-hold", b, recent),
+            ("c7", "commons-fail", c, recent),
+            ("c8", "commons-push", c, recent),  # carol's first push is in-window
+            ("c9", "ask", a, recent),  # ignored
+        ):
+            con.execute(
+                "INSERT INTO events(claim_id, kind, actor, ts, detail) VALUES(?,?,?,?,?)",
+                (claim_id, kind, actor, ts, None),
+            )
+
+    funnel = commons_funnel(store, days=30)
+    assert funnel["pushes"] == {"count": 3, "actors": 3}
+    assert funnel["refused"] == 1
+    assert funnel["skipped"] == 1
+    assert funnel["holds"] == 1
+    assert funnel["fails"] == 1
+    by = {row["actor"]: row for row in funnel["by_actor"]}
+    assert by[a] == {"actor": a, "push": 1, "refused": 1, "skip": 0, "hold": 0, "fail": 0}
+    assert by[b] == {"actor": b, "push": 1, "refused": 0, "skip": 1, "hold": 1, "fail": 0}
+    assert by[c] == {"actor": c, "push": 1, "refused": 0, "skip": 0, "hold": 0, "fail": 1}
+    assert funnel["first_share_actors"]["count"] == 2
+    assert funnel["first_share_actors"]["actors"] == [b, c]
+
+    line = render_line({"days": 30, "asks": 0, "hits": 0, "retries_skipped": 0, "claims_published": 0, "replays_held": 0, "funnel": funnel})
+    assert "funnel: push 3 refuse 1 skip 1 first-share 2" in line
+
+
+def test_impact_includes_funnel_when_commons_enabled(tmp_path: Path, monkeypatch):
+    from claimidx.impact import impact
+    from claimidx.store import Store
+
+    monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
+    store = Store(tmp_path / "ix.sqlite")
+    store.log("commons-push", "did:claimidx:test", "c1")
+    store.log("commons-skip", "did:claimidx:test", "c2")
+    out = impact(store, days=30, own="did:claimidx:test", offline=True)
+    assert out["funnel"]["pushes"]["count"] == 1
+    assert out["funnel"]["skipped"] == 1
+    assert out["funnel"]["first_share_actors"]["count"] == 1
+    assert "funnel: push 1 refuse 0 skip 1 first-share 1" in out["line"]

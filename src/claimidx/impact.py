@@ -131,15 +131,73 @@ def commons_impact(own: str, *, days: int = 30) -> dict[str, Any]:
     }
 
 
+_FUNNEL_KINDS = {
+    "commons-push": "push",
+    "commons-refused": "refused",
+    "commons-skip": "skip",
+    "commons-hold": "hold",
+    "commons-fail": "fail",
+}
+
+
+def commons_funnel(store: Store, *, days: int = 30) -> dict[str, Any]:
+    """Local commons publish funnel from the event log (no network)."""
+    since = datetime.now(UTC) - timedelta(days=days)
+    rows = _rows(store, since)
+    pushes = [r for r in rows if r["kind"] == "commons-push"]
+    refused = [r for r in rows if r["kind"] == "commons-refused"]
+    skipped = [r for r in rows if r["kind"] == "commons-skip"]
+    holds = [r for r in rows if r["kind"] == "commons-hold"]
+    fails = [r for r in rows if r["kind"] == "commons-fail"]
+
+    by: dict[str, dict[str, int]] = {}
+    for r in rows:
+        key = _FUNNEL_KINDS.get(r["kind"])
+        actor = r["actor"]
+        if not key or not actor:
+            continue
+        bucket = by.setdefault(actor, {"push": 0, "refused": 0, "skip": 0, "hold": 0, "fail": 0})
+        bucket[key] += 1
+    by_actor_rows: list[dict[str, Any]] = [{"actor": a, **counts} for a, counts in by.items()]
+
+    def _funnel_total(row: dict[str, Any]) -> int:
+        return int(row["push"]) + int(row["refused"]) + int(row["skip"]) + int(row["hold"]) + int(row["fail"])
+
+    by_actor = sorted(by_actor_rows, key=lambda row: -_funnel_total(row))
+
+    # First-ever commons-push per actor across full history; count those whose debut is in-window.
+    first_at: dict[str, datetime] = {}
+    for r in _rows(store, datetime(1970, 1, 1, tzinfo=UTC)):
+        if r["kind"] != "commons-push" or not r["actor"] or r["actor"] in first_at:
+            continue
+        first_at[r["actor"]] = r["ts"]
+    first_share = sorted((a for a, t in first_at.items() if t >= since), key=lambda a: first_at[a])
+    return {
+        "days": days,
+        "pushes": {"count": len(pushes), "actors": len({r["actor"] for r in pushes if r["actor"]})},
+        "refused": len(refused),
+        "skipped": len(skipped),
+        "holds": len(holds),
+        "fails": len(fails),
+        "by_actor": by_actor,
+        "first_share_actors": {"count": len(first_share), "actors": first_share[:20]},
+    }
+
+
 def impact(store: Store, *, days: int = 7, own: str = "", offline: bool = False, url: str | None = None) -> dict[str, Any]:
     out: dict[str, Any] = {"own": own, **local_impact(store, days=days, own=own)}
+    from .home import commons_enabled
+
+    if commons_enabled():
+        try:
+            out["funnel"] = commons_funnel(store, days=days)
+        except Exception as e:  # local-only; keep parity with optional bits
+            out["funnel"] = {"error": str(e)[:200]}
     if not offline and own and own != "did:claimidx:anon":
         try:
             out["public"] = ledger_impact(own, url=url, store=store)
         except Exception as e:  # network is optional here
             out["public"] = {"error": str(e)[:200]}
-        from .home import commons_enabled
-
         if commons_enabled():
             try:
                 out["commons"] = commons_impact(own)
@@ -171,4 +229,11 @@ def render_line(out: dict[str, Any]) -> str:
         bits.append(
             f"commons {com.get('days', 30)}d: held by others {com.get('held_by_others', 0)} ({com.get('verifiers', 0)} verifiers{rank}), you held {com.get('you_held', 0)}"
         )
+    funnel = out.get("funnel") or {}
+    if funnel and not funnel.get("error"):
+        pushes = funnel.get("pushes") or {}
+        push_n = pushes.get("count", 0) if isinstance(pushes, dict) else 0
+        first = funnel.get("first_share_actors") or {}
+        first_n = first.get("count", 0) if isinstance(first, dict) else 0
+        bits.append(f"funnel: push {push_n} refuse {funnel.get('refused', 0)} skip {funnel.get('skipped', 0)} first-share {first_n}")
     return f"# impact {d}d: " + ", ".join(bits)
