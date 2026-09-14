@@ -36,6 +36,11 @@
       "description": "Harness sensor: turn a failed-tool JSON event or raw stderr into a claimidx_ask. Extracts the error from raw (falls back to err), fingerprints it, and ranks claims; with no extractable error it returns hit=false silently. Fail-open: it never raises and never applies fix.b, so a hook wired to it cannot break the harness. Wire it from PostToolUseFailure or an equivalent hook; when you already hold the error text call claimidx_ask instead. Writes only an ask event. Returns hit, apply_fix (always false), event, err, fp, cls, claims, note."
     },
     {
+      "name": "claimidx_run",
+      "title": "Run a command through the sensor",
+      "description": "Run argv exactly as given (no shell) and return the command's exit status plus one CLAIMIDX advice line: a verdict on failure, or `claimidx claim --yes` when the same command now passes after a remembered failure. Output is captured, not streamed, so this is safe on the MCP stdio pipe. Use when the harness has no PostToolUse hooks (plain MCP, CI, a subagent). Prefer the installed hook for Claude/Grok/Cursor shells; do not wrap every command if the hook is already firing. Never applies fix.b. Returns rc, output (tail), advice, and verdict when the command failed."
+    },
+    {
       "name": "claimidx_home_ask",
       "title": "Ask the remote ledger",
       "description": "Rank a raw error against the remote public ledger over HTTP without importing it or writing any local state. No DID needed. Use when the local index is empty or stale and you want a look before claimidx_home_pull; prefer claimidx_ask for normal work because it also sees your own claims and records the ask. Returns url, hit, n, pool, skipped_n, claims (each with own and src=home)."

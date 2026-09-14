@@ -13,6 +13,7 @@ import os
 import re
 import shlex
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,9 @@ _EVENT_CANON = {
     "stop": "Stop",
     "pre_tool_use": "PreToolUse",
     "user_prompt_submit": "UserPromptSubmit",
+    "after_shell_execution": "PostToolUse",
+    "after_mcp_execution": "PostToolUse",
+    "before_shell_execution": "PreToolUse",
 }
 _BLOB_KEYS = (
     "tool_response",
@@ -59,6 +63,10 @@ _INNER_KEYS = (
 _EXIT_KEYS = ("exit_code", "exitCode", "returncode")
 
 
+def _snake_event(name: str) -> str:
+    return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name).replace("-", "_").lower()
+
+
 def canon_hook_event(name: str | None) -> str | None:
     """Claude PascalCase, Grok snake_case, and Cursor camelCase all become PascalCase."""
     raw = (name or "").strip()
@@ -66,7 +74,7 @@ def canon_hook_event(name: str | None) -> str | None:
         return None
     if raw in _SUCCESS_EVENTS or raw == "PostToolUseFailure":
         return raw
-    return _EVENT_CANON.get(raw) or _EVENT_CANON.get(raw.replace("-", "_").lower()) or raw
+    return _EVENT_CANON.get(raw) or _EVENT_CANON.get(_snake_event(raw)) or raw
 
 
 def _parse_hook_obj(raw: str) -> dict | None:
@@ -111,7 +119,7 @@ def extract_hook_exit(raw: str) -> int | None:
 
 
 def posttooluse_is_failure(raw: str) -> bool:
-    """Grok (and Cursor) fire PostToolUse for a failed shell. Only trust an explicit non-zero exit."""
+    """Grok fires PostToolUse for a failed shell. Only trust an explicit non-zero exit."""
     obj = _parse_hook_obj(raw)
     if not obj:
         return False
@@ -120,6 +128,21 @@ def posttooluse_is_failure(raw: str) -> bool:
         return False
     code = _payload_exit(obj)
     return code is not None and code != 0
+
+
+def hook_is_failure(raw: str, event: str | None, err: str | None) -> bool:
+    """True when this hook event is a failed command that should ask, not a success nudge."""
+    if event == "PostToolUseFailure":
+        return True
+    if posttooluse_is_failure(raw):
+        return True
+    if not err:
+        return False
+    obj = _parse_hook_obj(raw)
+    if not obj:
+        return False
+    orig = str(obj.get("hook_event_name") or obj.get("hookEventName") or "")
+    return _snake_event(orig) in {"after_shell_execution", "after_mcp_execution"}
 
 
 def extract_hook_err(raw: str) -> tuple[str | None, str | None]:
@@ -162,6 +185,8 @@ def extract_hook_context(raw: str) -> dict[str, str]:
         tool_input = obj.get("toolInput")
     if isinstance(tool_input, dict) and isinstance(tool_input.get("command"), str):
         out["command"] = tool_input["command"][:400]
+    if not out.get("command") and isinstance(obj.get("command"), str):
+        out["command"] = obj["command"][:400]
     if not out.get("command"):
         for key in ("toolResult", "tool_result", "tool_response"):
             val = obj.get(key)
@@ -338,6 +363,38 @@ def share_nudge(store) -> str:
         return ""
     plural = "s" if n != 1 else ""
     return f"{n} replayable claim{plural} live only on this machine: `claimidx sync` shares them (CLAIMIDX_COMMONS=0 to opt out)."
+
+
+def pending_brief_path() -> Path:
+    from .env import last_failure_path
+
+    return last_failure_path().with_name("session-brief.json")
+
+
+def remember_pending_brief(text: str) -> None:
+    """Grok ignores SessionStart stdout; land the brief on the next tool event."""
+    path = pending_brief_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"text": text, "ts": int(time.time())}), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def take_pending_brief() -> str:
+    path = pending_brief_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        path.unlink(missing_ok=True)
+    except (OSError, ValueError):
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    return str(data.get("text") or "")
+
+
+def grok_session() -> bool:
+    return bool(os.environ.get("GROK_HOOK_EVENT"))
 
 
 def session_brief(store) -> str:
@@ -554,6 +611,13 @@ def cursor_mcp_path() -> Path:
     if override:
         return Path(override)
     return Path.home() / ".cursor" / "mcp.json"
+
+
+def cursor_hooks_path() -> Path:
+    override = os.environ.get("CLAIMIDX_CURSOR_HOOKS")
+    if override:
+        return Path(override)
+    return cursor_mcp_path().parent / "hooks.json"
 
 
 def grok_config_path() -> Path:
@@ -835,13 +899,144 @@ def install_grok_hooks(path: Path | None = None) -> dict:
     return {"path": str(target), "status": "installed", "command": cmd, "events": [e for e, _m in CLAUDE_EVENTS]}
 
 
+def cursor_hook_file(cmd: str | None = None) -> dict:
+    """Cursor ~/.cursor/hooks.json (version 1, camelCase events, command at the entry)."""
+    h = {"command": cmd or hook_command(), "timeout": 15}
+    stop = dict(h)
+    stop["loop_limit"] = 1
+    return {
+        "version": 1,
+        "hooks": {
+            "afterShellExecution": [dict(h)],
+            "postToolUseFailure": [dict(h)],
+            "postToolUse": [dict(h)],
+            "sessionStart": [dict(h)],
+            "stop": [stop],
+        },
+    }
+
+
+def cursor_hooks_has_claimidx(data: dict) -> bool:
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        return False
+    for event in ("afterShellExecution", "postToolUse", "sessionStart", "stop"):
+        found = False
+        for h in hooks.get(event) or []:
+            if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
+                found = True
+        if not found:
+            return False
+    return True
+
+
+def install_cursor_hooks(path: Path | None = None) -> dict:
+    """Merge the sensor into ~/.cursor/hooks.json when Cursor is present."""
+    target = path or cursor_hooks_path()
+    forced = bool(os.environ.get("CLAIMIDX_CURSOR_HOOKS")) or path is not None
+    mcp = cursor_mcp_path()
+    if not forced and not mcp.exists() and not mcp.parent.exists() and not target.exists():
+        return {"path": str(target), "status": "skip", "reason": "no cursor config dir"}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    cmd = hook_command()
+    data, err = _load_json_object(target, "hooks.json")
+    if err:
+        return err
+    assert data is not None
+    if data.get("version") not in (None, 1):
+        return {"path": str(target), "status": "error", "error": "hooks.json version is not 1"}
+    payload = cursor_hook_file(cmd)
+    if cursor_hooks_has_claimidx(data):
+        existing_cmd = ""
+        for h in (data.get("hooks") or {}).get("afterShellExecution") or []:
+            if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
+                existing_cmd = str(h.get("command") or "")
+        if existing_cmd == cmd:
+            return {"path": str(target), "status": "present", "command": cmd}
+    # Merge our events into an existing file without dropping other hooks.
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        hooks = {}
+        data["hooks"] = hooks
+    data["version"] = 1
+    for event, groups in payload["hooks"].items():
+        raw = hooks.get(event) or []
+        if not isinstance(raw, list):
+            raw = []
+        kept = [h for h in raw if not (isinstance(h, dict) and _MARKER in str(h.get("command") or ""))]
+        hooks[event] = groups + kept
+        # ours first so a later user hook cannot hide the sensor
+    target.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return {"path": str(target), "status": "installed", "command": cmd}
+
+
+def bundled_skill_text() -> str | None:
+    """SKILL.md from the checkout or the wheel. None if this install has no copy."""
+    here = Path(__file__).resolve().parent
+    for path in (
+        here.parents[2] / "skills" / "claimidx" / "SKILL.md",
+        here / "data" / "SKILL.md",
+    ):
+        if path.is_file():
+            try:
+                return path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+    return None
+
+
+def _skill_ours(text: str) -> bool:
+    return bool(re.search(r"(?m)^name:\s*claimidx\s*$", text))
+
+
+def install_one_skill(target: Path, body: str) -> dict:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        try:
+            current = target.read_text(encoding="utf-8")
+        except OSError as e:
+            return {"path": str(target), "status": "error", "error": str(e)}
+        if current == body:
+            return {"path": str(target), "status": "present"}
+        if current and not _skill_ours(current):
+            return {"path": str(target), "status": "skip", "reason": "not a claimidx skill"}
+    target.write_text(body, encoding="utf-8")
+    return {"path": str(target), "status": "installed"}
+
+
+def install_user_skills() -> dict:
+    """Drop SKILL.md into user harness skill dirs so other trees see Claimidx."""
+    body = bundled_skill_text()
+    if not body:
+        return {"status": "skip", "reason": "no bundled skill"}
+    out: dict[str, Any] = {}
+    targets = {
+        "claude": claude_settings_path().parent / "skills" / "claimidx" / "SKILL.md",
+        "grok": grok_config_path().parent / "skills" / "claimidx" / "SKILL.md",
+        "cursor": cursor_mcp_path().parent / "skills" / "claimidx" / "SKILL.md",
+    }
+    required = {
+        "claude": True,  # init always writes Claude settings
+        "grok": grok_config_path().exists() or grok_config_path().parent.exists(),
+        "cursor": cursor_mcp_path().exists() or cursor_mcp_path().parent.exists(),
+    }
+    for name, path in targets.items():
+        if not required[name]:
+            out[name] = {"path": str(path), "status": "skip", "reason": f"no {name} config"}
+            continue
+        out[name] = install_one_skill(path, body)
+    return out
+
+
 def install_harness(*, own: str, agent: str = "") -> dict:
-    """Claude failure hook, Grok native hooks, plus MCP into Cursor/Grok/OpenCode/VS Code when those configs exist."""
+    """Claude/Grok/Cursor sensors, user skill drop, plus MCP when those configs exist."""
     return {
         "claude": install_claude_hook(),
         "cursor": install_cursor_mcp(own=own, agent=agent),
+        "cursor_hooks": install_cursor_hooks(),
         "grok": install_grok_mcp(own=own, agent=agent),
         "grok_hooks": install_grok_hooks(),
         "opencode": install_opencode_mcp(own=own, agent=agent),
         "vscode": install_vscode_mcp(own=own, agent=agent),
+        "skills": install_user_skills(),
     }

@@ -61,7 +61,7 @@ COPIES = {
     ".well-known/api-catalog": ("docs/.well-known/api-catalog",),
     ".well-known/security.txt": ("docs/.well-known/security.txt",),
     ".well-known/agent-skills/index.json": ("docs/.well-known/agent-skills/index.json",),
-    SKILL: tuple(f"{d}/skills/claimidx/SKILL.md" for d in SKILL_DROPS),
+    SKILL: tuple(f"{d}/skills/claimidx/SKILL.md" for d in SKILL_DROPS) + ("src/claimidx/data/SKILL.md",),
 }
 
 FULL_TARGETS = ("llms-full.txt", "docs/llms-full.txt")

@@ -1,0 +1,27 @@
+name: Claimidx run
+description: Run a command through the Claimidx sensor. Failures ask the index; a later pass nudges claimidx claim --yes.
+author: Claimidx
+inputs:
+  run:
+    description: Command after `claimidx run --` (no extra shell wrapping).
+    required: true
+  extra-args:
+    description: Extra claimidx flags before `--` (for example --cwd).
+    required: false
+    default: ""
+  source:
+    description: pip install target. Default is PyPI. Use '.[server]' in this repository.
+    required: false
+    default: "claimidx[server]"
+runs:
+  using: composite
+  steps:
+    - name: Install Claimidx
+      shell: bash
+      run: python -m pip install -q "${{ inputs.source }}"
+    - name: Init (offline, no hooks)
+      shell: bash
+      run: claimidx init --agent github-actions --offline --no-hooks
+    - name: Run
+      shell: bash
+      run: claimidx run ${{ inputs.extra-args }} -- ${{ inputs.run }}

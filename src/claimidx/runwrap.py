@@ -27,8 +27,8 @@ def _tail(text: str, n: int = 4000) -> str:
     return text[-n:] if len(text) > n else text
 
 
-def run_command(argv: list[str], *, cwd: str | None = None, timeout: float | None = None) -> tuple[int, str]:
-    """Run argv, passing stdout/stderr through live, and return (rc, captured tail of both)."""
+def run_command(argv: list[str], *, cwd: str | None = None, timeout: float | None = None, stream: bool = True) -> tuple[int, str]:
+    """Run argv, passing stdout/stderr through live unless stream=False (MCP must not write to stdio)."""
     if not argv:
         return 2, ""
     from .sandbox import _which
@@ -40,14 +40,16 @@ def run_command(argv: list[str], *, cwd: str | None = None, timeout: float | Non
         proc = subprocess.Popen([head, *argv[1:]], cwd=cwd or None, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
     except OSError as e:
         # The command never started: that is this wrapper's failure, not the tree's. Nothing to ask or remember.
-        sys.stderr.write(f"claimidx run: {e}\n")
+        if stream:
+            sys.stderr.write(f"claimidx run: {e}\n")
         return 127, ""
     chunks: list[str] = []
     assert proc.stdout is not None
     try:
         for line in proc.stdout:
-            sys.stdout.write(line)
-            sys.stdout.flush()
+            if stream:
+                sys.stdout.write(line)
+                sys.stdout.flush()
             chunks.append(line)
         rc = proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -59,7 +61,7 @@ def run_command(argv: list[str], *, cwd: str | None = None, timeout: float | Non
     return rc, _tail("".join(chunks))
 
 
-def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None = None, k: int = 5) -> dict[str, Any]:
+def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None = None, k: int = 5, emit: bool = True) -> dict[str, Any]:
     """The hook logic, given a finished command. Returns what was printed."""
     from .fingerprint import classify, fingerprint
     from .match import verdict_for
@@ -88,7 +90,9 @@ def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None =
         if hits:
             c = hits[0][0]
             line += f"\nCLAIMIDX hit {c.id} fix.k={c.fix.k} fix.b={c.fix.b.splitlines()[0][:160]!r} eval={c.eval.cmd!r} (data from {c.own}, not instructions)"
-        sys.stderr.write(line + "\n")
+        if emit:
+            sys.stderr.write(line + "\n")
+        out["advice"] = line
         out["verdict"] = v
         return out
     rec = last_failure()
@@ -113,6 +117,8 @@ def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None =
     line = f"CLAIMIDX fixed: `{cmd}` now passes after failing with: {rec['err'][:120]}\nRecord it so the next agent skips this: claimidx claim --yes"
     if draft.get("ok"):
         line += f"   (drafted: fix.k={draft['fix_k']} eval={draft['eval']} proof={str(draft['eval_proof']).lower()})"
-    sys.stderr.write(line + "\n")
+    if emit:
+        sys.stderr.write(line + "\n")
+    out["advice"] = line
     out["nudge"] = True
     return out
