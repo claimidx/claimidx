@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|shell",
+        "hooks": [
+          { "type": "command", "command": "python -m claimidx hook", "timeout": 15 }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|shell",
+        "hooks": [
+          { "type": "command", "command": "python -m claimidx hook", "timeout": 15 }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python -m claimidx hook", "timeout": 15 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python -m claimidx hook", "timeout": 15 }
+        ]
+      }
+    ]
+  }
+}

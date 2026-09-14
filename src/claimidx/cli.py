@@ -168,7 +168,8 @@ def cmd_hook(ns: argparse.Namespace) -> int:
     err, event = extract_hook_err(raw)
     failed = hook_is_failure(raw, event, err)
     # Grok/Cursor fire PostToolUse (or afterShellExecution) for a failed shell.
-    if event in {"PostToolUse", "SessionStart", "Stop"} and not failed:
+    # AfterAgent/SessionEnd are Gemini (and similar) end-of-turn events: remind, never block.
+    if event in {"PostToolUse", "SessionStart", "Stop", "AfterAgent", "SessionEnd", "SubagentStop"} and not failed:
         from .hook import remember_pending_brief, session_brief, stop_reminder, success_nudge, take_pending_brief
 
         store = _store(ns)
@@ -186,14 +187,14 @@ def cmd_hook(ns: argparse.Namespace) -> int:
             if text:
                 print(claude_context(event, text))
             return 0
-        reminder = stop_reminder(store)
+        reminder = stop_reminder(store, event=event, block=(event == "Stop"))
         extra = take_pending_brief()
         if extra:
             if reminder and isinstance(reminder.get("hookSpecificOutput"), dict):
                 ctx = reminder["hookSpecificOutput"].get("additionalContext") or ""
                 reminder["hookSpecificOutput"]["additionalContext"] = extra + (("\n" + ctx) if ctx else "")
             else:
-                reminder = {"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": extra}}
+                reminder = {"hookSpecificOutput": {"hookEventName": event, "additionalContext": extra}}
         if reminder:
             print(json.dumps(reminder))
         return 0
@@ -220,7 +221,7 @@ def cmd_hook(ns: argparse.Namespace) -> int:
             ns.dep = inferred_dep
     q, hits, candidates = _ask_hits(store, ns, err)
     prev = last_failure()
-    if prev and prev.get("fp") == q["fp"] and prev.get("err") == err[:280] and int(time.time()) - int(prev.get("ts") or 0) <= 3:
+    if prev and not prev.get("nudged") and prev.get("fp") == q["fp"] and prev.get("err") == err[:280] and int(time.time()) - int(prev.get("ts") or 0) <= 3:
         return 0
     remember_failure(err, command=ctx.get("command", ""), cwd=ctx.get("cwd", ""), eco=q["eco"], rt=q["rt"], event=event or "", fp=q["fp"])
     if not hits:
@@ -1298,16 +1299,25 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
     ev = replay("true", 0)
     add("eval-true", ev.held, ev.reason)
     from .hook import (
+        CODEX_EVENTS,
+        GEMINI_EVENTS,
         claude_settings_path,
+        cline_mcp_path,
+        codex_config_path,
+        codex_hooks_path,
+        continue_mcp_path,
         cursor_hooks_has_claimidx,
         cursor_hooks_path,
         cursor_mcp_path,
+        gemini_settings_path,
         grok_config_path,
         grok_hooks_has_claimidx,
         grok_hooks_path,
+        grouped_hooks_has_claimidx,
         opencode_config_path,
         settings_has_claimidx,
         vscode_mcp_path,
+        windsurf_mcp_path,
     )
 
     hp = claude_settings_path()
@@ -1389,6 +1399,47 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
         add("vscode-mcp", True, f"{'installed' if has else 'missing claimidx'} {vp}")
     else:
         add("vscode-mcp", True, f"skip ({vp})")
+    gmp = gemini_settings_path()
+    if gmp.exists() or gmp.parent.exists():
+        try:
+            gd = json.loads(gmp.read_text(encoding="utf-8")) if gmp.exists() else {}
+            has_mcp = isinstance(gd, dict) and isinstance(gd.get("mcpServers"), dict) and "claimidx" in gd["mcpServers"]
+            has_hooks = isinstance(gd, dict) and grouped_hooks_has_claimidx(gd, GEMINI_EVENTS)
+        except (OSError, json.JSONDecodeError):
+            has_mcp, has_hooks = False, False
+        add("gemini-mcp", True, f"{'installed' if has_mcp else 'missing claimidx'} {gmp}")
+        add("gemini-hooks", True, f"{'installed' if has_hooks else 'missing AfterTool; claimidx init writes it'} {gmp}")
+    else:
+        add("gemini-mcp", True, f"skip ({gmp})")
+    cxp = codex_config_path()
+    cxh = codex_hooks_path()
+    if cxp.exists() or cxp.parent.exists() or cxh.exists():
+        try:
+            has = "[mcp_servers.claimidx]" in cxp.read_text(encoding="utf-8") if cxp.exists() else False
+        except OSError:
+            has = False
+        add("codex-mcp", True, f"{'installed' if has else 'missing claimidx'} {cxp}")
+        try:
+            hooked = cxh.exists() and grouped_hooks_has_claimidx(json.loads(cxh.read_text(encoding="utf-8")), CODEX_EVENTS)
+        except (OSError, json.JSONDecodeError):
+            hooked = False
+        add("codex-hooks", True, f"{'installed' if hooked else 'missing; claimidx init writes ~/.codex/hooks.json'} {cxh}")
+    else:
+        add("codex-mcp", True, f"skip ({cxp})")
+    for name, p, key in (
+        ("cline-mcp", cline_mcp_path(), "mcpServers"),
+        ("windsurf-mcp", windsurf_mcp_path(), "mcpServers"),
+        ("continue-mcp", continue_mcp_path(), "mcpServers"),
+    ):
+        if p.exists() or p.parent.exists():
+            try:
+                loaded = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+                has = isinstance(loaded, dict) and isinstance(loaded.get(key), dict) and "claimidx" in loaded[key]
+            except (OSError, json.JSONDecodeError):
+                has = False
+            add(name, True, f"{'installed' if has else 'missing claimidx'} {p}")
+        else:
+            add(name, True, f"skip ({p})")
     ok = all(c["ok"] for c in checks)
     print(json.dumps({"ok": ok, "whoami": me, "checks": checks}, indent=2))
     return 0 if ok else 2

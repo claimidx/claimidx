@@ -46,14 +46,26 @@ def run_command(argv: list[str], *, cwd: str | None = None, timeout: float | Non
     chunks: list[str] = []
     assert proc.stdout is not None
     try:
-        for line in proc.stdout:
-            if stream:
+        if stream:
+            for line in proc.stdout:
                 sys.stdout.write(line)
                 sys.stdout.flush()
-            chunks.append(line)
-        rc = proc.wait(timeout=timeout)
+                chunks.append(line)
+            rc = proc.wait(timeout=timeout)
+        else:
+            # communicate applies timeout to the whole process; a hang that never
+            # closes stdout would otherwise ignore wait(timeout=).
+            out, _err = proc.communicate(timeout=timeout)
+            chunks.append(out or "")
+            rc = proc.returncode if proc.returncode is not None else 0
     except subprocess.TimeoutExpired:
         proc.kill()
+        try:
+            leftover, _err = proc.communicate(timeout=2)
+            if leftover:
+                chunks.append(leftover)
+        except Exception:
+            pass
         rc = 124
     except KeyboardInterrupt:
         proc.kill()

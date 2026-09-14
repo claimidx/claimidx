@@ -35,6 +35,36 @@ def test_listed_tools_core_env(monkeypatch):
     assert {t["name"] for t in listed_tools()} == {t["name"] for t in TOOLS}
 
 
+def test_mcp_run_schema_has_timeout():
+    tool = next(t for t in TOOLS if t["name"] == "claimidx_run")
+    assert "timeout" in tool["inputSchema"]["properties"]
+
+
+def test_mcp_run_timeout_kills_a_hung_command(tmp_path):
+    from claimidx.store import Store
+
+    store = Store(tmp_path / "ix.sqlite")
+    rec = handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "claimidx_run",
+                "arguments": {
+                    "argv": [sys.executable, "-c", "import time; time.sleep(8)"],
+                    "cwd": str(tmp_path),
+                    "timeout": 0.4,
+                },
+            },
+        },
+        store,
+    )
+    assert rec.get("result", {}).get("isError") is not True
+    body = json.loads(rec["result"]["content"][0]["text"])
+    assert body["rc"] == 124
+
+
 def test_mcp_run_asks_on_failure_without_streaming_stdio(tmp_path):
     from claimidx.store import Store
 
@@ -138,5 +168,262 @@ def test_github_action_wraps_claimidx_run():
     from claimidx.discovery import ROOT
 
     yml = (ROOT / ".github" / "actions" / "run" / "action.yml").read_text(encoding="utf-8")
-    assert "claimidx run" in yml
+    assert "python -m claimidx run" in yml
+    assert "python -m claimidx init" in yml
+    assert "--no-hooks" in yml
+    assert "--offline" not in yml
     assert "inputs:" in yml and "run:" in yml
+
+
+def test_gemini_after_tool_failure_asks(tmp_path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    assert main(["--db", db, "seed"]) == 0
+    capsys.readouterr()
+    payload = json.dumps(
+        {
+            "hook_event_name": "AfterTool",
+            "tool_name": "run_shell_command",
+            "tool_input": {"command": "npx tsc --noEmit"},
+            "tool_response": "TypeError: params is a Promise\n",
+        }
+    )
+    rc = main(["--db", db, "hook", "--eco", "npm", "--dep", "next@15.0.0", "--err", payload])
+    out = capsys.readouterr().out
+    assert rc == 0
+    ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "spr_a11c000000000001" in ctx
+    assert "CLAIMIDX verdict" in ctx
+
+
+def test_gemini_after_agent_does_not_block(tmp_path, capsys):
+    """Gemini AfterAgent is not Claude Stop: inject a reminder, never decision:block."""
+    db = str(tmp_path / "ix.sqlite")
+    tree = tmp_path / "t"
+    tree.mkdir()
+    fail = json.dumps(
+        {
+            "hook_event_name": "AfterTool",
+            "tool_name": "run_shell_command",
+            "tool_input": {"command": "python app.py"},
+            "cwd": str(tree),
+            "tool_response": {"llmContent": "ModuleNotFoundError: No module named 'json'\n"},
+        }
+    )
+    assert main(["--db", db, "hook", "--err", fail]) == 0
+    capsys.readouterr()
+    ok = json.dumps(
+        {
+            "hook_event_name": "AfterTool",
+            "tool_name": "run_shell_command",
+            "tool_input": {"command": "python app.py"},
+            "cwd": str(tree),
+            "tool_response": {"llmContent": "ok\n"},
+            "exitCode": 0,
+        }
+    )
+    assert main(["--db", db, "hook", "--err", ok]) == 0
+    assert "CLAIMIDX fixed" in capsys.readouterr().out
+    assert main(["--db", db, "hook", "--err", json.dumps({"hook_event_name": "AfterAgent"})]) == 0
+    out = capsys.readouterr().out
+    body = json.loads(out)
+    assert body.get("decision") != "block"
+    ctx = (body.get("hookSpecificOutput") or {}).get("additionalContext") or ""
+    assert "claimidx claim --yes" in ctx
+
+
+def test_gemini_llmcontent_list_and_type_field_ask(tmp_path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    assert main(["--db", db, "seed"]) == 0
+    capsys.readouterr()
+    payload = json.dumps(
+        {
+            "type": "AfterTool",
+            "tool_name": "run_shell_command",
+            "tool_args": {"command": "npx tsc --noEmit"},
+            "tool_response": {
+                "llmContent": ["TypeError: params is a Promise\n"],
+                "error": {"message": "TypeError: params is a Promise"},
+            },
+        }
+    )
+    rc = main(["--db", db, "hook", "--eco", "npm", "--dep", "next@15.0.0", "--err", payload])
+    out = capsys.readouterr().out
+    assert rc == 0
+    ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "spr_a11c000000000001" in ctx
+
+
+def test_gemini_after_tool_object_payload_asks(tmp_path, capsys):
+    """Gemini AfterTool sends tool_response as {llmContent, error}, not a string."""
+    db = str(tmp_path / "ix.sqlite")
+    assert main(["--db", db, "seed"]) == 0
+    capsys.readouterr()
+    payload = json.dumps(
+        {
+            "hook_event_name": "AfterTool",
+            "cwd": "/tmp/app",
+            "tool_name": "run_shell_command",
+            "tool_args": {"command": "npx tsc --noEmit"},
+            "tool_response": {
+                "llmContent": "TypeError: params is a Promise\n",
+                "returnDisplay": "failed",
+                "error": {"type": "SHELL_ERROR", "message": "TypeError: params is a Promise"},
+            },
+        }
+    )
+    rc = main(["--db", db, "hook", "--eco", "npm", "--dep", "next@15.0.0", "--err", payload])
+    out = capsys.readouterr().out
+    assert rc == 0
+    ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "spr_a11c000000000001" in ctx
+    assert "CLAIMIDX verdict" in ctx
+
+
+def test_gemini_hooks_are_portable_on_windows(tmp_path):
+    from claimidx.hook import hook_command, install_gemini_hooks
+
+    rec = install_gemini_hooks(tmp_path / "settings.json")
+    assert rec["status"] == "installed"
+    data = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    after = data["hooks"]["AfterTool"][0]["hooks"][0]
+    assert "shell" not in after
+    cmd = after["command"]
+    assert "claimidx hook" in cmd
+    assert not cmd.lstrip().startswith("&")
+    # cmd.exe and PowerShell both accept a quoted interpreter.
+    assert "-m claimidx hook" in hook_command()
+
+
+def test_init_wires_codex_gemini_and_other_harnesses(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("CLAIMIDX_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    for key, rel in (
+        ("CLAIMIDX_CODEX_CONFIG", "codex/config.toml"),
+        ("CLAIMIDX_GEMINI_CONFIG", "gemini/settings.json"),
+        ("CLAIMIDX_CLINE_MCP", "cline/data/settings/cline_mcp_settings.json"),
+        ("CLAIMIDX_CONTINUE_MCP", "continue/mcpServers/claimidx.json"),
+        ("CLAIMIDX_WINDSURF_MCP", "codeium/windsurf/mcp_config.json"),
+        ("CLAIMIDX_OPENCODE_CONFIG", "opencode/opencode.json"),
+    ):
+        path = tmp_path / rel
+        monkeypatch.setenv(key, str(path))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.suffix == ".toml":
+            path.write_text('model = "gpt-5"\n', encoding="utf-8")
+        elif path.name == "opencode.json":
+            path.write_text("{}\n", encoding="utf-8")
+        elif "mcpServers" in str(path):
+            pass
+        else:
+            path.write_text("{}\n", encoding="utf-8")
+    db = str(tmp_path / "ix.sqlite")
+    assert main(["--db", db, "init", "--agent", "wiretest", "--offline"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    harness = out["harness"]
+    for key in ("codex", "codex_hooks", "gemini", "gemini_hooks", "cline", "continue", "windsurf"):
+        assert harness[key]["status"] in {"installed", "updated"}, key
+    assert "claimidx-mcp" in (tmp_path / "codex" / "config.toml").read_text(encoding="utf-8")
+    gemini = json.loads((tmp_path / "gemini" / "settings.json").read_text(encoding="utf-8"))
+    assert gemini["mcpServers"]["claimidx"]["command"] == "claimidx-mcp"
+    assert "AfterTool" in json.dumps(gemini.get("hooks") or {})
+    assert "claimidx hook" in json.dumps(gemini)
+    codex_hooks = json.loads((tmp_path / "codex" / "hooks.json").read_text(encoding="utf-8"))
+    assert "PostToolUse" in json.dumps(codex_hooks) and "claimidx hook" in json.dumps(codex_hooks)
+    skill = (tmp_path / "gemini" / "skills" / "claimidx" / "SKILL.md").read_text(encoding="utf-8")
+    assert "name: claimidx" in skill
+    assert (tmp_path / "codex" / "skills" / "claimidx" / "SKILL.md").is_file()
+    cline = json.loads((tmp_path / "cline" / "data" / "settings" / "cline_mcp_settings.json").read_text(encoding="utf-8"))
+    assert cline["mcpServers"]["claimidx"]["command"] == "claimidx-mcp"
+    wind = json.loads((tmp_path / "codeium" / "windsurf" / "mcp_config.json").read_text(encoding="utf-8"))
+    assert wind["mcpServers"]["claimidx"]["command"] == "claimidx-mcp"
+    cont = json.loads((tmp_path / "continue" / "mcpServers" / "claimidx.json").read_text(encoding="utf-8"))
+    assert "claimidx-mcp" in json.dumps(cont)
+    assert main(["--db", db, "init", "--agent", "wiretest", "--offline"]) == 0
+    again = json.loads(capsys.readouterr().out)["harness"]
+    assert again["codex"]["status"] == "present"
+    assert again["gemini"]["status"] == "present"
+
+
+def test_codex_hooks_update_stale_matcher(tmp_path):
+    from claimidx.hook import hook_command, install_codex_hooks
+
+    cmd = hook_command()
+    hooks = tmp_path / "hooks.json"
+    hooks.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PostToolUseFailure": [{"matcher": "Bash", "hooks": [{"type": "command", "command": cmd}]}],
+                    "PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": cmd}]}],
+                    "SessionStart": [{"hooks": [{"type": "command", "command": cmd}]}],
+                    "Stop": [{"hooks": [{"type": "command", "command": cmd}]}],
+                }
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    rec = install_codex_hooks(hooks)
+    assert rec["status"] in {"installed", "updated"}
+    data = json.loads(hooks.read_text(encoding="utf-8"))
+    assert "shell" in (data["hooks"]["PostToolUse"][0].get("matcher") or "")
+
+
+def test_subagent_stop_does_not_block(tmp_path, capsys):
+    """SubagentStop is not Claude Stop: remind, never decision:block."""
+    db = str(tmp_path / "ix.sqlite")
+    tree = tmp_path / "t"
+    tree.mkdir()
+    fail = json.dumps(
+        {
+            "hook_event_name": "PostToolUseFailure",
+            "tool_name": "Bash",
+            "tool_input": {"command": "python app.py"},
+            "cwd": str(tree),
+            "tool_response": {"stderr": "ModuleNotFoundError: No module named 'json'"},
+        }
+    )
+    assert main(["--db", db, "hook", "--err", fail]) == 0
+    capsys.readouterr()
+    ok = json.dumps(
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "python app.py"},
+            "cwd": str(tree),
+            "tool_response": {"stdout": "ok\n"},
+        }
+    )
+    assert main(["--db", db, "hook", "--err", ok]) == 0
+    assert "CLAIMIDX fixed" in capsys.readouterr().out
+    assert main(["--db", db, "hook", "--err", json.dumps({"hook_event_name": "SubagentStop"})]) == 0
+    body = json.loads(capsys.readouterr().out)
+    assert body.get("decision") != "block"
+    ctx = (body.get("hookSpecificOutput") or {}).get("additionalContext") or ""
+    assert "claimidx claim --yes" in ctx
+
+
+def test_cursor_hooks_restore_missing_post_tool_use_failure(tmp_path):
+    from claimidx.hook import hook_command, install_cursor_hooks
+
+    cmd = hook_command()
+    path = tmp_path / "hooks.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "hooks": {
+                    "afterShellExecution": [{"command": cmd, "timeout": 15}],
+                    "postToolUse": [{"command": cmd, "timeout": 15}],
+                    "sessionStart": [{"command": cmd, "timeout": 15}],
+                    "stop": [{"command": cmd, "timeout": 15, "loop_limit": 1}],
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    rec = install_cursor_hooks(path)
+    assert rec["status"] in {"installed", "updated"}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert any("claimidx hook" in json.dumps(h) for h in data["hooks"].get("postToolUseFailure") or [])

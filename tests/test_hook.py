@@ -193,11 +193,15 @@ def test_hook_install_refuses_hooks_array(tmp_path, capsys, monkeypatch):
 
 def test_hook_command_invokes_on_windows():
     import os
+    import sys
     from claimidx.hook import claude_hook_block, hook_command
 
     if os.name != "nt":
         return
-    assert hook_command().lstrip().startswith("&")
+    cmd = hook_command()
+    assert "-m claimidx hook" in cmd
+    assert sys.executable in cmd or cmd.startswith('"')
+    assert not cmd.lstrip().startswith("&")
     assert claude_hook_block()["hooks"][0].get("shell") == "powershell"
 
 
@@ -546,3 +550,86 @@ def test_init_wires_grok_native_hooks(tmp_path, capsys, monkeypatch):
     assert rc2 == 0
     again = _json.loads(capsys.readouterr().out)
     assert again["harness"]["grok_hooks"]["status"] == "present"
+
+
+def test_hook_duplicate_failure_within_3s_is_silent(tmp_path, capsys):
+    """Two identical failure payloads in the same second must not ask twice (hook double-fire)."""
+    db = str(tmp_path / "ix.sqlite")
+    fail = json.dumps(
+        {
+            "hook_event_name": "PostToolUseFailure",
+            "tool_name": "Bash",
+            "tool_input": {"command": "python app.py"},
+            "tool_response": {"stderr": "ModuleNotFoundError: No module named 'json'"},
+        }
+    )
+    assert main(["--db", db, "hook", "--err", fail]) == 0
+    first = capsys.readouterr().out
+    assert "CLAIMIDX" in first
+    assert main(["--db", db, "hook", "--err", fail]) == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_hook_fail_after_nudge_is_not_swallowed(tmp_path, capsys):
+    """A success nudge must not 3s-debounce a later failure of the same err."""
+    db = str(tmp_path / "ix.sqlite")
+    tree = tmp_path / "t"
+    tree.mkdir()
+    fail = json.dumps(
+        {
+            "hook_event_name": "PostToolUseFailure",
+            "tool_name": "Bash",
+            "tool_input": {"command": "python app.py"},
+            "cwd": str(tree),
+            "tool_response": {"stderr": "ModuleNotFoundError: No module named 'json'"},
+        }
+    )
+    assert main(["--db", db, "hook", "--err", fail]) == 0
+    assert "CLAIMIDX" in capsys.readouterr().out
+    ok = json.dumps(
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "python app.py"},
+            "cwd": str(tree),
+            "tool_response": {"stdout": "ok\n"},
+        }
+    )
+    assert main(["--db", db, "hook", "--err", ok]) == 0
+    assert "CLAIMIDX fixed" in capsys.readouterr().out
+    assert main(["--db", db, "hook", "--err", fail]) == 0
+    again = capsys.readouterr().out
+    assert "CLAIMIDX" in again
+    assert "verdict" in again or "miss" in again
+
+
+def test_cursor_top_level_exit_zero_is_not_a_failure():
+    from claimidx.hook import extract_hook_err, extract_hook_exit, hook_is_failure
+
+    raw = json.dumps(
+        {
+            "hook_event_name": "afterShellExecution",
+            "command": "npx tsc --noEmit",
+            "output": "error: none\ncompiled ok\n",
+            "exitCode": 0,
+        }
+    )
+    err, event = extract_hook_err(raw)
+    assert err and "error" in err.lower()
+    assert event == "PostToolUse"
+    assert extract_hook_exit(raw) == 0
+    assert hook_is_failure(raw, event, err) is False
+
+
+def test_cursor_after_shell_exit_zero_stays_silent(tmp_path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    payload = json.dumps(
+        {
+            "hook_event_name": "afterShellExecution",
+            "command": "npx tsc --noEmit",
+            "output": "error: none\ncompiled ok\n",
+            "exitCode": 0,
+        }
+    )
+    assert main(["--db", db, "hook", "--err", payload]) == 0
+    assert capsys.readouterr().out == ""

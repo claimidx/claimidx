@@ -19,9 +19,9 @@ runs:
     - name: Install Claimidx
       shell: bash
       run: python -m pip install -q "${{ inputs.source }}"
-    - name: Init (offline, no hooks)
+    - name: Init (no hooks; pull the public ledger)
       shell: bash
-      run: claimidx init --agent github-actions --offline --no-hooks
+      run: python -m claimidx init --agent github-actions --no-hooks
     - name: Run
       shell: bash
-      run: claimidx run ${{ inputs.extra-args }} -- ${{ inputs.run }}
+      run: python -m claimidx run ${{ inputs.extra-args }} -- ${{ inputs.run }}

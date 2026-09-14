@@ -221,11 +221,13 @@ The insertion point is the **harness operator**, not a chat session. Drop the sk
 | Claude Code | `.claude/skills/claimidx` · [`CLAUDE.md`](CLAUDE.md) | [`examples/claude_mcp.json`](examples/claude_mcp.json) · sensor: `claimidx init` writes [`examples/claude-hooks.json`](examples/claude-hooks.json) (`claimidx hook`) |
 | Grok | `.agents/skills/claimidx` (Grok also scans this) · `claimidx init` drops `~/.grok/skills/claimidx` | [`examples/mcp-grok.json`](examples/mcp-grok.json) · sensor: `claimidx init` writes [`examples/grok-hooks.json`](examples/grok-hooks.json) to `~/.grok/hooks/claimidx.json` |
 | OpenCode | `.opencode/skills/claimidx` | [`examples/mcp-opencode.json`](examples/mcp-opencode.json) |
-| Cline | `.cline/skills/claimidx` · `.agents/skills/claimidx` | [`examples/mcp-team.json`](examples/mcp-team.json) |
+| Cline | `.cline/skills/claimidx` · `.agents/skills/claimidx` | [`examples/mcp-team.json`](examples/mcp-team.json) · `claimidx init` merges `~/.cline/data/settings/cline_mcp_settings.json` |
 | Cursor | `.cursor/skills/claimidx` · `claimidx init` drops `~/.cursor/skills/claimidx` | [`examples/mcp-cursor.json`](examples/mcp-cursor.json) · sensor: [`examples/cursor-hooks.json`](examples/cursor-hooks.json) → `~/.cursor/hooks.json` |
 | GitHub Actions | — | [`/.github/actions/run`](.github/actions/run/action.yml): `uses: claimidx/claimidx/.github/actions/run@main` with `run: pytest -q` |
 | VS Code Copilot | `.github/skills/claimidx` · [`.github/copilot-instructions.md`](.github/copilot-instructions.md) | [`examples/mcp-vscode.json`](examples/mcp-vscode.json) |
-| Codex / Gemini / Continue / Windsurf | matching drop under `.codex` / `.gemini` / `.continue` / `.windsurf` | [`examples/mcp-team.json`](examples/mcp-team.json) |
+| Codex | `.codex/skills/claimidx` · `claimidx init` drops `~/.codex/skills/claimidx` | [`examples/mcp-team.json`](examples/mcp-team.json) · sensor: [`examples/codex-hooks.json`](examples/codex-hooks.json) → `~/.codex/hooks.json` |
+| Gemini | `.gemini/skills/claimidx` · `claimidx init` drops `~/.gemini/skills/claimidx` | [`examples/gemini-hooks.json`](examples/gemini-hooks.json) (`mcpServers` + `AfterTool`) |
+| Continue / Windsurf | matching drop under `.continue` / `.windsurf` | [`examples/mcp-team.json`](examples/mcp-team.json) · `claimidx init` writes Continue `mcpServers/claimidx.json` and Windsurf `mcp_config.json` when those dirs exist |
 
 Canonical skill: [`skills/claimidx/SKILL.md`](https://github.com/claimidx/claimidx/blob/main/skills/claimidx/SKILL.md). Copies in the drop paths must match it. Windows: `. .\scripts\wire_agent.ps1 <any-agent>`.
 

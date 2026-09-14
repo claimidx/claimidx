@@ -238,6 +238,10 @@ TOOLS: list[dict[str, Any]] = [
                 },
                 "cwd": _CWD,
                 "k": _k(5),
+                "timeout": {
+                    "type": "number",
+                    "description": "Seconds to wait before killing the process (default 300). Exit 124 if it times out. MCP must not hang the stdio pipe.",
+                },
             },
         },
         "outputSchema": _out(rc=_I, output=_S, advice=_S, verdict=_O, command=_S, nudge=_B),
@@ -1395,7 +1399,9 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         if not argv:
             raise KeyError("argv")
         cwd = (args.get("cwd") or "").strip() or os.getcwd()
-        rc, output = run_command(argv, cwd=cwd, stream=False)
+        timeout = args.get("timeout")
+        timeout_s = 300.0 if timeout is None or timeout == "" else float(timeout)
+        rc, output = run_command(argv, cwd=cwd, stream=False, timeout=timeout_s)
         rec = after_run(store, argv, rc, output, cwd=cwd, k=int(args.get("k") or 5), emit=False)
         rec["output"] = output
         return rec
