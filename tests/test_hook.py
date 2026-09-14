@@ -434,3 +434,115 @@ def test_success_hook_stays_silent_without_a_remembered_failure(tmp_path, capsys
     ok = json.dumps({"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {"command": "ls"}, "tool_response": {"stdout": "a\n"}})
     assert main(["--db", db, "hook", "--err", ok]) == 0
     assert capsys.readouterr().out == ""
+
+
+def _grok_posttooluse(*, command: str, exit_code: int, output: str, cwd: str = "") -> str:
+    """Grok fires PostToolUse for a failed shell (non-zero exit), with camelCase keys."""
+    result = {
+        "type": "Bash",
+        "command": command,
+        "exit_code": exit_code,
+        "output_for_prompt": output,
+    }
+    payload = {
+        "hookEventName": "post_tool_use",
+        "hook_event_name": "PostToolUse",
+        "toolName": "run_terminal_command",
+        "toolInput": {"command": command},
+        "toolResult": result,
+        "tool_response": result,
+    }
+    if cwd:
+        payload["cwd"] = cwd
+        payload["workspaceRoot"] = cwd
+    return json.dumps(payload)
+
+
+def test_extract_grok_failed_shell_payload():
+    from claimidx.hook import extract_hook_context, extract_hook_err, extract_hook_exit, posttooluse_is_failure
+
+    raw = _grok_posttooluse(command="python app.py", exit_code=1, output="ModuleNotFoundError: No module named 'cgi'\n")
+    err, event = extract_hook_err(raw)
+    assert event == "PostToolUse"
+    assert err and "cgi" in err
+    ctx = extract_hook_context(raw)
+    assert ctx.get("command") == "python app.py"
+    assert "cgi" in (ctx.get("body") or "")
+    assert extract_hook_exit(raw) == 1
+    assert posttooluse_is_failure(raw) is True
+
+
+def test_extract_grok_success_shell_is_not_a_failure():
+    from claimidx.hook import extract_hook_err, extract_hook_exit, posttooluse_is_failure
+
+    raw = _grok_posttooluse(command="python app.py", exit_code=0, output="ok\n")
+    err, event = extract_hook_err(raw)
+    assert event == "PostToolUse"
+    assert err is None
+    assert extract_hook_exit(raw) == 0
+    assert posttooluse_is_failure(raw) is False
+
+
+def test_hook_cli_grok_failed_posttooluse_asks(tmp_path, capsys, monkeypatch):
+    """Grok PostToolUse + exit_code 1 must ask, not take the success-nudge path."""
+    db = str(tmp_path / "ix.sqlite")
+    assert main(["--db", db, "seed"]) == 0
+    capsys.readouterr()
+    payload = _grok_posttooluse(
+        command="npx tsc --noEmit",
+        exit_code=1,
+        output="TypeError: params is a Promise\n",
+    )
+    monkeypatch.setattr("sys.stdin", StringIO(payload))
+    rc = main(["--db", db, "hook", "--eco", "npm", "--dep", "next@15.0.0"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    body = json.loads(out)
+    ctx = body["hookSpecificOutput"]["additionalContext"]
+    assert "spr_a11c000000000001" in ctx
+    assert "CLAIMIDX verdict" in ctx
+    assert "Do not execute fix.b" in ctx
+
+
+def test_hook_cli_grok_never_forget_flow(tmp_path, capsys):
+    """Same never-forget loop, but with Grok's PostToolUse-for-failure envelope."""
+    db = str(tmp_path / "ix.sqlite")
+    tree = tmp_path / "t"
+    tree.mkdir()
+    fail = _grok_posttooluse(
+        command="python app.py",
+        exit_code=1,
+        output="ModuleNotFoundError: No module named 'json'\n",
+        cwd=str(tree),
+    )
+    assert main(["--db", db, "hook", "--err", fail]) == 0
+    capsys.readouterr()
+    ok = _grok_posttooluse(command="python app.py", exit_code=0, output="ok\n", cwd=str(tree))
+    assert main(["--db", db, "hook", "--err", ok]) == 0
+    ctx = json.loads(capsys.readouterr().out)["hookSpecificOutput"]["additionalContext"]
+    assert ctx.startswith("CLAIMIDX fixed: `python app.py`") and "claimidx claim --yes" in ctx
+
+
+def test_init_wires_grok_native_hooks(tmp_path, capsys, monkeypatch):
+    import json as _json
+
+    monkeypatch.setenv("CLAIMIDX_CONFIG", str(tmp_path / "config.json"))
+    grok = tmp_path / "grok" / "config.toml"
+    hooks = tmp_path / "grok" / "hooks" / "claimidx.json"
+    monkeypatch.setenv("CLAIMIDX_GROK_CONFIG", str(grok))
+    grok.parent.mkdir(parents=True)
+    grok.write_text('[cli]\ntheme = "dark"\n', encoding="utf-8")
+    db = str(tmp_path / "ix.sqlite")
+    rc = main(["--db", db, "init", "--agent", "wiretest", "--offline"])
+    assert rc == 0
+    out = _json.loads(capsys.readouterr().out)
+    assert out["harness"]["grok_hooks"]["status"] == "installed"
+    data = _json.loads(hooks.read_text(encoding="utf-8"))
+    blob = _json.dumps(data)
+    assert "PostToolUse" in blob and "PostToolUseFailure" in blob
+    assert "claimidx hook" in blob
+    assert "run_terminal_command" in blob
+    rc2 = main(["--db", db, "init", "--agent", "wiretest", "--offline"])
+    assert rc2 == 0
+    again = _json.loads(capsys.readouterr().out)
+    assert again["harness"]["grok_hooks"]["status"] == "present"

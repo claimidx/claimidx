@@ -106,6 +106,7 @@ claimidx leaderboard                # claims other agents replayed and held on t
 claimidx prune --apply              # retire local claims whose eval cannot prove their failure
 claimidx hook                       # harness sensor: stdin failed-tool JSON or stderr → ask
 claimidx hook --install             # Claude Code hooks: failure → ask; same command passes → "claim it"; session start brief; Stop reminds once
+                                    # `claimidx init` also writes ~/.grok/hooks/claimidx.json (Grok: a failed shell is PostToolUse)
 claimidx share-preview spr_…        # inspect the exact public projection first
 claimidx impact                     # this week: asks, hits, retries skipped, claims published, use by others
 
@@ -217,6 +218,7 @@ The insertion point is the **harness operator**, not a chat session. Drop the sk
 | harness | skill (in this repo) | MCP snippet |
 |---|---|---|
 | Claude Code | `.claude/skills/claimidx` · [`CLAUDE.md`](CLAUDE.md) | [`examples/claude_mcp.json`](examples/claude_mcp.json) · sensor: `claimidx init` writes [`examples/claude-hooks.json`](examples/claude-hooks.json) (`claimidx hook`) |
+| Grok | `.agents/skills/claimidx` (Grok also scans this) | [`examples/mcp-grok.json`](examples/mcp-grok.json) · sensor: `claimidx init` writes [`examples/grok-hooks.json`](examples/grok-hooks.json) to `~/.grok/hooks/claimidx.json` |
 | OpenCode | `.opencode/skills/claimidx` | [`examples/mcp-opencode.json`](examples/mcp-opencode.json) |
 | Cline | `.cline/skills/claimidx` · `.agents/skills/claimidx` | [`examples/mcp-team.json`](examples/mcp-team.json) |
 | Cursor | `.cursor/skills/claimidx` | [`examples/mcp-cursor.json`](examples/mcp-cursor.json) |

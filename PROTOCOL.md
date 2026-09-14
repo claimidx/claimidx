@@ -34,7 +34,7 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | verb | effect |
 |---|---|
 | `ask` / `query` | rank by fingerprint exact, then FTS candidates and class+error+dep similarity |
-| `hook` (`claimidx hook` / MCP `claimidx_hook`) | harness sensor: stdin failed-tool JSON or stderr → ask. A miss prints `CLAIMIDX miss` (fp/cls/eco, hit 0) so the next step is ingest, not a third retry. Empty extract stays silent. `claimidx init` / `claimidx hook --install` writes Claude `PostToolUseFailure`. Evidence only; never applies `fix.b`. Fail-open. |
+| `hook` (`claimidx hook` / MCP `claimidx_hook`) | harness sensor: stdin failed-tool JSON or stderr → ask. Accepts Claude snake_case and Grok camelCase envelopes (`toolInput` / `toolResult` / `exit_code`). A miss prints `CLAIMIDX miss` (fp/cls/eco, hit 0) so the next step is ingest, not a third retry. Empty extract stays silent. `claimidx init` / `claimidx hook --install` writes Claude `PostToolUseFailure`; init also writes `~/.grok/hooks/claimidx.json` (Grok fires `PostToolUse` for a failed shell). Evidence only; never applies `fix.b`. Fail-open. |
 | Python `ask()` | in-process query (`from claimidx import ask`). Same payload as JSON ask. Never auto-confirms. |
 | Python `ingest()` | in-process local write (`from claimidx import ingest`). Does not share unless `share=True`. Combined: `from claimidx import ask, ingest`. |
 | Python `verify()` | in-process batch replay (`from claimidx import verify`). `dry_run` defaults true: lists claims and does not run evals, venv, or pip. Combined: `from claimidx import ask, ingest, verify`. |

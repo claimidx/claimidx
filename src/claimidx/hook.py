@@ -1,8 +1,9 @@
 """Harness sensor: pull an error out of stdin (Claude Code hook JSON or raw stderr).
 
 Does not apply fix.b. Fail-open: no error / secrets / parse issues → empty.
-`claimidx init` writes Claude PostToolUseFailure and, when those configs exist,
-Cursor/Grok MCP (`claimidx-mcp`). Never writes home URLs or tokens.
+`claimidx init` writes Claude PostToolUseFailure, Grok `~/.grok/hooks/claimidx.json`
+(Grok fires PostToolUse for a failed shell, not PostToolUseFailure), and, when
+those configs exist, Cursor/Grok MCP (`claimidx-mcp`). Never writes home URLs or tokens.
 """
 
 from __future__ import annotations
@@ -25,6 +26,100 @@ _ERR_LINE = re.compile(
     re.I,
 )
 _SUCCESS_EVENTS = {"PostToolUse", "PreToolUse", "SessionStart", "Stop"}
+_EVENT_CANON = {
+    "post_tool_use": "PostToolUse",
+    "post_tool_use_failure": "PostToolUseFailure",
+    "session_start": "SessionStart",
+    "session_end": "SessionEnd",
+    "stop": "Stop",
+    "pre_tool_use": "PreToolUse",
+    "user_prompt_submit": "UserPromptSubmit",
+}
+_BLOB_KEYS = (
+    "tool_response",
+    "tool_result",
+    "toolResult",
+    "error",
+    "stderr",
+    "output",
+    "message",
+    "content",
+    "result",
+)
+_INNER_KEYS = (
+    "stderr",
+    "stdout",
+    "output",
+    "error",
+    "content",
+    "message",
+    "output_for_prompt",
+    "outputForPrompt",
+)
+_EXIT_KEYS = ("exit_code", "exitCode", "returncode")
+
+
+def canon_hook_event(name: str | None) -> str | None:
+    """Claude PascalCase, Grok snake_case, and Cursor camelCase all become PascalCase."""
+    raw = (name or "").strip()
+    if not raw:
+        return None
+    if raw in _SUCCESS_EVENTS or raw == "PostToolUseFailure":
+        return raw
+    return _EVENT_CANON.get(raw) or _EVENT_CANON.get(raw.replace("-", "_").lower()) or raw
+
+
+def _parse_hook_obj(raw: str) -> dict | None:
+    try:
+        obj = json.loads((raw or "").strip())
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
+def _payload_blobs(obj: dict) -> list[str]:
+    blobs: list[str] = []
+    for key in _BLOB_KEYS:
+        val = obj.get(key)
+        if isinstance(val, str) and val.strip():
+            blobs.append(val)
+        elif isinstance(val, dict):
+            for inner in _INNER_KEYS:
+                iv = val.get(inner)
+                if isinstance(iv, str) and iv.strip():
+                    blobs.append(iv)
+    return blobs
+
+
+def _payload_exit(obj: dict) -> int | None:
+    for key in _BLOB_KEYS:
+        val = obj.get(key)
+        if isinstance(val, dict):
+            for ek in _EXIT_KEYS:
+                if ek in val:
+                    try:
+                        return int(val[ek])
+                    except (TypeError, ValueError):
+                        pass
+    return None
+
+
+def extract_hook_exit(raw: str) -> int | None:
+    """Exit code from a Grok/Cursor toolResult envelope, or None if the payload has none."""
+    obj = _parse_hook_obj(raw)
+    return _payload_exit(obj) if obj else None
+
+
+def posttooluse_is_failure(raw: str) -> bool:
+    """Grok (and Cursor) fire PostToolUse for a failed shell. Only trust an explicit non-zero exit."""
+    obj = _parse_hook_obj(raw)
+    if not obj:
+        return False
+    event = canon_hook_event(str(obj.get("hook_event_name") or obj.get("hookEventName") or "") or None)
+    if event != "PostToolUse":
+        return False
+    code = _payload_exit(obj)
+    return code is not None and code != 0
 
 
 def extract_hook_err(raw: str) -> tuple[str | None, str | None]:
@@ -34,22 +129,10 @@ def extract_hook_err(raw: str) -> tuple[str | None, str | None]:
         return None, None
     event: str | None = None
     body = text
-    try:
-        obj = json.loads(text)
-    except json.JSONDecodeError:
-        obj = None
-    if isinstance(obj, dict):
-        event = str(obj.get("hook_event_name") or obj.get("hookEventName") or "") or None
-        blobs: list[str] = []
-        for key in ("tool_response", "tool_result", "error", "stderr", "output", "message", "content", "result"):
-            val = obj.get(key)
-            if isinstance(val, str) and val.strip():
-                blobs.append(val)
-            elif isinstance(val, dict):
-                for inner in ("stderr", "stdout", "output", "error", "content", "message"):
-                    iv = val.get(inner)
-                    if isinstance(iv, str) and iv.strip():
-                        blobs.append(iv)
+    obj = _parse_hook_obj(text)
+    if obj is not None:
+        event = canon_hook_event(str(obj.get("hook_event_name") or obj.get("hookEventName") or "") or None)
+        blobs = _payload_blobs(obj)
         body = "\n".join(blobs) if blobs else ""
         if event in _SUCCESS_EVENTS and not body:
             return None, event
@@ -66,28 +149,28 @@ def extract_hook_err(raw: str) -> tuple[str | None, str | None]:
 
 
 def extract_hook_context(raw: str) -> dict[str, str]:
-    """Command and cwd from a Claude Code hook payload, when present. Empty otherwise."""
-    try:
-        obj = json.loads((raw or "").strip())
-    except (json.JSONDecodeError, ValueError):
-        return {}
-    if not isinstance(obj, dict):
+    """Command and cwd from a Claude Code or Grok hook payload, when present. Empty otherwise."""
+    obj = _parse_hook_obj(raw)
+    if not obj:
         return {}
     out: dict[str, str] = {}
-    blobs: list[str] = []
-    for key in ("tool_response", "tool_result", "error", "stderr", "output", "message", "content", "result"):
-        val = obj.get(key)
-        if isinstance(val, str):
-            blobs.append(val)
-        elif isinstance(val, dict):
-            blobs.extend(str(v) for k, v in val.items() if k in ("stderr", "stdout", "output", "error", "content", "message") and isinstance(v, str))
+    blobs = _payload_blobs(obj)
     if blobs:
         out["body"] = "\n".join(blobs)[:20000]
     tool_input = obj.get("tool_input")
+    if not isinstance(tool_input, dict):
+        tool_input = obj.get("toolInput")
     if isinstance(tool_input, dict) and isinstance(tool_input.get("command"), str):
         out["command"] = tool_input["command"][:400]
-    if isinstance(obj.get("cwd"), str):
-        out["cwd"] = obj["cwd"]
+    if not out.get("command"):
+        for key in ("toolResult", "tool_result", "tool_response"):
+            val = obj.get(key)
+            if isinstance(val, dict) and isinstance(val.get("command"), str):
+                out["command"] = val["command"][:400]
+                break
+    cwd = obj.get("cwd") or obj.get("workspaceRoot")
+    if isinstance(cwd, str):
+        out["cwd"] = cwd
     return out
 
 
@@ -480,6 +563,13 @@ def grok_config_path() -> Path:
     return Path.home() / ".grok" / "config.toml"
 
 
+def grok_hooks_path() -> Path:
+    override = os.environ.get("CLAIMIDX_GROK_HOOKS")
+    if override:
+        return Path(override)
+    return grok_config_path().parent / "hooks" / "claimidx.json"
+
+
 def opencode_config_path() -> Path:
     override = os.environ.get("CLAIMIDX_OPENCODE_CONFIG")
     if override:
@@ -681,12 +771,77 @@ def install_vscode_mcp(path: Path | None = None, *, own: str, agent: str = "") -
     return {"path": str(target), "status": "installed", "command": "claimidx-mcp"}
 
 
+def grok_hook_file(cmd: str | None = None) -> dict:
+    """Native Grok hooks file. Matcher includes run_terminal_command; timeout stays short."""
+    h: dict[str, Any] = {"type": "command", "command": cmd or hook_command(), "timeout": 15}
+    matcher = "Bash|run_terminal_command"
+    events: dict[str, list] = {}
+    for event, use_matcher in (
+        ("PostToolUseFailure", True),
+        ("PostToolUse", True),
+        ("SessionStart", False),
+        ("Stop", False),
+    ):
+        group: dict[str, Any] = {"hooks": [dict(h)]}
+        if use_matcher:
+            group["matcher"] = matcher
+        events[event] = [group]
+    return {"hooks": events}
+
+
+def grok_hooks_has_claimidx(data: dict) -> bool:
+    hooks = data.get("hooks") or {}
+    if not isinstance(hooks, dict):
+        return False
+    for event, _matcher in CLAUDE_EVENTS:
+        found = False
+        for group in hooks.get(event) or []:
+            if not isinstance(group, dict):
+                continue
+            for h in group.get("hooks") or []:
+                if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
+                    found = True
+        if not found:
+            return False
+    return True
+
+
+def install_grok_hooks(path: Path | None = None) -> dict:
+    """Write ~/.grok/hooks/claimidx.json so Grok sees the sensor without Claude compat."""
+    target = path or grok_hooks_path()
+    forced = bool(os.environ.get("CLAIMIDX_GROK_HOOKS")) or path is not None
+    cfg = grok_config_path()
+    if not forced and not cfg.exists() and not target.parent.exists():
+        return {"path": str(target), "status": "skip", "reason": "no grok config"}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    cmd = hook_command()
+    if target.exists():
+        try:
+            loaded = json.loads(target.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            return {"path": str(target), "status": "error", "error": f"claimidx.json is not json: {e}"}
+        if isinstance(loaded, dict) and grok_hooks_has_claimidx(loaded):
+            existing_cmd = ""
+            for group in (loaded.get("hooks") or {}).get("PostToolUse") or []:
+                if not isinstance(group, dict):
+                    continue
+                for h in group.get("hooks") or []:
+                    if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
+                        existing_cmd = str(h.get("command") or "")
+            if existing_cmd == cmd:
+                return {"path": str(target), "status": "present", "command": cmd}
+    payload = grok_hook_file(cmd)
+    target.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return {"path": str(target), "status": "installed", "command": cmd, "events": [e for e, _m in CLAUDE_EVENTS]}
+
+
 def install_harness(*, own: str, agent: str = "") -> dict:
-    """Claude failure hook plus MCP into Cursor/Grok/OpenCode/VS Code when those configs exist."""
+    """Claude failure hook, Grok native hooks, plus MCP into Cursor/Grok/OpenCode/VS Code when those configs exist."""
     return {
         "claude": install_claude_hook(),
         "cursor": install_cursor_mcp(own=own, agent=agent),
         "grok": install_grok_mcp(own=own, agent=agent),
+        "grok_hooks": install_grok_hooks(),
         "opencode": install_opencode_mcp(own=own, agent=agent),
         "vscode": install_vscode_mcp(own=own, agent=agent),
     }

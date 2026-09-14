@@ -155,8 +155,8 @@ def _hook_near_tie(a: float, b: float) -> bool:
 
 
 def cmd_hook(ns: argparse.Namespace) -> int:
-    """Harness sensor. Reads Claude-Code hook JSON or raw stderr. Never applies fix.b."""
-    from .hook import claude_context, extract_hook_err, install_claude_hook
+    """Harness sensor. Reads Claude-Code / Grok hook JSON or raw stderr. Never applies fix.b."""
+    from .hook import claude_context, extract_hook_err, install_claude_hook, posttooluse_is_failure
 
     if getattr(ns, "install", False):
         rec = install_claude_hook()
@@ -165,7 +165,8 @@ def cmd_hook(ns: argparse.Namespace) -> int:
 
     raw = (getattr(ns, "err", None) or "").strip() or sys.stdin.read()
     err, event = extract_hook_err(raw)
-    if event in {"PostToolUse", "SessionStart", "Stop"}:
+    # Grok fires PostToolUse for a non-zero shell; that is a failure, not a success nudge.
+    if event in {"PostToolUse", "SessionStart", "Stop"} and not (event == "PostToolUse" and posttooluse_is_failure(raw)):
         from .hook import session_brief, stop_reminder, success_nudge
 
         store = _store(ns)
@@ -1268,6 +1269,8 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
         claude_settings_path,
         cursor_mcp_path,
         grok_config_path,
+        grok_hooks_has_claimidx,
+        grok_hooks_path,
         opencode_config_path,
         settings_has_claimidx,
         vscode_mcp_path,
@@ -1306,6 +1309,19 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
         add("grok-mcp", True, f"{'installed' if has else 'missing claimidx'} {gp}")
     else:
         add("grok-mcp", True, f"skip ({gp})")
+    ghp = grok_hooks_path()
+    if gp.exists() or ghp.exists():
+        try:
+            grok_hooked = ghp.exists() and grok_hooks_has_claimidx(json.loads(ghp.read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError):
+            grok_hooked = False
+        add(
+            "grok-hooks",
+            True,
+            f"{'installed (failure, success, session, stop)' if grok_hooked else 'missing; claimidx init writes ~/.grok/hooks/claimidx.json'} {ghp}",
+        )
+    else:
+        add("grok-hooks", True, f"skip ({ghp})")
     oc = opencode_config_path()
     if oc.exists():
         try:

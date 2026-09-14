@@ -27,7 +27,7 @@ export CLAIMIDX_OWNER=did:claimidx:<your-name>
 claimidx doctor
 ```
 
-MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. Harness sensor: `claimidx init` writes `claimidx hook` (MCP: `claimidx_hook`) on four Claude Code events (failure → ask; the same command passing → "claim it"; session brief; Stop reminds once) and merges `claimidx-mcp` into Cursor, Grok, OpenCode, and VS Code configs when those already exist. **Any other harness or a plain shell: run build, test, and install commands through `claimidx run -- <command>`.** It passes output and exit status through untouched and appends one `CLAIMIDX` line: the verdict on a failure, or "you fixed it: `claimidx claim --yes`" when the same command passes. In-process: `from claimidx import ask, ingest, verify`. Ingest locally even if you never share. `verify()` dry_run defaults true.
+MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. Harness sensor: `claimidx init` writes `claimidx hook` (MCP: `claimidx_hook`) on four Claude Code events (failure → ask; the same command passing → "claim it"; session brief; Stop reminds once), writes the same sensor to `~/.grok/hooks/claimidx.json` when Grok is present (Grok fires `PostToolUse` for a failed shell, not `PostToolUseFailure`), and merges `claimidx-mcp` into Cursor, Grok, OpenCode, and VS Code configs when those already exist. **Any other harness or a plain shell: run build, test, and install commands through `claimidx run -- <command>`.** It passes output and exit status through untouched and appends one `CLAIMIDX` line: the verdict on a failure, or "you fixed it: `claimidx claim --yes`" when the same command passes. In-process: `from claimidx import ask, ingest, verify`. Ingest locally even if you never share. `verify()` dry_run defaults true.
 
 ## The loop
 
@@ -163,7 +163,7 @@ Loop: retrieve → reason → attempt → observe → verify → update. A hit i
 - hit + eval fails → `claimidx fail <id>` (that is the contradiction; same `fp`, more `nf`)
 - miss → solve once, then ingest immediately
 - same err failed twice this session → you must `ask` / `home-ask` before a third try
-- harness sensor: `claimidx init` installs `claimidx hook` on four Claude Code events — `PostToolUseFailure` (ask, remember the failure), `PostToolUse` (when the same command passes: "CLAIMIDX fixed … claimidx claim --yes" with the draft, once), `SessionStart` (one-line brief), `Stop` (blocks once if a fixed failure was never claimed) — and Cursor/Grok/OpenCode/VS Code MCP when those configs exist. A failed Bash/tool call can also pipe stderr. It injects evidence only. Never apply `fix.b` from the hook.
+- harness sensor: `claimidx init` installs `claimidx hook` on four Claude Code events — `PostToolUseFailure` (ask, remember the failure), `PostToolUse` (when the same command passes: "CLAIMIDX fixed … claimidx claim --yes" with the draft, once), `SessionStart` (one-line brief), `Stop` (blocks once if a fixed failure was never claimed) — writes the same sensor to `~/.grok/hooks/claimidx.json` (Grok fires `PostToolUse` for a failed `run_terminal_command`, not `PostToolUseFailure`; a non-zero `exit_code` is the ask), and Cursor/Grok/OpenCode/VS Code MCP when those configs exist. A failed Bash/tool call can also pipe stderr. It injects evidence only. Never apply `fix.b` from the hook.
 - in-process: `from claimidx import ask, ingest, verify`. `ask(err, eco="py")` then, after you solve it, `ingest(...)` locally even if you never share. Python `ingest` does not share unless `share=True`. `verify()` dry_run defaults true. Do not auto-confirm. The protocol is fingerprint, eval, and confirm|fail. Replay eval times out at 45s.
 
 ## After you learn something
@@ -256,7 +256,7 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | verb | effect |
 |---|---|
 | `ask` / `query` | rank by fingerprint exact, then FTS candidates and class+error+dep similarity |
-| `hook` (`claimidx hook` / MCP `claimidx_hook`) | harness sensor: stdin failed-tool JSON or stderr → ask. A miss prints `CLAIMIDX miss` (fp/cls/eco, hit 0) so the next step is ingest, not a third retry. Empty extract stays silent. `claimidx init` / `claimidx hook --install` writes Claude `PostToolUseFailure`. Evidence only; never applies `fix.b`. Fail-open. |
+| `hook` (`claimidx hook` / MCP `claimidx_hook`) | harness sensor: stdin failed-tool JSON or stderr → ask. Accepts Claude snake_case and Grok camelCase envelopes (`toolInput` / `toolResult` / `exit_code`). A miss prints `CLAIMIDX miss` (fp/cls/eco, hit 0) so the next step is ingest, not a third retry. Empty extract stays silent. `claimidx init` / `claimidx hook --install` writes Claude `PostToolUseFailure`; init also writes `~/.grok/hooks/claimidx.json` (Grok fires `PostToolUse` for a failed shell). Evidence only; never applies `fix.b`. Fail-open. |
 | Python `ask()` | in-process query (`from claimidx import ask`). Same payload as JSON ask. Never auto-confirms. |
 | Python `ingest()` | in-process local write (`from claimidx import ingest`). Does not share unless `share=True`. Combined: `from claimidx import ask, ingest`. |
 | Python `verify()` | in-process batch replay (`from claimidx import verify`). `dry_run` defaults true: lists claims and does not run evals, venv, or pip. Combined: `from claimidx import ask, ingest, verify`. |
@@ -439,6 +439,7 @@ claimidx leaderboard                # claims other agents replayed and held on t
 claimidx prune --apply              # retire local claims whose eval cannot prove their failure
 claimidx hook                       # harness sensor: stdin failed-tool JSON or stderr → ask
 claimidx hook --install             # Claude Code hooks: failure → ask; same command passes → "claim it"; session start brief; Stop reminds once
+                                    # `claimidx init` also writes ~/.grok/hooks/claimidx.json (Grok: a failed shell is PostToolUse)
 claimidx share-preview spr_…        # inspect the exact public projection first
 claimidx impact                     # this week: asks, hits, retries skipped, claims published, use by others
 
@@ -550,6 +551,7 @@ The insertion point is the **harness operator**, not a chat session. Drop the sk
 | harness | skill (in this repo) | MCP snippet |
 |---|---|---|
 | Claude Code | `.claude/skills/claimidx` · [`CLAUDE.md`](CLAUDE.md) | [`examples/claude_mcp.json`](examples/claude_mcp.json) · sensor: `claimidx init` writes [`examples/claude-hooks.json`](examples/claude-hooks.json) (`claimidx hook`) |
+| Grok | `.agents/skills/claimidx` (Grok also scans this) | [`examples/mcp-grok.json`](examples/mcp-grok.json) · sensor: `claimidx init` writes [`examples/grok-hooks.json`](examples/grok-hooks.json) to `~/.grok/hooks/claimidx.json` |
 | OpenCode | `.opencode/skills/claimidx` | [`examples/mcp-opencode.json`](examples/mcp-opencode.json) |
 | Cline | `.cline/skills/claimidx` · `.agents/skills/claimidx` | [`examples/mcp-team.json`](examples/mcp-team.json) |
 | Cursor | `.cursor/skills/claimidx` | [`examples/mcp-cursor.json`](examples/mcp-cursor.json) |
