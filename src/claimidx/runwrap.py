@@ -17,6 +17,7 @@ import os
 import shlex
 import subprocess
 import sys
+import threading
 from typing import Any
 
 from .env import deps_from_traceback, infer_env, last_failure, remember_failure
@@ -47,11 +48,23 @@ def run_command(argv: list[str], *, cwd: str | None = None, timeout: float | Non
     assert proc.stdout is not None
     try:
         if stream:
-            for line in proc.stdout:
-                sys.stdout.write(line)
-                sys.stdout.flush()
-                chunks.append(line)
-            rc = proc.wait(timeout=timeout)
+            # wait(timeout) after stdout EOF never fires if the child hangs with
+            # the pipe open. Pump in a thread and time the process itself.
+            def _pump() -> None:
+                assert proc.stdout is not None
+                for line in proc.stdout:
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
+                    chunks.append(line)
+
+            reader = threading.Thread(target=_pump, daemon=True)
+            reader.start()
+            try:
+                rc = proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                rc = 124
+            reader.join(timeout=2)
         else:
             # communicate applies timeout to the whole process; a hang that never
             # closes stdout would otherwise ignore wait(timeout=).
@@ -82,6 +95,9 @@ def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None =
     cmd = shlex.join(argv)
     root = cwd or os.getcwd()
     out: dict[str, Any] = {"rc": rc, "command": cmd}
+    if rc in (124, 127):
+        # Wrapper timeout / spawn failure: not a tree error to ask or remember.
+        return out
     if rc != 0:
         err = _first_err_line(output) or ""
         if not err:

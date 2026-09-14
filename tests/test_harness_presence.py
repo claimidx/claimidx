@@ -427,3 +427,53 @@ def test_cursor_hooks_restore_missing_post_tool_use_failure(tmp_path):
     assert rec["status"] in {"installed", "updated"}
     data = json.loads(path.read_text(encoding="utf-8"))
     assert any("claimidx hook" in json.dumps(h) for h in data["hooks"].get("postToolUseFailure") or [])
+
+
+def test_gemini_after_tool_success_without_exit_does_not_ask(tmp_path, capsys):
+    """Gemini AfterTool often omits exitCode; success output must not look like a failure."""
+    db = str(tmp_path / "ix.sqlite")
+    payload = json.dumps(
+        {
+            "hook_event_name": "AfterTool",
+            "tool_name": "run_shell_command",
+            "tool_args": {"command": "echo hello"},
+            "tool_response": {
+                "llmContent": "hello from a successful shell command\n",
+                "returnDisplay": "hello from a successful shell command",
+            },
+        }
+    )
+    assert main(["--db", db, "hook", "--err", payload]) == 0
+    assert "CLAIMIDX verdict" not in capsys.readouterr().out
+
+
+def test_grok_hooks_update_stale_matcher(tmp_path):
+    from claimidx.hook import grok_hook_file, hook_command, install_grok_hooks
+
+    cmd = hook_command()
+    path = tmp_path / "claimidx.json"
+    payload = grok_hook_file(cmd)
+    payload["hooks"]["PostToolUse"][0]["matcher"] = "Bash"
+    payload["hooks"]["PostToolUseFailure"][0]["matcher"] = "Bash"
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    rec = install_grok_hooks(path)
+    assert rec["status"] in {"installed", "updated"}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert "run_terminal_command" in (data["hooks"]["PostToolUse"][0].get("matcher") or "")
+    assert "run_terminal_command" in (data["hooks"]["PostToolUseFailure"][0].get("matcher") or "")
+
+
+def test_flat_mcp_override_keeps_skill_next_to_the_file(tmp_path, capsys, monkeypatch):
+    """A CLAIMIDX_*_MCP file that is not nested under data/settings must not walk to grandparents."""
+    monkeypatch.setenv("CLAIMIDX_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("CLAIMIDX_CLINE_MCP", str(tmp_path / "cline.json"))
+    monkeypatch.setenv("CLAIMIDX_CONTINUE_MCP", str(tmp_path / "continue.json"))
+    (tmp_path / "cline.json").write_text("{}\n", encoding="utf-8")
+    (tmp_path / "continue.json").write_text("{}\n", encoding="utf-8")
+    db = str(tmp_path / "ix.sqlite")
+    assert main(["--db", db, "init", "--agent", "wiretest", "--offline"]) == 0
+    capsys.readouterr()
+    leaked = tmp_path.parent / "skills" / "claimidx" / "SKILL.md"
+    assert not leaked.exists()
+    assert (tmp_path / "skills" / "claimidx" / "SKILL.md").is_file()

@@ -64,6 +64,7 @@ Three commands. Everything else on this page is the long form.
 
 ```bash
 claimidx run -- python -m pytest -q      # any harness or shell: output and exit status untouched, plus one CLAIMIDX line
+                                         # optional --timeout N (exit 124); MCP claimidx_run defaults to 300s
                                          # MCP: claimidx_run  argv=["python","-m","pytest","-q"]  (no shell; output captured)
                                          # (Claude Code users skip this: `claimidx init` wires the same thing as hooks)
 claimidx apply cix_… --cwd . --yes       # the verdict said apply: install the pin or git-apply the patch, replay, record

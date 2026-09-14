@@ -198,7 +198,11 @@ def hook_is_failure(raw: str, event: str | None, err: str | None) -> bool:
     if not obj:
         return False
     orig = _hook_event_raw(obj)
-    return _snake_event(orig) in _HEURISTIC_FAILURE_EVENTS
+    if _snake_event(orig) not in _HEURISTIC_FAILURE_EVENTS:
+        return False
+    # AfterTool / afterShellExecution often omit an exit code. Do not treat
+    # ordinary stdout as a failure just because it is long enough to extract.
+    return bool(_ERR_LINE.search(err))
 
 
 def extract_hook_err(raw: str) -> tuple[str | None, str | None]:
@@ -1259,6 +1263,33 @@ def grok_hooks_has_claimidx(data: dict) -> bool:
     return True
 
 
+def grok_hooks_current(data: dict, cmd: str) -> bool:
+    """True when every event has our hook, the current command, and the Grok matcher."""
+    if not grok_hooks_has_claimidx(data):
+        return False
+    hooks = data.get("hooks") or {}
+    matcher = "Bash|run_terminal_command"
+    wanted: dict[str, str | None] = {
+        "PostToolUseFailure": matcher,
+        "PostToolUse": matcher,
+        "SessionStart": None,
+        "Stop": None,
+    }
+    for event, want_matcher in wanted.items():
+        found_cmd = None
+        found_matcher: str | None = None
+        for group in hooks.get(event) or []:
+            if not isinstance(group, dict):
+                continue
+            for h in group.get("hooks") or []:
+                if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
+                    found_cmd = str(h.get("command") or "")
+                    found_matcher = group.get("matcher")
+        if found_cmd != cmd or found_matcher != want_matcher:
+            return False
+    return True
+
+
 def install_grok_hooks(path: Path | None = None) -> dict:
     """Write ~/.grok/hooks/claimidx.json so Grok sees the sensor without Claude compat."""
     target = path or grok_hooks_path()
@@ -1273,16 +1304,8 @@ def install_grok_hooks(path: Path | None = None) -> dict:
             loaded = json.loads(target.read_text(encoding="utf-8"))
         except json.JSONDecodeError as e:
             return {"path": str(target), "status": "error", "error": f"claimidx.json is not json: {e}"}
-        if isinstance(loaded, dict) and grok_hooks_has_claimidx(loaded):
-            existing_cmd = ""
-            for group in (loaded.get("hooks") or {}).get("PostToolUse") or []:
-                if not isinstance(group, dict):
-                    continue
-                for h in group.get("hooks") or []:
-                    if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
-                        existing_cmd = str(h.get("command") or "")
-            if existing_cmd == cmd:
-                return {"path": str(target), "status": "present", "command": cmd}
+        if isinstance(loaded, dict) and grok_hooks_current(loaded, cmd):
+            return {"path": str(target), "status": "present", "command": cmd}
     payload = grok_hook_file(cmd)
     target.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return {"path": str(target), "status": "installed", "command": cmd, "events": [e for e, _m in CLAUDE_EVENTS]}
@@ -1378,6 +1401,14 @@ def _skill_ours(text: str) -> bool:
     return bool(re.search(r"(?m)^name:\s*claimidx\s*$", text))
 
 
+def _harness_skill_path(mcp: Path, *home_names: str) -> Path:
+    """SKILL.md under the harness home. A flat MCP override stays next to that file."""
+    for p in mcp.parents:
+        if p.name in home_names:
+            return p / "skills" / "claimidx" / "SKILL.md"
+    return mcp.parent / "skills" / "claimidx" / "SKILL.md"
+
+
 def install_one_skill(target: Path, body: str) -> dict:
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
@@ -1406,8 +1437,8 @@ def install_user_skills() -> dict:
         "codex": codex_config_path().parent / "skills" / "claimidx" / "SKILL.md",
         "gemini": gemini_settings_path().parent / "skills" / "claimidx" / "SKILL.md",
         "opencode": opencode_config_path().parent / "skills" / "claimidx" / "SKILL.md",
-        "cline": (cline_mcp_path().parents[2] if len(cline_mcp_path().parents) >= 3 else cline_mcp_path().parent) / "skills" / "claimidx" / "SKILL.md",
-        "continue": continue_mcp_path().parent.parent / "skills" / "claimidx" / "SKILL.md",
+        "cline": _harness_skill_path(cline_mcp_path(), ".cline", "cline"),
+        "continue": _harness_skill_path(continue_mcp_path(), ".continue", "continue"),
         "windsurf": windsurf_mcp_path().parent / "skills" / "claimidx" / "SKILL.md",
     }
     required = {

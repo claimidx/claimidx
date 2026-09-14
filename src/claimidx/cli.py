@@ -681,7 +681,8 @@ def cmd_run(ns: argparse.Namespace) -> int:
     if not argv:
         print("usage: claimidx run -- <command> [args...]", file=sys.stderr)
         return 2
-    rc, output = run_command(argv, cwd=ns.cwd)
+    timeout = getattr(ns, "timeout", None)
+    rc, output = run_command(argv, cwd=ns.cwd, timeout=timeout)
     try:
         after_run(_store(ns), argv, rc, output, cwd=ns.cwd, k=ns.k)
     except Exception as e:  # the wrapper must never change the command's outcome
@@ -1551,6 +1552,7 @@ def build_parser() -> argparse.ArgumentParser:
     rn = sub.add_parser("run", help="Run a command through the sensor: failure → ask + remember; the fix → `claim --yes` nudge. Exit status is the command's")
     rn.add_argument("--cwd")
     rn.add_argument("-k", type=int, default=5)
+    rn.add_argument("--timeout", type=float, default=None, help="seconds to wait before killing the process (exit 124). Default: wait forever")
     rn.add_argument("argv", nargs=argparse.REMAINDER, help="-- <command> [args...]")
     rn.set_defaults(func=cmd_run)
     ap = sub.add_parser("apply", help="Apply a pin or patch remedy in --cwd, then confirm --replay; prints the plan without --yes")

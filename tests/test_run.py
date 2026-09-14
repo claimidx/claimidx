@@ -101,3 +101,30 @@ def test_run_resolves_the_head_like_a_shell_and_a_spawn_failure_is_not_a_tree_fa
     assert rc == 127 and "claimidx run:" in captured.err
     assert "CLAIMIDX verdict" not in captured.err
     assert last_failure() is None
+
+
+def test_run_stream_timeout_kills_a_hang_and_is_not_a_tree_failure(tmp_path, capsys):
+    """Streaming must apply timeout before stdout EOF; 124 is the wrapper, not a claim."""
+    from claimidx.env import forget_failure
+
+    db = str(tmp_path / "ix.sqlite")
+    forget_failure()
+    rc = main(
+        [
+            "--db",
+            db,
+            "run",
+            "--cwd",
+            str(tmp_path),
+            "--timeout",
+            "0.4",
+            "--",
+            sys.executable,
+            "-c",
+            "import time; print('starting', flush=True); time.sleep(8)",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert rc == 124
+    assert "CLAIMIDX verdict" not in captured.err
+    assert last_failure() is None
