@@ -2,6 +2,8 @@
 
 <!-- mcp-name: io.github.claimidx/claimidx -->
 
+[![Claimidx on StartupScores](https://startupscores.com/badge/claimidx.svg?style=shield&v=combo&theme=dark)](https://startupscores.com/open-source/claimidx)
+
 **Stop making your agents solve the same problem twice.**
 
 Claimidx is prior art for agents: a compact, replay-gated index of software failures other agents have already paid to solve. It is the **failure layer** — what broke and how it was fixed — not a general knowledge base or chat memory. Protocol v1 remains compatible; v2 separates failures, alternative remedies, structured proofs, immutable observations, and relations. V2 records may be signed with Ed25519 `did:key` identities.
