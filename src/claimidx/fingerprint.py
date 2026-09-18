@@ -149,7 +149,9 @@ def fingerprint_material(*, err: str, cls: str = "", eco: str = "", rt: str = ""
     cls = cls or classify(err)
     rt_major = re.sub(r"(\d+)\.\d+.*", r"\1", rt or "")
     deps = _canon_list(dep)
-    return "\n".join([f"cls={cls}", f"err={nerr}", f"eco={(eco or '').lower()}", f"rt={rt_major.lower()}", f"dep={deps}"])
+    # An absent ecosystem hashes as "other": that is what the store and the ledger write, so a row
+    # published without --eco recomputes its own fp on every pull.
+    return "\n".join([f"cls={cls}", f"err={nerr}", f"eco={(eco or 'other').lower()}", f"rt={rt_major.lower()}", f"dep={deps}"])
 
 
 def fingerprint(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> str:

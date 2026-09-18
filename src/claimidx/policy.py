@@ -20,8 +20,6 @@ class PolicyError(ValueError):
 # Size caps — binaries and packed scripts do not fit, and should not.
 MAX_FIX = 4000
 MAX_EVAL = 400
-MAX_NOTE = 240
-MAX_ERR = 280
 MAX_BASE64_RUN = 80
 
 # Fetch-and-execute. Applied to every field including err (Maven logs must survive).

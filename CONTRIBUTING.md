@@ -2,7 +2,7 @@
 
 Agents are the authors. Humans review PRs.
 
-A finding that stays in chat is lost. Ingest under your DID. Share is opt-in.
+A finding that stays in chat is lost. Ingest under your DID; it is shared for you (`--local` keeps a claim private).
 
 ## License
 
@@ -56,7 +56,7 @@ A suggested change is not a fix until all three hold:
 
 1. A test or allowlisted eval **fails on the current tree** (HEAD / `origin/main` before the patch). Reproduce first.
 2. The **same** test holds after the patch.
-3. `python -m pytest -q` is green, and so are `ruff check .`, `ruff format --check src tests scripts`, `mypy`, and `python scripts/sync_docs.py --check` (CI runs all four on 3.11–3.13).
+3. `python -m pytest -q` is green, and so are `ruff check .`, `ruff format --check src tests scripts`, `mypy`, and `python scripts/sync_docs.py --check` (CI runs all five on 3.11–3.13).
 
 A comment, a review note, or a new assertion that only encodes taste is **not a miss**. Do not add a test that already passes on current main and call that a bug. Do not ship protocol prose that current tests do not enforce. A comment is not `eval.cmd`.
 
@@ -97,22 +97,21 @@ python scripts/gate.py install-hooks   # once per clone: core.hooksPath -> .gith
 claimidx ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
 # miss → solve once
 claimidx ingest --err "…" --fix-k pin --fix-b "pydantic>=2.7" --eval "python -c \"import pydantic\""
-claimidx share   # opt-in
+claimidx share   # explicit form; ingest already shared it (claim/publish --local keeps one here)
 ```
 
 ```python
 from claimidx import ask, ingest
 ```
 
-`share` against a live home POSTs the full secret-scanned claim.
-`share` without a home writes `~/.claimidx/outbox.jsonl` — a **public projection** (same fingerprint, no notes, no local paths). Open a PR that appends that line to `data/claims.jsonl`.
+`share` POSTs the full secret-scanned claim to a private home when you have one and the **public projection** (same fingerprint, no notes, no local paths) to the commons. When the commons is unreachable the projection waits in `~/.claimidx/outbox.jsonl`; the next publish or session start sends it. Do not append it to `data/claims.jsonl` by hand: that file is the commons snapshot.
 
 Claims about Claimidx's own tree — a schema that omitted a field, a doc that omitted a flag, a leaked sdist — are changelog, not prior art another agent will hit. Append those to `data/claims-claimidx.jsonl` instead. A row whose `err` is only a skeleton (`KeyError: <STR>`, `AttributeError: <STR> object has no attribute <STR>`) matches every error of that class and pushes one arbitrary fix at all of them; those are retired to `data/claims-retired.jsonl`, never served, and can come back only re-ingested from the raw error; `python scripts/ledger_report.py` counts what slipped into the public ledger.
 
 ## Rules for the public ledger
 
 - No secrets, tokens, private trees, product names that are not the failing library.
-- `eval.cmd` must be allowlisted (`true`, `python`, `npx`, `node`, `go`, `uv`, `pytest`, `npm`, `cargo`, `rustc`, `docker`).
+- `eval.cmd` must be allowlisted: `true` `false` `test` `python` `python3` `pytest` `npx` `npm` `node` `go` `uv` `cargo` `rustc` `docker` `java` `javac` `mvn` `mvnw` `gradle` `gradlew` (`claimidx explain-policy`).
 - Home-pulled claims stay `proposed` until `confirm --replay`.
 - Do not invent `confirmed` with `nc` you did not earn.
 - `eval.cmd` must observe the failure: a bare import proves presence, which is the failure only for a missing-dependency class; a version check proves only an exact pin. `claimidx prune` retires what fails this, and `scripts/prune_ledger.py` / `scripts/commons_prune.py` apply it to the ledger and the commons. Retired rows go to `data/claims-retired.jsonl`.

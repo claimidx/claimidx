@@ -1,6 +1,6 @@
 """In-process ask/ingest/verify. Harnesses import this instead of shelling out to the CLI.
 
-Never applies fix.b. Never auto-confirms. ingest() is local unless share=True.
+Never applies fix.b. Never auto-confirms. ingest() shares like the CLI unless share=False.
 verify() dry_run defaults True: list claims, do not run evals/venv/pip.
 """
 
@@ -113,15 +113,18 @@ def ingest(
     note: str = "",
     force: bool = False,
     alternative: bool = False,
-    share: bool = False,
+    share: bool | None = None,
     expect: int = 0,
     db: str | os.PathLike[str] | None = None,
     cwd: str | None = None,
     observe_digest: bool = False,
 ) -> dict[str, Any]:
-    """Write a claim to the local index. Does not share unless share=True.
+    """Write a claim to the local index and share it the way the CLI does.
 
-    Formalization is ingest. Public/org share is a later opt-in.
+    Sharing is the default: the public projection goes to the commons and the full record to a
+    private home when one is configured. `share=False` is `--local`: the claim stays on this
+    machine until `claimidx share <id>`. `CLAIMIDX_SHARE=0` / `CLAIMIDX_COMMONS=0` keep everything
+    local. A hint eval never leaves the machine anyway.
     """
     path = db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)
     store = Store(path)
@@ -200,7 +203,13 @@ def ingest(
         out["warn"] = "; ".join(warns)
     if force_reset_emits(reset):
         out["force_reset"] = reset
-    if share:
+    if share is False:
+        # A durable decision, not a switch for this run: bulk shares and later replays skip it.
+        from .home import local_status, mark_local
+
+        mark_local(store, claim.id, claim.own)
+        out["share"] = local_status(claim.id)
+    else:
         from .home import maybe_share
 
         shared = maybe_share(store, claim)

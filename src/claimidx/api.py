@@ -139,7 +139,7 @@ def create_app(db: str | None = None) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def inspector():
-        return WEB.read_text() if WEB.exists() else HTMLResponse("<pre>Claimidx inspector missing</pre>")
+        return WEB.read_text(encoding="utf-8") if WEB.exists() else HTMLResponse("<pre>Claimidx inspector missing</pre>")
 
     @app.get("/health")
     def health():

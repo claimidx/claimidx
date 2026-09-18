@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -277,7 +278,7 @@ def propose_line(claim: Claim) -> str:
     return json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
 
-def publish_home(claim: Claim, api: str | None = None, token: str | None = None, force: bool = False) -> dict[str, Any]:
+def publish_home(claim: Claim, api: str | None = None, token: str | None = None, force: bool = False, *, timeout: float = 20.0) -> dict[str, Any]:
     """POST a local claim to a live home API. Never hits GitHub directly."""
     base = (api or api_url()).rstrip("/")
     if not base:
@@ -300,7 +301,7 @@ def publish_home(claim: Claim, api: str | None = None, token: str | None = None,
         "note": claim.note,
         "force": force,
     }
-    return _post(f"{base}/api/publish", body, token=token if token is not None else api_token())
+    return _post(f"{base}/api/publish", body, token=token if token is not None else api_token(), timeout=timeout)
 
 
 def keep_local(store, claim_id: str) -> bool:
@@ -394,11 +395,11 @@ def commons_travels(claim: Claim) -> tuple[bool, str]:
     return True, ""
 
 
-def push_commons(store, claim: Claim, *, force: bool = False) -> dict[str, Any]:
+def push_commons(store, claim: Claim, *, force: bool = False, timeout: float = 20.0) -> dict[str, Any]:
     """Push the public projection to the commons; queue it in the outbox only when the commons is unreachable.
 
-    A policy refusal (400/403/404/409/410/422) is recorded as `commons-refused` and never
-    retried; transient 4xx (401/408/425/429) stay in the outbox like transport failures.
+    A policy refusal (400/409/410/422, or a 403/404 whose body is a row judgment) is recorded as
+    `commons-refused` and never retried; transient 4xx (401/408/425/429) stay in the outbox like transport failures.
     A projection with no replayable eval is recorded as `commons-skip` before any request.
     Settled skips/refusals stop the hooks nudging about the claim.
     """
@@ -418,7 +419,7 @@ def push_commons(store, claim: Claim, *, force: bool = False) -> dict[str, Any]:
     if force:
         payload["force"] = True
     try:
-        result = _post(commons_api() + "/api/publish", payload)
+        result = _post(commons_api() + "/api/publish", payload, timeout=timeout)
     except HomeError as e:
         if _is_refusal(str(e)):
             store.log("commons-refused", claim.own, claim.id, {"error": str(e)[:300]})
@@ -428,20 +429,31 @@ def push_commons(store, claim: Claim, *, force: bool = False) -> dict[str, Any]:
         with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(payload, separators=(",", ":"), ensure_ascii=False) + "\n")
         store.log("home-propose", claim.own, claim.id, {"commons": "outbox", "error": str(e)[:200]})
-        return {"status": "outbox", "id": claim.id, "path": str(path), "hint": f"commons unreachable ({str(e)[:80]}); queued, `claimidx sync` sends it"}
+        return {
+            "status": "outbox",
+            "id": claim.id,
+            "path": str(path),
+            "hint": f"commons unreachable ({str(e)[:80]}); queued, sent on the next claim or session (`claimidx sync` sends it now)",
+        }
     store.log("commons-push", claim.own, claim.id, {"exists": bool(result.get("exists")) if isinstance(result, dict) else False})
     return {"status": "commons", "id": claim.id, "commons": result}
 
 
-def flush_outbox(store) -> dict[str, Any]:
-    """Send queued public rows to the commons; keep the ones that still fail."""
+def flush_outbox(store, *, timeout: float = 20.0, stop_on_unreachable: bool = False) -> dict[str, Any]:
+    """Send queued public rows to the commons; keep the ones that still fail.
+
+    `stop_on_unreachable` leaves the rest of the queue untouched after the first transport
+    failure: the commons is down and one probe is enough (the hooks run this on a time budget).
+    """
     path = outbox_path()
     if not path.exists() or not commons_enabled():
-        return {"sent": 0, "kept": 0, "refused": 0}
+        return {"sent": 0, "kept": 0, "refused": 0, "unreachable": False}
     kept: list[str] = []
     sent = 0
     refused = 0
-    for line in path.read_text(encoding="utf-8").splitlines():
+    unreachable = False
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for i, line in enumerate(lines):
         if not line.strip():
             continue
         try:
@@ -449,7 +461,7 @@ def flush_outbox(store) -> dict[str, Any]:
         except ValueError:
             continue
         try:
-            _post(commons_api() + "/api/publish", payload)
+            _post(commons_api() + "/api/publish", payload, timeout=timeout)
         except HomeError as e:
             if _is_refusal(str(e)):
                 refused += 1  # a decision, not an outage: drop it, record it
@@ -458,6 +470,10 @@ def flush_outbox(store) -> dict[str, Any]:
                     store.log("commons-refused", str(payload.get("own") or "did:claimidx:anon"), cid, {"error": str(e)[:300], "from": "outbox"})
                 continue
             kept.append(line)
+            if stop_on_unreachable:
+                unreachable = True
+                kept.extend(rest for rest in lines[i + 1 :] if rest.strip())
+                break
             continue
         sent += 1
         cid = str(payload.get("id") or "")
@@ -467,7 +483,7 @@ def flush_outbox(store) -> dict[str, Any]:
         path.write_text("\n".join(kept) + "\n", encoding="utf-8")
     else:
         path.unlink(missing_ok=True)
-    return {"sent": sent, "kept": len(kept), "refused": refused}
+    return {"sent": sent, "kept": len(kept), "refused": refused, "unreachable": unreachable}
 
 
 def already_shared(store, claim_id: str) -> bool:
@@ -479,7 +495,9 @@ def already_shared(store, claim_id: str) -> bool:
     return False
 
 
-def share_claim(store, claim: Claim, *, api: str | None = None, token: str | None = None, force: bool = False, explicit: bool = False) -> dict[str, Any]:
+def share_claim(
+    store, claim: Claim, *, api: str | None = None, token: str | None = None, force: bool = False, explicit: bool = False, timeout: float = 20.0
+) -> dict[str, Any]:
     """Push a local claim: the full record to a private home when one is configured, and the public
     projection to the commons unless it is switched off. With neither, the projection is queued.
 
@@ -494,7 +512,7 @@ def share_claim(store, claim: Claim, *, api: str | None = None, token: str | Non
     out: dict[str, Any] = {"status": "already", "id": claim.id}
     if base and (force or not already_shared(store, claim.id)):
         try:
-            result = publish_home(claim, api=base, token=token, force=force)
+            result = publish_home(claim, api=base, token=token, force=force, timeout=timeout)
         except HomeError as e:
             # A private home that refuses (old server, cap, outage) does not keep the claim off the commons.
             out["home"] = {"status": "error", "error": str(e)[:300]}
@@ -504,7 +522,7 @@ def share_claim(store, claim: Claim, *, api: str | None = None, token: str | Non
             store.log("home-push", claim.own, claim.id)
             out.update({"status": "pushed", "home": result})
     if commons_enabled():
-        commons = push_commons(store, claim, force=force)
+        commons = push_commons(store, claim, force=force, timeout=timeout)
         out["commons"] = commons
         if commons.get("status") in {"commons", "outbox"} and out["status"] == "already":
             out["status"] = commons["status"]
@@ -573,17 +591,94 @@ def share_pending(store, *, api: str | None = None, token: str | None = None, fo
 
 
 def maybe_share(store, claim: Claim) -> dict[str, Any] | None:
-    """Auto-submit after ingest/confirm when a live home is configured."""
+    """Auto-submit after ingest/confirm: the private home when one is configured, the commons unless it is off.
+
+    Anything queued from an earlier outage goes first, so a new publish drains the outbox
+    without anyone asking for a sync.
+    """
     if not share_enabled():
         return None
     if keep_local(store, claim.id):
         return local_status(claim.id)
     if not api_url() and not commons_enabled():
         return None
+    flushed = flush_outbox(store, timeout=HOOK_REQUEST_SECONDS, stop_on_unreachable=True) if outbox_path().exists() else None
     try:
-        return share_claim(store, claim)
+        out = share_claim(store, claim)
     except HomeError as e:
-        return {"status": "error", "id": claim.id, "error": str(e)}
+        out = {"status": "error", "id": claim.id, "error": str(e)}
+    if flushed and flushed.get("sent"):
+        out["outbox"] = flushed
+    return out
+
+
+HOOK_REQUEST_SECONDS = 4.0
+HOOK_BUDGET_SECONDS = 8.0
+
+
+def unshared_claims(store, limit: int = 500) -> list[str]:
+    """Local, live, replayable claims that have reached neither a home nor the commons."""
+    from .public import eval_is_proof
+
+    if not share_enabled():
+        return []
+    want_private = bool(api_url())
+    want_commons = commons_enabled()
+    if not want_private and not want_commons:
+        return []
+    out: list[str] = []
+    try:
+        rows = store.all()
+    except Exception:
+        return []
+    for c in rows:
+        if getattr(c, "src", "local") != "local" or c.st == "rejected" or not eval_is_proof(c.eval.cmd) or keep_local(store, c.id):
+            continue
+        commons_due = want_commons and not commons_settled(store, c.id) and commons_travels(c)[0]
+        if (want_private and not already_shared(store, c.id)) or commons_due:
+            out.append(c.id)
+            if len(out) >= limit:
+                break
+    return out
+
+
+def auto_share(store, *, budget: float = HOOK_BUDGET_SECONDS, timeout: float = HOOK_REQUEST_SECONDS) -> dict[str, Any]:
+    """Send whatever this machine still owes, without being asked: the outbox, then every unshared claim.
+
+    Runs inside the hooks, so it is bounded: one short request at a time, and the first
+    transport failure ends the run (the commons is down; the next session tries again).
+    Returns sent / queued / unreachable; `queued` is what is still waiting afterwards.
+    """
+    out: dict[str, Any] = {"sent": 0, "queued": 0, "unreachable": False}
+    if not share_enabled() or (not api_url() and not commons_enabled()):
+        return out
+    deadline = time.monotonic() + budget
+    flushed = flush_outbox(store, timeout=timeout, stop_on_unreachable=True)
+    out["sent"] += int(flushed.get("sent") or 0)
+    if flushed.get("unreachable"):
+        out["unreachable"] = True
+    else:
+        for cid in unshared_claims(store):
+            if time.monotonic() > deadline:
+                break
+            claim = store.get(cid)
+            if claim is None:
+                continue
+            try:
+                r = share_claim(store, claim, timeout=timeout)
+            except HomeError:
+                out["unreachable"] = True
+                break
+            status = r.get("status")
+            commons: dict[str, Any] = dict(r.get("commons") or {})
+            home_res: dict[str, Any] = dict(r.get("home") or {})
+            if status in {"pushed", "commons"} or commons.get("status") == "commons":
+                out["sent"] += 1
+            if status == "outbox" or commons.get("status") == "outbox" or home_res.get("status") == "error":
+                out["unreachable"] = True
+                break
+    out["queued"] = len(unshared_claims(store))
+    return out
 
 
 def share_observation(store, claim: Claim, *, held: bool, actor: str, replayed: bool = True, mode: str = "") -> dict[str, Any] | None:

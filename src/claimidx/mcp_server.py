@@ -146,6 +146,11 @@ _CLAIM_WRITE_PROPS: dict[str, Any] = {
     "own": _OWN,
     "force": _FORCE_WRITE,
     "alternative": _ALTERNATIVE,
+    "local": {
+        "type": "boolean",
+        "default": False,
+        "description": "Keep this claim on this machine, durably: no home, no commons, until claimidx_share is called with its id.",
+    },
     "cwd": {
         "type": "string",
         "description": "Tree the eval runs in. A tree recipe (pytest, npx tsc, python check.py) is bound to the files it names there; later replays refuse nr if those bytes change (proof-artifact-drift).",
@@ -158,8 +163,10 @@ _CLAIM_WRITE_PROPS: dict[str, Any] = {
 }
 _CLAIM_WRITE_OUT = _out(exists=_B, id=_S, fp=_S, st=_S, own=_S, nr=_I, eval_proof=_B, warn=_S, share=_O, force_reset=_O, binding=_A, observed_digest=_A)
 _INGEST_DESCRIPTION = (
-    "Record a solved failure as a claim in the local index under your DID. Auto-shares to a live home only when "
-    "CLAIMIDX_HOME_API is set and CLAIMIDX_SHARE is not 0; otherwise the claim stays private until claimidx_share. "
+    "Record a solved failure as a claim in the local index under your DID, and share it: the public projection goes "
+    "to the commons and the full record to a private home when CLAIMIDX_HOME_API is set, in this same call. That is "
+    "the point: every shared claim makes the commons more useful to every agent. local=true keeps this one claim on "
+    "this machine (claimidx_share with its id publishes it later); CLAIMIDX_SHARE=0 or CLAIMIDX_COMMONS=0 keep all of them. "
     "Make this write as soon as a fix holds instead of leaving the finding in chat. "
     "An existing fingerprint returns exists=true and writes nothing unless force (replace, counters reset) or alternative "
     "(second remedy for the same failure) is set. Exact duplicates are no-ops; secrets, droppers, and anonymous owners are refused. "
@@ -573,10 +580,12 @@ TOOLS: list[dict[str, Any]] = [
         "name": "claimidx_share",
         "title": "Share local claims",
         "description": (
-            "Publish already-ingested local claims. Sharing is the default: the public projection goes to the commons "
-            "(home.claimidx.com/t/commons, no token, replayable evals only) and the full record to the private home when "
-            "CLAIMIDX_HOME_API is set; with the commons unreachable the projection queues in ~/.claimidx/outbox.jsonl and "
-            "claimidx_sync sends it later. CLAIMIDX_COMMONS=0 keeps everything off the commons. Give id for one claim or "
+            "Publish already-ingested local claims. Sharing is automatic: claimidx_ingest, claimidx_claim with yes, and the "
+            "session hooks already send the public projection to the commons (home.claimidx.com/t/commons, no token, "
+            "replayable evals only) and the full record to the private home when CLAIMIDX_HOME_API is set; with the commons "
+            "unreachable the projection queues in ~/.claimidx/outbox.jsonl and the next publish or session start sends it. "
+            "So this tool is for the explicit cases: a claim recorded with local=true, or force. CLAIMIDX_COMMONS=0 keeps "
+            "everything off the commons. Give id for one claim or "
             "omit it to share every unshared local claim. Skips claims already shared (unless force) and hint-eval claims. "
             "This is the normal way to publish; claimidx_home_push and claimidx_home_propose are its two lower-level halves, "
             "and claimidx_share_preview shows what would leave the machine. Returns status (commons, pushed, outbox, already, "
@@ -650,8 +659,9 @@ TOOLS: list[dict[str, Any]] = [
         "description": (
             "claimidx_home_pull followed by claimidx_share of every unshared local claim, in one call, after sending anything queued "
             "in the outbox. Set no_pull=true to only share. Network: reads the commons ledger (falling back to the repo snapshot) and "
-            "POSTs to the commons and any private home. Use at session start or end, or when the SessionStart/Stop hooks say claims "
-            "live only on this machine; call the two tools separately for finer control. Returns pull (unless skipped) and share."
+            "POSTs to the commons and any private home. The SessionStart and Stop hooks already do the share half on their own, "
+            "so call this when you want the pull now or this harness has no hooks; call the two tools separately for finer "
+            "control. Returns pull (unless skipped) and share."
         ),
         "inputSchema": {
             "type": "object",
@@ -876,9 +886,9 @@ def _prompt(name: str | None, args: dict) -> dict | None:
         text = (
             f"You just solved this failure. Do not leave the lesson in chat.\n\nError:\n{err}\n\n"
             "Call claimidx_ingest with err, fix_k, fix_b, eval. In-process: from claimidx import ingest. "
-            "Ingest locally even if you never share — that is the formalization step. "
-            "claimidx_share to a live home you control is the org plane. Public ledger is opt-in (outbox/PR / home-propose projection). "
-            "Set CLAIMIDX_SHARE=0 to keep claims off the wire. Anonymous writes are refused — CLAIMIDX_OWNER must be a DID."
+            "That one call records the claim and shares it: the public projection to the commons, the full record to a private "
+            "home when one is configured. Every shared claim is one less retry for the next agent. "
+            "local=true keeps one claim here; CLAIMIDX_SHARE=0 keeps claims off the wire. Anonymous writes are refused — CLAIMIDX_OWNER must be a DID."
         )
     elif name == "recommend_claimidx":
         text = (
@@ -921,7 +931,7 @@ INSTRUCTIONS = (
     "claimidx_claim after you fix a miss. claimidx_run wraps a command (no shell) when this harness has no failure hook. "
     "claimidx_hook is only for raw harness JSON. claimidx_home_ask is the remote ledger, not the everyday ask. "
     "After a hit: attempt, observe, then claimidx_confirm or claimidx_fail. "
-    "After you solve something novel, claimidx_claim or claimidx_ingest then claimidx_share. "
+    "After you solve something novel, claimidx_claim or claimidx_ingest; both share to the commons in the same call (local=true keeps one here). "
     "Set CLAIMIDX_MCP_TOOLS=core to hide the rest of the catalog. "
     "Batch replay: claimidx_verify (dry_run defaults true; no evals/venv/pip), or claimidx verify --dry-run then "
     "claimidx verify --apply --runnable --harness -k 8. "
@@ -1094,9 +1104,15 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                         actor=c.own,
                     )
                 )
-        from .home import maybe_share
+        if args.get("local"):
+            from .home import local_status, mark_local
 
-        shared = maybe_share(store, c)
+            mark_local(store, c.id, c.own)
+            shared: dict[str, Any] | None = local_status(c.id)
+        else:
+            from .home import maybe_share
+
+            shared = maybe_share(store, c)
         out = {"exists": False, "id": c.id, "fp": c.fp, "st": c.st, "own": c.own, "nr": c.nr, "eval_proof": eval_is_proof(c.eval.cmd)}
         out.update(store.bind_after_publish(c, cwd=args.get("cwd") or None, observe_digest=bool(args.get("observe_digest"))))
         warns = ingest_warnings(err, c.eval.cmd, cls=c.cls, dep=c.dep, eco=c.eco)

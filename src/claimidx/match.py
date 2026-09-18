@@ -300,7 +300,7 @@ def verdict_for(query: Claim | dict, hits: list[tuple[Claim, float]]) -> dict:
     claim, sim = hits[0]
     ann = annotate(query, claim, sim)
     disp = ann.get("disposition") or {}
-    action = _VERDICT_ACTION.get(disp.get("action") or "", "replay")
+    action = _VERDICT_ACTION.get(disp.get("action") or "", "review")
     bits = [ann["match"] + " match", ann["evidence"]]
     if ann["evidence"] == "reproduced" and claim.rt:
         bits[-1] = f"reproduced on {claim.rt}"

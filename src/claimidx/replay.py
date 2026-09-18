@@ -528,7 +528,11 @@ def _project_ledger(path: Path, updates: list[Claim]) -> int:
     for line in lines:
         if not line.strip():
             continue
-        row = json.loads(line)
+        try:
+            row = json.loads(line)
+        except ValueError:
+            out.append(line)  # not ours to rewrite
+            continue
         cid = row.get("id")
         if cid in by_id:
             c = by_id[cid]
@@ -599,45 +603,43 @@ def run(
             else:
                 decision = harness(c, work) if harness_mode else decide(c, scratch=replay_root, trust=trust, store=store)
             action = decision["action"]
-            if not dry_run:
-                if action == "confirm":
-                    replay_info = decision.get("replay") or {}
-                    store.confirm(
-                        c.id,
-                        actor,
-                        replayed=True,
-                        detail={"ms": int(replay_info.get("ms") or 0), "held": True},
-                    )
-                    changed.append(store.get(c.id) or c)
+            if action == "confirm":
+                replay_info = decision.get("replay") or {}
+                store.confirm(
+                    c.id,
+                    actor,
+                    replayed=True,
+                    detail={"ms": int(replay_info.get("ms") or 0), "held": True},
+                )
+                changed.append(store.get(c.id) or c)
+                seen.add(c.id)
+            elif action == "fail":
+                replay_info = decision.get("replay") or {}
+                store.fail(
+                    c.id,
+                    actor,
+                    note=decision.get("reason") or "verify eval-miss",
+                    detail={"ms": int(replay_info.get("ms") or 0), "held": False},
+                )
+                changed.append(store.get(c.id) or c)
+                seen.add(c.id)
+            elif action == "skip":
+                reason = decision.get("reason") or ""
+                if reason in {
+                    "harness-no-repro",
+                    "harness-no-discriminate",
+                    "harness-broken-install",
+                    "harness-pin-install",
+                    "pin-eval-unproven",
+                }:
                     seen.add(c.id)
-                elif action == "fail":
-                    replay_info = decision.get("replay") or {}
-                    store.fail(
-                        c.id,
-                        actor,
-                        note=decision.get("reason") or "verify eval-miss",
-                        detail={"ms": int(replay_info.get("ms") or 0), "held": False},
-                    )
-                    changed.append(store.get(c.id) or c)
-                    seen.add(c.id)
-                elif action == "skip":
-                    reason = decision.get("reason") or ""
-                    if reason in {
-                        "harness-no-repro",
-                        "harness-no-discriminate",
-                        "harness-broken-install",
-                        "harness-pin-install",
-                        "pin-eval-unproven",
-                    }:
-                        seen.add(c.id)
             latest = store.get(c.id)
             decision["st"] = latest.st if latest else c.st
             results.append(decision)
-        if not dry_run:
-            seen_st["ids"] = sorted(seen)
-            save_seen(seen_st)
-            if ledger:
-                _project_ledger(Path(ledger), [c for c in changed if c])
+        seen_st["ids"] = sorted(seen)
+        save_seen(seen_st)
+        if ledger:
+            _project_ledger(Path(ledger), [c for c in changed if c])
     finally:
         shutil.rmtree(scratch_root, ignore_errors=True)
     counts = {"confirm": 0, "fail": 0, "skip": 0}

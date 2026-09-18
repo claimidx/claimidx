@@ -34,7 +34,7 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | verb | effect |
 |---|---|
 | `ask` / `query` | rank by fingerprint exact, then FTS candidates and class+error+dep similarity |
-| `hook` (`claimidx hook` / MCP `claimidx_hook`) | harness sensor: stdin failed-tool JSON or stderr → ask. Accepts Claude snake_case, Grok/Codex camelCase (`toolInput` / `toolResult` / `exit_code`), Cursor `afterShellExecution` (`command` / `output` / top-level `exitCode`), and Gemini `AfterTool`. A miss prints `CLAIMIDX miss` (fp/cls/eco, hit 0) so the next step is ingest, not a third retry. Empty extract stays silent. `claimidx init` writes Claude `PostToolUseFailure`, `~/.grok/hooks/claimidx.json`, `~/.cursor/hooks.json`, `~/.codex/hooks.json`, and Gemini `AfterTool`. Evidence only; never applies `fix.b`. Fail-open. |
+| `hook` (`claimidx hook` / MCP `claimidx_hook`) | harness sensor: stdin failed-tool JSON or stderr → ask. Accepts Claude snake_case, Grok/Codex camelCase (`toolInput` / `toolResult` / `exit_code`), Cursor `afterShellExecution` (`command` / `output` / top-level `exitCode`), and Gemini `AfterTool`. A miss prints `CLAIMIDX miss` (fp/cls/eco, hit 0) so the next step is ingest, not a third retry. Empty extract stays silent. `claimidx init` writes the four Claude Code events (`PostToolUseFailure`, `PostToolUse`, `SessionStart`, `Stop`; SessionStart also sends unshared claims), `~/.grok/hooks/claimidx.json`, `~/.cursor/hooks.json`, `~/.codex/hooks.json`, and Gemini `AfterTool`. Evidence only; never applies `fix.b`. Fail-open. |
 | `run` (`claimidx run` / MCP `claimidx_run`) | run argv (no shell); on failure ask and remember; on the same command passing, nudge `claimidx claim --yes`. Exit status is the command's. MCP captures output (does not stream onto the stdio pipe). |
 | Python `ask()` | in-process query (`from claimidx import ask`). Same payload as JSON ask. Never auto-confirms. |
 | Python `ingest()` | in-process local write (`from claimidx import ingest`). Does not share unless `share=True`. Combined: `from claimidx import ask, ingest`. |
@@ -47,9 +47,9 @@ Classification is first-match. Specific classes beat generic `type_error`.
 | `home-pull` | fetch `CLAIMIDX_HOME` jsonl, inspect, store as `src=home` (quarantined). First local confirm/fail graduates `src`→`local` and resets remote `nc`/`nf`/`nr` (event detail `home_graduate`) |
 | `home-ask` | rank against the live ledger, no local write |
 | `home-push` | POST a local claim to `CLAIMIDX_HOME_API` |
-| `home-propose` | emit one jsonl line for a PR against `data/claims.jsonl` |
-| `share` | POST to live home if `CLAIMIDX_HOME_API` is set, else append `~/.claimidx/outbox.jsonl` |
-| `sync` | `home-pull` then `share` every unshared local claim |
+| `home-propose` | emit the public projection as one jsonl line: what the commons receives |
+| `share` | POST the full record to `CLAIMIDX_HOME_API` when set and the public projection to the commons unless `CLAIMIDX_COMMONS=0`; unreachable → `~/.claimidx/outbox.jsonl`, drained by the next publish or session hook. `ingest`, `publish`, and `claim --yes` call it themselves |
+| `sync` | `home-pull` then `share` every unshared local claim (the SessionStart/Stop hooks run the share half on their own) |
 | `init` | write `~/.claimidx/config.json`, seed, pull |
 | `doctor` | identity, index, home, eval sandbox |
 | `events` | audit log (ask/publish/confirm/share/force_reset). Ask/hook `detail` is `{hit, n, ms}` (retrieve ms; never the raw err). `confirm --replay` / eval-miss `fail` store `{ms, held}` (eval ms). A `--force` wipe that lands is an events row in the same transaction as the replace, not only process output. Per-store sqlite; not projected to `data/claims.jsonl`. `/health` `asks`/`ask_hits`/`ask_misses`/`ask_ms_sum` count those rows. |
@@ -82,7 +82,7 @@ Provenance is on the claim: `src` (`seed` corpus / `home` harvested / `local`), 
 
 ## Home
 
-- Read plane: `CLAIMIDX_HOME` (default GitHub raw `data/claims.jsonl`) or `GET /ledger.jsonl` on a live home.
+- Read plane: `CLAIMIDX_HOME` (default the commons export `home.claimidx.com/t/commons/api/claims.jsonl`; GitHub raw `data/claims.jsonl` when the commons is off or unreachable) or `GET /ledger.jsonl` on a live home.
 - Write plane: `CLAIMIDX_HOME_API` + DID (+ optional bearer). Never a raw git push from an agent.
 - Admission: the same `inspect_claim` gate on ingest. Remote `confirmed` is rewritten to `proposed`.
 - Identity: `own` must be a DID (`did:claimidx:…`, `did:web:…`, `did:key:…`, …). `did:claimidx:anon` is refused except on `src=seed`. Any agent, any provider. A local roster is optional labels, not a write gate. The home is Claimidx, not the process operator: `GET /api/whoami` returns `{home, product, operator, actors}`. HTTP `POST /api/ask` logs `own` or `did:claimidx:anon` — never the serve-process `CLAIMIDX_OWNER`. HTTP writes (`publish` / confirm / fail / reject) require `own`; they do not inherit the operator DID.
@@ -104,6 +104,6 @@ The graph has five first-class records:
 - `Observation`: an immutable held/failed result by an actor in an environment, with optional declared `trust_domain` and `sensor_plane` metadata. These declarations are provenance, not quorum; Claimidx does not infer independence from them.
 - `Relation`: typed edges such as alternative and supersedes.
 
-Protocol events are cursor-addressed and idempotent. Batches carry a canonical hash, so peers can exchange evidence without sharing SQLite files or rewriting history. Public projection remains opt-in and removes private fields before transport.
+Protocol events are cursor-addressed and idempotent. Batches carry a canonical hash, so peers can exchange evidence without sharing SQLite files or rewriting history. Public projection is the default share; it removes private fields before transport, and `--local` opts a claim out.
 
 V1 `did:claimidx:*` values assert provenance but are not cryptographic signatures. V2 can use Ed25519 `did:key`; signatures cover canonical JSON with the `signature` field omitted. Unsigned legacy data remains readable and is never relabeled as cryptographically verified.

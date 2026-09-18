@@ -17,7 +17,6 @@ import os
 import re
 import shlex
 import subprocess
-from pathlib import Path
 from typing import Any
 
 from .env import infer_env, installed_version, last_failure, tree_eval
@@ -374,6 +373,7 @@ def publish_draft(
         db=db,
         cwd=str(draft.get("cwd") or "") or None,
         observe_digest=True,
+        share=False if local else None,
     )
     if out.get("exists") and str(out.get("st") or "") == "rejected":
         # The fingerprint's only claim was rejected: this draft is the correction, not a duplicate.
@@ -392,6 +392,7 @@ def publish_draft(
             cwd=str(draft.get("cwd") or "") or None,
             observe_digest=True,
             force=True,
+            share=False if local else None,
         )
         out = dict(out)
         out["superseded"] = "rejected"
@@ -399,24 +400,8 @@ def publish_draft(
     out["ok"] = True
     if out.get("exists"):
         return out
-    # Published is shared: the private home when one is configured, the commons unless it is off.
+    # Published is shared (ingest did it): the private home when one is configured, the commons unless it is off.
     # `--local` / CLAIMIDX_SHARE=0 is the opt-out; a hint eval never leaves the machine anyway.
-    from .home import maybe_share
-    from .store import DEFAULT_DB, Store
-
-    store_ = Store(db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB))
-    published = store_.get(out["id"])
-    if published is not None:
-        if local:
-            # A durable decision, not a switch for this run: bulk shares and later replays skip it.
-            from .home import local_status, mark_local
-
-            mark_local(store_, published.id, published.own)
-            out["share"] = local_status(published.id)
-        else:
-            shared = maybe_share(store_, published)
-            if shared:
-                out["share"] = shared
     if replay and draft.get("eval_proof"):
         cwd = str(draft.get("cwd") or "")
         warns = list(draft.get("warn") or [])
@@ -519,8 +504,4 @@ def render_draft(draft: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def dumps(draft: dict[str, Any]) -> str:
-    return json.dumps(draft, default=str)
-
-
-__all__ = ["draft_claim", "publish_draft", "render_draft", "infer_fix_kind", "Path"]
+__all__ = ["draft_claim", "publish_draft", "render_draft", "infer_fix_kind"]

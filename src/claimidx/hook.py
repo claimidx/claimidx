@@ -395,38 +395,36 @@ def success_nudge(raw: str, store) -> str | None:
 
 def unshared_claims(store, limit: int = 500) -> list[str]:
     """Local, live, replayable claims that have reached neither a home nor the commons."""
-    from .home import already_shared, api_url, commons_enabled, commons_settled, commons_travels, keep_local, share_enabled
-    from .public import eval_is_proof
+    from .home import unshared_claims as _unshared
 
-    if not share_enabled():
-        return []
-    want_private = bool(api_url())
-    want_commons = commons_enabled()
-    if not want_private and not want_commons:
-        return []
-    out: list[str] = []
-    try:
-        rows = store.all()
-    except Exception:
-        return []
-    for c in rows:
-        if getattr(c, "src", "local") != "local" or c.st == "rejected" or not eval_is_proof(c.eval.cmd) or keep_local(store, c.id):
-            continue
-        commons_due = want_commons and not commons_settled(store, c.id) and commons_travels(c)[0]
-        if (want_private and not already_shared(store, c.id)) or commons_due:
-            out.append(c.id)
-            if len(out) >= limit:
-                break
-    return out
+    return _unshared(store, limit=limit)
 
 
-def share_nudge(store) -> str:
-    """One line when replayable claims sit only on this machine."""
-    n = len(unshared_claims(store))
-    if not n:
+def share_backlog(store) -> str:
+    """Send what this machine still owes and say what happened, in one line.
+
+    The agent never has to run `claimidx sync`: the hooks do it. The line names a
+    result (shared N) or a state (N queued, commons unreachable), never a chore.
+    """
+    from .home import auto_share, outbox_path
+
+    if not unshared_claims(store, limit=1) and not outbox_path().exists():
         return ""
-    plural = "s" if n != 1 else ""
-    return f"{n} replayable claim{plural} live only on this machine: `claimidx sync` shares them (CLAIMIDX_COMMONS=0 to opt out)."
+    try:
+        res = auto_share(store)
+    except Exception:
+        return ""
+    sent = int(res.get("sent") or 0)
+    queued = int(res.get("queued") or 0)
+    parts: list[str] = []
+    if sent:
+        parts.append(f"shared {sent} claim{'s' if sent != 1 else ''} to the commons")
+    if queued:
+        why = "commons unreachable" if res.get("unreachable") else "out of time"
+        parts.append(
+            f"{queued} replayable claim{'s' if queued != 1 else ''} queued on this machine ({why}); they go out on the next session, or `claimidx sync` now"
+        )
+    return "; ".join(parts) + ("." if parts else "")
 
 
 def pending_brief_path() -> Path:
@@ -471,14 +469,12 @@ def session_brief(store) -> str:
     except Exception:
         first = "CLAIMIDX is installed."
     line = first + " Failed commands are looked up automatically; after you fix one, run `claimidx claim --yes`."
-    nudge = share_nudge(store)
-    return line + (" " + nudge if nudge else "")
+    backlog = share_backlog(store)
+    return line + (" " + backlog[0].upper() + backlog[1:] if backlog else "")
 
 
 def _stop_share_nudge_due(hours: int = 6) -> bool:
     """At most once per `hours`: the Stop hook fires every turn."""
-    import time
-
     from .env import last_failure_path
 
     path = last_failure_path().with_name("share-nudge.json")
@@ -509,9 +505,12 @@ def stop_reminder(store, *, event: str = "Stop", block: bool | None = None) -> d
         block = event == "Stop"
     rec = last_failure()
     if not rec or not rec.get("nudged") or rec.get("stop_nudged"):
-        nudge = share_nudge(store)
-        if nudge and _stop_share_nudge_due():
-            return {"hookSpecificOutput": {"hookEventName": event, "additionalContext": "CLAIMIDX " + nudge}}
+        from .home import outbox_path
+
+        if (unshared_claims(store, limit=1) or outbox_path().exists()) and _stop_share_nudge_due():
+            line = share_backlog(store)
+            if line:
+                return {"hookSpecificOutput": {"hookEventName": event, "additionalContext": "CLAIMIDX " + line}}
         return None
     rec["stop_nudged"] = True
     remember_failure(
@@ -638,9 +637,8 @@ def install_claude_hook(path: Path | None = None) -> dict:
     target.parent.mkdir(parents=True, exist_ok=True)
     data: dict = {}
     if target.exists():
-        raw = target.read_text(encoding="utf-8")
         try:
-            loaded = json.loads(raw)
+            loaded = json.loads(target.read_text(encoding="utf-8"))
         except json.JSONDecodeError as e:
             return {
                 "path": str(target),

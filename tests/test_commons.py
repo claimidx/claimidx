@@ -68,7 +68,7 @@ def test_unreachable_commons_queues_and_sync_flushes(tmp_path: Path, monkeypatch
     sent: list[dict] = []
     monkeypatch.setattr(home, "_post", lambda url, payload, token="", timeout=20.0: sent.append(payload) or {"exists": False})
     flushed = home.flush_outbox(store)
-    assert flushed == {"sent": 1, "kept": 0, "refused": 0} and not outbox.exists() and sent[0]["id"] == c.id
+    assert flushed == {"sent": 1, "kept": 0, "refused": 0, "unreachable": False} and not outbox.exists() and sent[0]["id"] == c.id
     assert home.commons_shared(store, c.id)
 
 
@@ -149,20 +149,20 @@ def test_scratch_uses_a_throwaway_index_and_never_shares(tmp_path: Path, commons
     assert not (tmp_path / "ix.sqlite").exists()
 
 
-def test_hooks_nudge_when_replayable_claims_are_unshared(tmp_path: Path, monkeypatch, commons):
+def test_hooks_share_replayable_claims_themselves_and_leave_hints_alone(tmp_path: Path, monkeypatch, commons):
+    """An unshared replayable claim is the hooks' job, not a chore for the agent; a hint eval is never a backlog."""
     from claimidx.hook import session_brief, stop_reminder, unshared_claims
 
     monkeypatch.setenv("CLAIMIDX_LAST_FAILURE", str(tmp_path / "lf.json"))
     store = Store(str(tmp_path / "ix.sqlite"))
     c = store.put(_claim())
-    store.put(_claim(err="RuntimeError: only a hint", ev="true"))
+    hint = store.put(_claim(err="RuntimeError: only a hint", ev="true"))
     assert unshared_claims(store) == [c.id]
-    assert "1 replayable claim live" in session_brief(store)
-    rem = stop_reminder(store)
-    assert rem and "claimidx sync" in rem["hookSpecificOutput"]["additionalContext"]
-    assert stop_reminder(store) is None  # once per window
-    home.share_claim(store, c)
-    assert unshared_claims(store) == [] and "replayable claim" not in session_brief(store)
+    assert "Shared 1 claim to the commons." in session_brief(store)
+    assert [pl["id"] for _u, pl in commons] == [c.id]
+    assert home.commons_shared(store, c.id) and not home.commons_shared(store, hint.id)
+    assert unshared_claims(store) == [] and "claim" not in session_brief(store).split("claim --yes`.")[-1]
+    assert stop_reminder(store) is None  # nothing owed, nothing said
 
 
 def test_verdict_calls_a_hint_a_hint(tmp_path: Path, capsys):
@@ -322,7 +322,7 @@ def test_flush_outbox_drops_refused_lines_and_keeps_transport_failures(tmp_path:
         raise home.HomeError("connection refused")
 
     monkeypatch.setattr(home, "_post", post)
-    assert home.flush_outbox(store) == {"sent": 0, "kept": 1, "refused": 1}
+    assert home.flush_outbox(store) == {"sent": 0, "kept": 1, "refused": 1, "unreachable": False}
     assert [json.loads(ln)["id"] for ln in outbox.read_text(encoding="utf-8").splitlines() if ln.strip()] == ["cix_00000000000000b2"]
 
 
@@ -358,3 +358,99 @@ def test_transient_4xx_stays_in_outbox(tmp_path: Path, monkeypatch):
     from claimidx.hook import unshared_claims
 
     assert unshared_claims(store) == [c.id]
+
+
+def test_session_start_sends_the_backlog_instead_of_asking(tmp_path: Path, monkeypatch, commons):
+    """A queued projection and an unshared claim go out on SessionStart; the brief reports it, never `claimidx sync`."""
+    from claimidx.hook import session_brief, unshared_claims
+
+    monkeypatch.setenv("CLAIMIDX_LAST_FAILURE", str(tmp_path / "lf.json"))
+    monkeypatch.setenv("CLAIMIDX_OUTBOX", str(tmp_path / "outbox.jsonl"))
+    store = Store(str(tmp_path / "ix.sqlite"))
+    queued = store.put(_claim(err="ModuleNotFoundError: No module named 'tomllib'"))
+    monkeypatch.setattr(home, "_post", lambda *a, **k: (_ for _ in ()).throw(home.HomeError("connection refused")))
+    assert home.share_claim(store, queued)["commons"]["status"] == "outbox"
+    posted: list[str] = []
+    monkeypatch.setattr(home, "_post", lambda url, payload, token="", timeout=20.0: posted.append(payload["id"]) or {"exists": False})
+    fresh = store.put(_claim())
+    assert unshared_claims(store) == [queued.id, fresh.id]
+    brief = session_brief(store)
+    assert "Shared 2 claims to the commons" in brief and "claimidx sync" not in brief, brief
+    assert posted == [queued.id, fresh.id]
+    assert not Path(home.outbox_path()).exists()
+    assert home.commons_shared(store, queued.id) and home.commons_shared(store, fresh.id)
+    assert unshared_claims(store) == []
+    assert "Shared" not in session_brief(store)  # nothing left: no line at all
+
+
+def test_session_start_with_the_commons_down_tries_once_and_says_queued(tmp_path: Path, monkeypatch):
+    from claimidx.hook import session_brief, stop_reminder
+
+    monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
+    monkeypatch.setenv("CLAIMIDX_LAST_FAILURE", str(tmp_path / "lf.json"))
+    monkeypatch.setenv("CLAIMIDX_OUTBOX", str(tmp_path / "outbox.jsonl"))
+    store = Store(str(tmp_path / "ix.sqlite"))
+    for name in ("tomli", "tomllib", "yaml"):
+        store.put(_claim(err=f"ModuleNotFoundError: No module named '{name}'"))
+    tries: list[str] = []
+
+    def down(url, payload, token="", timeout=20.0):
+        tries.append(payload["id"])
+        raise home.HomeError("home unreachable: timed out")
+
+    monkeypatch.setattr(home, "_post", down)
+    brief = session_brief(store)
+    assert "3 replayable claims queued" in brief and "unreachable" in brief and "next session" in brief, brief
+    assert len(tries) == 1  # one probe, not one per claim
+    # Stop tries again at most once per window, then stays quiet.
+    rem = stop_reminder(store)
+    assert rem and "queued" in rem["hookSpecificOutput"]["additionalContext"]
+    assert len(tries) == 2
+    assert stop_reminder(store) is None
+
+
+def test_python_ingest_shares_by_default_and_share_false_keeps_it(tmp_path: Path, monkeypatch, commons):
+    from claimidx import ingest
+
+    db = str(tmp_path / "ix.sqlite")
+    out = ingest(
+        "ModuleNotFoundError: No module named 'tomli'",
+        fix_k="pin",
+        fix_b="tomli==2.0.1",
+        eval='python -c "import tomli"',
+        eco="py",
+        own="did:claimidx:agent-a",
+        db=db,
+    )
+    assert out["share"]["status"] == "commons", out
+    assert [p["id"] for _u, p in commons] == [out["id"]]
+    kept = ingest(
+        "ModuleNotFoundError: No module named 'yaml'",
+        fix_k="pin",
+        fix_b="pyyaml==6.0",
+        eval='python -c "import yaml"',
+        eco="py",
+        own="did:claimidx:agent-a",
+        db=db,
+        share=False,
+    )
+    assert kept["share"]["status"] == "local" and "claimidx share" in kept["share"]["hint"] and len(commons) == 1
+    from claimidx.hook import unshared_claims
+
+    assert unshared_claims(Store(db)) == []  # share=False is --local: a decision, not a backlog
+
+
+def test_a_new_publish_drains_the_outbox_first(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
+    monkeypatch.setenv("CLAIMIDX_OUTBOX", str(tmp_path / "outbox.jsonl"))
+    store = Store(str(tmp_path / "ix.sqlite"))
+    queued = store.put(_claim(err="ModuleNotFoundError: No module named 'tomllib'"))
+    monkeypatch.setattr(home, "_post", lambda *a, **k: (_ for _ in ()).throw(home.HomeError("connection refused")))
+    assert home.share_claim(store, queued)["status"] == "outbox"
+    posted: list[str] = []
+    monkeypatch.setattr(home, "_post", lambda url, payload, token="", timeout=20.0: posted.append(payload["id"]) or {"exists": False})
+    fresh = store.put(_claim())
+    out = home.maybe_share(store, fresh)
+    assert out and out["status"] == "commons" and out["outbox"]["sent"] == 1, out
+    assert posted == [queued.id, fresh.id]
+    assert not Path(home.outbox_path()).exists()

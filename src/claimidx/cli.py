@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import os
 import sys
@@ -662,7 +663,7 @@ def _destination_line(share: dict, claim_id: str) -> str:
     if status == "pushed" and "private home" not in parts:
         parts.append("private home")
     if cstatus == "outbox":
-        queued = "queued for the commons (unreachable now): `claimidx sync` sends it; this claim is approved for publication, not private"
+        queued = "queued for the commons (unreachable now): the next claim or session start sends it (`claimidx sync` sends it now); approved for publication, not private"
         return ("# shared: " + ", ".join(parts) + "; " if parts else "# ") + queued
     if parts:
         return "# shared: " + ", ".join(parts)
@@ -1502,6 +1503,33 @@ def _glue_dashed_opt(argv: list[str], opt: str) -> list[str]:
     return out
 
 
+def _claim_write_args(p: argparse.ArgumentParser) -> None:
+    """The fields of a claim written by hand: `publish` and `ingest` take the same ones."""
+    p.add_argument("--local", action="store_true", help="keep this claim on this machine: no home, no commons")
+    p.add_argument("--err", required=True)
+    p.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"])
+    p.add_argument("--fix-b", required=True)
+    p.add_argument("--eval", required=True)
+    p.add_argument("--expect", "--expect-exit", dest="expect", type=int, default=0, help="expected evaluation process exit code")
+    p.add_argument("--cls")
+    p.add_argument("--eco")
+    p.add_argument("--rt")
+    p.add_argument("--dep", action=_AppendCsv, default=None)
+    p.add_argument("--tool", action=_AppendCsv, default=None)
+    p.add_argument("--tried", action=_AppendTried, default=None)
+    p.add_argument("--own")
+    p.add_argument("--model")
+    p.add_argument("--note")
+    p.add_argument("--force", action="store_true")
+    p.add_argument("--alternative", action="store_true", help="store a distinct remedy for an existing failure fingerprint")
+    p.add_argument("--proof", help="attach a structured v2 proof JSON document")
+    p.add_argument("--cwd", help="tree the eval runs in: binds a tree recipe to the files it names (proof binding)")
+    p.add_argument("--observe-digest", action="store_true", help="record the digest of the installed artifact for each --dep pin (I1)")
+    p.add_argument(
+        "--observed-digest", action="append", default=None, metavar="DEP=sha256:HEX", help="record a dependency digest you computed yourself; repeatable"
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="claimidx", description="Claimidx — prior art for agents. Ask before you burn tokens.")
     p.add_argument("--db", default=None, help="sqlite path (default: $CLAIMIDX_DB or ~/.claimidx/index.sqlite)")
@@ -1530,7 +1558,7 @@ def build_parser() -> argparse.ArgumentParser:
     hk.add_argument("--rt")
     hk.add_argument("--dep", action=_AppendCsv, default=None)
     hk.add_argument("-k", type=int, default=5)
-    hk.add_argument("--install", action="store_true", help="Write Claude Code PostToolUseFailure into settings.json")
+    hk.add_argument("--install", action="store_true", help="write the four Claude Code hook events (failure, success, session start, stop) into settings.json")
     hk.set_defaults(func=cmd_hook)
     cl = sub.add_parser("claim", help="Draft a claim from the last failure and this tree; --yes publishes and replays it")
     cl.add_argument("--err", help="failure text; defaults to the last failure the hook saw")
@@ -1562,30 +1590,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--yes", "-y", action="store_true", help="execute the plan")
     ap.add_argument("--trust-eval", action="store_true", help="also run a non-portable eval from a claim not published here")
     ap.set_defaults(func=cmd_apply)
-    pub = sub.add_parser("publish")
-    pub.add_argument("--local", action="store_true", help="keep this claim on this machine: no home, no commons")
-    pub.add_argument("--err", required=True)
-    pub.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"])
-    pub.add_argument("--fix-b", required=True)
-    pub.add_argument("--eval", required=True)
-    pub.add_argument("--expect", "--expect-exit", dest="expect", type=int, default=0, help="expected evaluation process exit code")
-    pub.add_argument("--cls")
-    pub.add_argument("--eco")
-    pub.add_argument("--rt")
-    pub.add_argument("--dep", action=_AppendCsv, default=None)
-    pub.add_argument("--tool", action=_AppendCsv, default=None)
-    pub.add_argument("--tried", action=_AppendTried, default=None)
-    pub.add_argument("--own")
-    pub.add_argument("--model")
-    pub.add_argument("--note")
-    pub.add_argument("--force", action="store_true")
-    pub.add_argument("--alternative", action="store_true", help="store a distinct remedy for an existing failure fingerprint")
-    pub.add_argument("--proof", help="attach a structured v2 proof JSON document")
-    pub.add_argument("--cwd", help="tree the eval runs in: binds a tree recipe to the files it names (proof binding)")
-    pub.add_argument("--observe-digest", action="store_true", help="record the digest of the installed artifact for each --dep pin (I1)")
-    pub.add_argument(
-        "--observed-digest", action="append", default=None, metavar="DEP=sha256:HEX", help="record a dependency digest you computed yourself; repeatable"
-    )
+    pub = sub.add_parser("publish", help="write a claim from every field you hold; shares it like claim --yes (--local keeps it here)")
+    _claim_write_args(pub)
     pub.set_defaults(func=cmd_publish)
     c = sub.add_parser("confirm")
     c.add_argument("id")
@@ -1715,24 +1721,8 @@ def build_parser() -> argparse.ArgumentParser:
     w.set_defaults(func=cmd_whoami)
     tm = sub.add_parser("team")
     tm.set_defaults(func=cmd_team)
-    ing = sub.add_parser("ingest")
-    ing.add_argument("--err", required=True)
-    ing.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"])
-    ing.add_argument("--fix-b", required=True)
-    ing.add_argument("--eval", required=True)
-    ing.add_argument("--expect", "--expect-exit", dest="expect", type=int, default=0, help="expected evaluation process exit code")
-    ing.add_argument("--cls")
-    ing.add_argument("--eco")
-    ing.add_argument("--rt")
-    ing.add_argument("--dep", action=_AppendCsv, default=None)
-    ing.add_argument("--tool", action=_AppendCsv, default=None)
-    ing.add_argument("--tried", action=_AppendTried, default=None)
-    ing.add_argument("--own")
-    ing.add_argument("--model")
-    ing.add_argument("--note")
-    ing.add_argument("--force", action="store_true")
-    ing.add_argument("--alternative", action="store_true", help="store a distinct remedy for an existing failure fingerprint")
-    ing.add_argument("--proof", help="attach a structured v2 proof JSON document")
+    ing = sub.add_parser("ingest", help="same as publish; the owner is your DID from CLAIMIDX_OWNER")
+    _claim_write_args(ing)
     ing.set_defaults(func=cmd_ingest)
     hp = sub.add_parser("home-pull")
     hp.add_argument("--url")
@@ -1761,7 +1751,7 @@ def build_parser() -> argparse.ArgumentParser:
     sh.add_argument("--token")
     sh.add_argument("--force", action="store_true")
     sh.set_defaults(func=cmd_share)
-    sy = sub.add_parser("sync", help="Pull the public ledger, then share unshared local claims")
+    sy = sub.add_parser("sync", help="Pull the public ledger, then share anything the hooks have not already sent (they share at session start)")
     sy.add_argument("--url")
     sy.add_argument("--api")
     sy.add_argument("--token")
@@ -1850,7 +1840,7 @@ def main(argv: list[str] | None = None) -> int:
     except BrokenPipeError:
         return 0
     except OSError as e:
-        if getattr(e, "errno", None) == 32:
+        if getattr(e, "errno", None) in (errno.EPIPE, errno.EINVAL):  # closed pipe; EINVAL is what Windows raises
             return 0
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -1858,7 +1848,7 @@ def main(argv: list[str] | None = None) -> int:
         _print_cli_error(ns, e)
         return 2
     except KeyError as e:
-        print(f"missing {e}", file=sys.stderr)
+        print(f"missing {e.args[0] if e.args else e}", file=sys.stderr)
         return 1
     except Exception as e:
         print(f"error: {e}", file=sys.stderr)

@@ -125,7 +125,7 @@ def whoami(explicit: str | None = None) -> dict:
 
 def load_roster() -> list[dict]:
     if PACKAGED.exists():
-        data = json.loads(PACKAGED.read_text())
+        data = json.loads(PACKAGED.read_text(encoding="utf-8"))
         return data.get("agents", [])
     return [{"agent": k, **v} for k, v in ROSTER.items()]
 

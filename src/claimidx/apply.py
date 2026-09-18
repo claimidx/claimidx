@@ -282,7 +282,7 @@ def apply_claim(store, claim: Claim, *, cwd: str, own: str | None, yes: bool, tr
         from .env import forget_failure, last_failure
 
         rec = last_failure() or {}
-        same_tree = os.path.abspath(str(rec.get("cwd") or "")) == p["cwd"] if rec.get("cwd") else False
+        same_tree = os.path.normcase(os.path.abspath(str(rec.get("cwd") or ""))) == os.path.normcase(str(p["cwd"])) if rec.get("cwd") else False
         if rec and (same_tree or (rec.get("fp") and rec.get("fp") == claim.fp)):
             forget_failure()
     return out

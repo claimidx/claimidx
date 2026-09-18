@@ -15,7 +15,6 @@ written by hand and are reset, not trusted.
 from __future__ import annotations
 
 import json
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -207,8 +206,3 @@ def prune_seed_rows(rows: list[dict]) -> tuple[list[dict], PruneReport]:
         new.pop("nf", None)
         out.append(new)
     return out, report
-
-
-def default_paths() -> tuple[Path, Path]:
-    root = Path(os.environ.get("CLAIMIDX_REPO") or Path(__file__).resolve().parents[2])
-    return root / "data" / "claims.jsonl", root / "data" / "claims-retired.jsonl"

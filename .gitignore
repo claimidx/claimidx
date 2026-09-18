@@ -23,3 +23,17 @@ tmp/
 _tick_feed.json
 _feed_tick.json
 uv.lock
+.tmp_*
+.social-drafts/
+.social_drafts/
+.social_tmp/
+.tmp_social/
+scratch/
+_tick_*.txt
+_social_*.txt
+_grass_*.txt
+_origin_*.txt
+_reply_*.txt
+_last_sub_summary.txt
+tmp_*.py
+data/social_*.txt

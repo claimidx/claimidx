@@ -155,8 +155,6 @@ def deps_from_traceback(text: str, cwd: str | os.PathLike[str] | None = None, ec
         "print(out)"
     )
     try:
-        import subprocess
-
         proc = subprocess.run([py, "-c", code, deepest], capture_output=True, text=True, timeout=15, check=False)
     except (OSError, subprocess.TimeoutExpired):
         return []
