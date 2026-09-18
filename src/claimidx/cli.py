@@ -1212,6 +1212,35 @@ def cmd_init(ns: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rewards(ns: argparse.Namespace) -> int:
+    """Monthly contributor standing from the public ledger: who qualified, and why the rest did not."""
+    from datetime import datetime
+
+    from .home import HomeError, fetch_ledger
+    from .rewards import eligible, excluded_owners, previous_month, render
+
+    month = ns.month or previous_month()
+    now = None
+    if ns.now:
+        try:
+            now = datetime.fromisoformat(ns.now.replace("Z", "+00:00"))
+        except ValueError:
+            print(f"error: --now must be an ISO timestamp, got {ns.now!r}", file=sys.stderr)
+            return 2
+    try:
+        claims, _skipped, target = fetch_ledger(ns.ledger)
+        report = eligible(claims, month=month, now=now, window_days=ns.window_days, exclude=excluded_owners(ns.exclude or []))
+    except (HomeError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    report["ledger"] = target
+    if ns.fmt == "json":
+        print(json.dumps(report, ensure_ascii=False))
+    else:
+        print(render(report))
+    return 0
+
+
 def cmd_impact(ns: argparse.Namespace) -> int:
     """What the index did for you: retries skipped, claims contributed, use by others."""
     from .impact import impact
@@ -1758,6 +1787,21 @@ def build_parser() -> argparse.ArgumentParser:
     imp.add_argument("--home", help="ledger URL (default CLAIMIDX_HOME or the public jsonl)")
     imp.add_argument("--offline", action="store_true", help="local event log only; skip the public ledger")
     imp.set_defaults(func=cmd_impact)
+    rw = sub.add_parser(
+        "rewards", help="monthly contributor standing from the public ledger: one row per owner with a confirmed, undisputed, non-duplicate claim"
+    )
+    rw.add_argument("--month", help="YYYY-MM (default: last month)")
+    rw.add_argument("--ledger", help="ledger URL or local jsonl (default: the commons, then the repo snapshot)")
+    rw.add_argument("--window-days", type=int, default=14, help="dispute window a claim must clear before it counts (default 14)")
+    rw.add_argument(
+        "--exclude",
+        action="append",
+        default=None,
+        metavar="DID",
+        help="never qualifies; repeatable (seed and anon always excluded; also CLAIMIDX_REWARDS_EXCLUDE / config rewards_exclude)",
+    )
+    rw.add_argument("--now", help="cutoff timestamp for a reproducible run (default: now)")
+    rw.set_defaults(func=cmd_rewards)
     ini = sub.add_parser("init", help="write ~/.claimidx/config.json, seed the local index, pull home")
     ini.add_argument("--own")
     ini.add_argument("--agent")
