@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .fingerprint import runtime_proof_key
-from .policy import _norm_head, eval_allowed, split_eval
+from .policy import _LOCAL_PIP, _norm_head, eval_allowed, split_eval
 
 
 def project_python(cwd: str | os.PathLike[str] | None) -> str | None:
@@ -157,7 +157,6 @@ _TREE_MARKERS = {
     "php": ("composer.json",),
     "make": ("Makefile", "makefile"),
 }
-_LOCAL_PIP = re.compile(r"\bpip\b.+\binstall\b.*(\s-e\s|\s\.(?:\s|$))", re.I)
 _ENV_HEADS = {"python", "python3", "node"}
 
 
@@ -188,6 +187,8 @@ def _observe_py(exe: str) -> str:
             [exe, "-c", "import sys; print('%d.%d' % sys.version_info[:2])"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5,
             check=False,
             stdin=subprocess.DEVNULL,
@@ -206,6 +207,8 @@ def _observe_node(exe: str) -> str:
             [exe, "-p", "process.versions.node"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5,
             check=False,
             stdin=subprocess.DEVNULL,
@@ -320,10 +323,14 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
     env.update(extra_env)
     t0 = time.monotonic()
     try:
+        # Decode as UTF-8, not locale.getpreferredencoding() (cp1252 on Windows): stderr feeds fingerprints,
+        # and a mis-decoded `café` would give an OS-dependent fp.
         proc = subprocess.run(
             argv,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             check=False,
             stdin=subprocess.DEVNULL,

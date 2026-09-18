@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import re
 import sqlite3
+from collections.abc import Iterator
 from datetime import UTC
 from pathlib import Path
 from typing import Literal
@@ -40,12 +43,22 @@ class Store:
         self._fts = False
         self._init()
 
-    def _conn(self) -> sqlite3.Connection:
+    @contextlib.contextmanager
+    def _conn(self) -> Iterator[sqlite3.Connection]:
+        """One connection per block: commit on success, roll back on error, always close.
+
+        sqlite3's own context manager only commits or rolls back; it leaves the
+        file handle to the garbage collector, which on Windows keeps the db locked.
+        """
         con = sqlite3.connect(self.path, timeout=10)
-        con.row_factory = sqlite3.Row
-        con.execute("PRAGMA journal_mode=WAL")
-        con.execute("PRAGMA busy_timeout=10000")
-        return con
+        try:
+            con.row_factory = sqlite3.Row
+            con.execute("PRAGMA journal_mode=WAL")
+            con.execute("PRAGMA busy_timeout=10000")
+            with con:
+                yield con
+        finally:
+            con.close()
 
     def _init(self) -> None:
         with self._conn() as con:
@@ -445,7 +458,7 @@ class Store:
         exact = self.by_fp(fp)
         if not self._fts:
             return exact or self.all()
-        tokens = [t for t in __import__("re").findall(r"[A-Za-z0-9_@.-]{3,}", err) if t.lower() not in {"error", "exception", "traceback"}]
+        tokens = [t for t in re.findall(r"[A-Za-z0-9_@.-]{3,}", err) if t.lower() not in {"error", "exception", "traceback"}]
         ids: list[str] = [c.id for c in exact]
         if tokens:
             expression = " OR ".join('"' + t.replace('"', "") + '"' for t in list(dict.fromkeys(tokens))[:12])
@@ -1215,9 +1228,39 @@ class Store:
             out.append(row)
         return out
 
+    def all_events(self) -> list[dict]:
+        """Every audit row, oldest first, `detail` as the raw blob (or None). For impact-style scans."""
+        with self._conn() as con:
+            rows = con.execute("SELECT claim_id, kind, actor, ts, detail FROM events ORDER BY id ASC").fetchall()
+        return [{"claim_id": r["claim_id"], "kind": r["kind"], "actor": r["actor"], "ts": r["ts"], "detail": r["detail"]} for r in rows]
+
     def _event(self, claim_id: str, kind: str, actor: str, detail: dict | None = None) -> None:
         with self._conn() as con:
             self._insert_event(con, claim_id, kind, actor, detail)
+
+    def put_draft(self, draft_id: str, fp: str, payload: dict, ts: str) -> None:
+        """Stash or replace a local ingest draft. Not a claim; never shared."""
+        with self._conn() as con:
+            con.execute(
+                "INSERT OR REPLACE INTO drafts(id, fp, json, ts) VALUES (?,?,?,?)",
+                (draft_id, fp, json.dumps(payload, ensure_ascii=False), ts),
+            )
+
+    def get_draft(self, draft_id: str) -> dict | None:
+        with self._conn() as con:
+            row = con.execute("SELECT json FROM drafts WHERE id=?", (draft_id,)).fetchone()
+        if not row:
+            return None
+        try:
+            data = json.loads(row["json"])
+        except json.JSONDecodeError:
+            return None
+        return data if isinstance(data, dict) else None
+
+    def delete_draft(self, draft_id: str) -> bool:
+        with self._conn() as con:
+            cur = con.execute("DELETE FROM drafts WHERE id=?", (draft_id,))
+        return bool(cur.rowcount)
 
     def export_jsonl(self, path: str | Path) -> int:
         path = Path(path)

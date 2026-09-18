@@ -8,6 +8,7 @@ those configs exist, Cursor/Grok MCP (`claimidx-mcp`). Never writes home URLs or
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -584,18 +585,8 @@ def claude_hook_block(matcher: str | None = "Bash") -> dict:
 
 
 def settings_has_claimidx(data: dict) -> bool:
-    hooks = data.get("hooks") or {}
-    for event, _matcher in CLAUDE_EVENTS:
-        present = False
-        for group in hooks.get(event) or []:
-            if not isinstance(group, dict):
-                continue
-            for h in group.get("hooks") or []:
-                if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
-                    present = True
-        if not present:
-            return False
-    return True
+    """Claude settings.json carries our hook on every CLAUDE_EVENTS event."""
+    return grouped_hooks_has_claimidx(data, CLAUDE_EVENTS)
 
 
 def merge_claude_hooks(data: dict) -> dict:
@@ -655,18 +646,21 @@ def install_claude_hook(path: Path | None = None) -> dict:
             }
         data = loaded
     try:
-        merged = merge_claude_hooks(data)
+        merged = merge_claude_hooks(copy.deepcopy(data))
     except ValueError as e:
         return {"path": str(target), "status": "error", "error": str(e)}
-    target.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
-    return {
+    record = {
         "path": str(target),
         "command": hook_command(),
         "event": "PostToolUseFailure",
         "events": [e for e, _m in CLAUDE_EVENTS],
         "matcher": "Bash",
-        "status": "installed",
     }
+    # Already current (command, matcher, shell): leave the user's file untouched.
+    if target.exists() and merged == data:
+        return {**record, "status": "present"}
+    target.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
+    return {**record, "status": "installed"}
 
 
 def _toml_str(value: str) -> str:
@@ -1226,66 +1220,34 @@ def install_gemini_hooks(path: Path | None = None) -> dict:
     return {"path": str(target), "status": "installed", "command": cmd, "events": [e for e, _m in GEMINI_EVENTS]}
 
 
+# Grok's shell tool is run_terminal_command; the same four moments as Claude, one matcher.
+GROK_EVENTS: tuple[tuple[str, str | None], ...] = (
+    ("PostToolUseFailure", "Bash|run_terminal_command"),
+    ("PostToolUse", "Bash|run_terminal_command"),
+    ("SessionStart", None),
+    ("Stop", None),
+)
+
+
 def grok_hook_file(cmd: str | None = None) -> dict:
     """Native Grok hooks file. Matcher includes run_terminal_command; timeout stays short."""
     h: dict[str, Any] = {"type": "command", "command": cmd or hook_command(), "timeout": 15}
-    matcher = "Bash|run_terminal_command"
     events: dict[str, list] = {}
-    for event, use_matcher in (
-        ("PostToolUseFailure", True),
-        ("PostToolUse", True),
-        ("SessionStart", False),
-        ("Stop", False),
-    ):
+    for event, matcher in GROK_EVENTS:
         group: dict[str, Any] = {"hooks": [dict(h)]}
-        if use_matcher:
+        if matcher:
             group["matcher"] = matcher
         events[event] = [group]
     return {"hooks": events}
 
 
 def grok_hooks_has_claimidx(data: dict) -> bool:
-    hooks = data.get("hooks") or {}
-    if not isinstance(hooks, dict):
-        return False
-    for event, _matcher in CLAUDE_EVENTS:
-        found = False
-        for group in hooks.get(event) or []:
-            if not isinstance(group, dict):
-                continue
-            for h in group.get("hooks") or []:
-                if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
-                    found = True
-        if not found:
-            return False
-    return True
+    return grouped_hooks_has_claimidx(data, GROK_EVENTS)
 
 
 def grok_hooks_current(data: dict, cmd: str) -> bool:
     """True when every event has our hook, the current command, and the Grok matcher."""
-    if not grok_hooks_has_claimidx(data):
-        return False
-    hooks = data.get("hooks") or {}
-    matcher = "Bash|run_terminal_command"
-    wanted: dict[str, str | None] = {
-        "PostToolUseFailure": matcher,
-        "PostToolUse": matcher,
-        "SessionStart": None,
-        "Stop": None,
-    }
-    for event, want_matcher in wanted.items():
-        found_cmd = None
-        found_matcher: str | None = None
-        for group in hooks.get(event) or []:
-            if not isinstance(group, dict):
-                continue
-            for h in group.get("hooks") or []:
-                if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
-                    found_cmd = str(h.get("command") or "")
-                    found_matcher = group.get("matcher")
-        if found_cmd != cmd or found_matcher != want_matcher:
-            return False
-    return True
+    return grouped_hooks_current(data, GROK_EVENTS, cmd)
 
 
 def install_grok_hooks(path: Path | None = None) -> dict:
@@ -1297,16 +1259,15 @@ def install_grok_hooks(path: Path | None = None) -> dict:
         return {"path": str(target), "status": "skip", "reason": "no grok config"}
     target.parent.mkdir(parents=True, exist_ok=True)
     cmd = hook_command()
-    if target.exists():
-        try:
-            loaded = json.loads(target.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as e:
-            return {"path": str(target), "status": "error", "error": f"claimidx.json is not json: {e}"}
-        if isinstance(loaded, dict) and grok_hooks_current(loaded, cmd):
-            return {"path": str(target), "status": "present", "command": cmd}
+    data, err = _load_json_object(target, "claimidx.json")
+    if err:
+        return err
+    assert data is not None
+    if grok_hooks_current(data, cmd):
+        return {"path": str(target), "status": "present", "command": cmd}
     payload = grok_hook_file(cmd)
     target.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    return {"path": str(target), "status": "installed", "command": cmd, "events": [e for e, _m in CLAUDE_EVENTS]}
+    return {"path": str(target), "status": "installed", "command": cmd, "events": [e for e, _m in GROK_EVENTS]}
 
 
 def cursor_hook_file(cmd: str | None = None) -> dict:
@@ -1380,13 +1341,18 @@ def install_cursor_hooks(path: Path | None = None) -> dict:
     return {"path": str(target), "status": "installed", "command": cmd}
 
 
+def bundled_skill_candidates() -> tuple[Path, ...]:
+    """Where SKILL.md may live: the checkout (src/claimidx -> repo root), then the wheel's data/ copy."""
+    here = Path(__file__).resolve().parent
+    return (
+        here.parents[1] / "skills" / "claimidx" / "SKILL.md",
+        here / "data" / "SKILL.md",
+    )
+
+
 def bundled_skill_text() -> str | None:
     """SKILL.md from the checkout or the wheel. None if this install has no copy."""
-    here = Path(__file__).resolve().parent
-    for path in (
-        here.parents[2] / "skills" / "claimidx" / "SKILL.md",
-        here / "data" / "SKILL.md",
-    ):
+    for path in bundled_skill_candidates():
         if path.is_file():
             try:
                 return path.read_text(encoding="utf-8")

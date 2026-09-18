@@ -95,7 +95,16 @@ def _tool_version(argv: list[str], pattern: str, label: str) -> str:
     if not shutil.which(argv[0]):
         return ""
     try:
-        proc = subprocess.run(argv, capture_output=True, text=True, timeout=10, check=False, stdin=subprocess.DEVNULL)
+        proc = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            check=False,
+            stdin=subprocess.DEVNULL,
+        )
     except (OSError, subprocess.TimeoutExpired):
         return ""
     m = re.search(pattern, (proc.stdout or "") + "\n" + (proc.stderr or ""))
@@ -155,7 +164,7 @@ def deps_from_traceback(text: str, cwd: str | os.PathLike[str] | None = None, ec
         "print(out)"
     )
     try:
-        proc = subprocess.run([py, "-c", code, deepest], capture_output=True, text=True, timeout=15, check=False)
+        proc = subprocess.run([py, "-c", code, deepest], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15, check=False)
     except (OSError, subprocess.TimeoutExpired):
         return []
     pin = (proc.stdout or "").strip()
@@ -222,7 +231,15 @@ def installed_version(name: str, eco: str = "", cwd: str | os.PathLike[str] | No
     own = project_python(root)
     if own:
         try:
-            proc = subprocess.run([own, "-c", _DIST_VERSION_CODE, name], capture_output=True, text=True, timeout=15, check=False)
+            proc = subprocess.run(
+                [own, "-c", _DIST_VERSION_CODE, name],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=15,
+                check=False,
+            )
         except (OSError, subprocess.TimeoutExpired):
             proc = None
         if proc is not None and proc.returncode == 0 and proc.stdout.strip():
@@ -240,6 +257,8 @@ def _go_module_version(pkg: str, root: Path) -> str:
             ["go", "list", "-f", "{{if .Module}}{{.Module.Path}}@{{.Module.Version}}{{end}}", pkg],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=60,
             check=False,
             cwd=str(root),

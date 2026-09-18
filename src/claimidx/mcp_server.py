@@ -17,6 +17,9 @@ from .team import whoami as team_whoami
 
 _ROOT = Path(__file__).resolve().parents[2]
 
+# The commons leaderboard caps a board at this many rows; the tool clamps rather than 400s.
+_LEADERBOARD_MAX_LIMIT = 200
+
 # ---- tool-schema vocabulary --------------------------------------------------------
 # Every inputSchema property carries a description. Fields that appear on more than
 # one tool are defined once so the wording is identical across the family.
@@ -26,7 +29,7 @@ _ERR = {
 }
 _ECO = {
     "type": "string",
-    "description": "Package ecosystem the failure occurred in: py, npm, go, cargo, docker, other. Narrows the fingerprint; omit if unknown.",
+    "description": "Package ecosystem the failure occurred in: py, npm, go, rust, java, mcp, browser, ci, or other. Narrows the fingerprint; omit if unknown.",
 }
 _RT = {
     "type": "string",
@@ -759,7 +762,11 @@ TOOLS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "days": {"type": "integer", "default": 30, "description": "Window in days. Default 30."},
-                "limit": {"type": "integer", "default": 25, "description": "Rows per board. Default 25, max 200."},
+                "limit": {
+                    "type": "integer",
+                    "default": 25,
+                    "description": f"Rows per board. Default 25, max {_LEADERBOARD_MAX_LIMIT}.",
+                },
                 "own": _OWN,
             },
         },
@@ -856,16 +863,30 @@ RESOURCES = [
 ]
 
 
+_DATA = Path(__file__).resolve().parent / "data"
+
+
 def _resource(uri: str) -> str | None:
+    """Resource text from the checkout, else from the copies the wheel ships under data/ (scripts/sync_docs.py keeps them equal)."""
     mapping = {
         "claimidx://skill": _ROOT / "skills" / "claimidx" / "SKILL.md",
         "claimidx://agents": _ROOT / "AGENTS.md",
         "claimidx://protocol": _ROOT / "PROTOCOL.md",
     }
     path = mapping.get(uri)
-    if not path or not path.is_file():
+    if path is None:
         return None
-    return path.read_text(encoding="utf-8")
+    if uri == "claimidx://skill":
+        from .hook import bundled_skill_text
+
+        return bundled_skill_text()
+    for candidate in (path, _DATA / path.name):
+        if candidate.is_file():
+            try:
+                return candidate.read_text(encoding="utf-8")
+            except OSError:
+                continue
+    return None
 
 
 def _prompt(name: str | None, args: dict) -> dict | None:
@@ -1314,7 +1335,8 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
     if name == "claimidx_leaderboard":
         from .board import fetch_leaderboard
 
-        return fetch_leaderboard(days=int(args.get("days") or 30), limit=int(args.get("limit") or 25), own=resolve_owner(args.get("own")))
+        limit = max(1, min(_LEADERBOARD_MAX_LIMIT, int(args.get("limit") or 25)))
+        return fetch_leaderboard(days=int(args.get("days") or 30), limit=limit, own=resolve_owner(args.get("own")))
     if name == "claimidx_prune":
         from .prune import prune_store
 

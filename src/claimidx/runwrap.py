@@ -38,9 +38,19 @@ def run_command(argv: list[str], *, cwd: str | None = None, timeout: float | Non
     if not os.path.dirname(head):
         head = _which(head) or head  # PATH lookup with PATHEXT: `gradle` is gradle.cmd on Windows, as a shell would find it
     try:
-        proc = subprocess.Popen([head, *argv[1:]], cwd=cwd or None, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
+        # UTF-8, not the locale codec (cp1252 on Windows): this output feeds _first_err_line and the fingerprint.
+        proc = subprocess.Popen(
+            [head, *argv[1:]],
+            cwd=cwd or None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
     except OSError as e:
         # The command never started: that is this wrapper's failure, not the tree's. Nothing to ask or remember.
+        # after_run tells this apart from a child's own exit 127 by the empty output.
         if stream:
             sys.stderr.write(f"claimidx run: {e}\n")
         return 127, ""
@@ -95,8 +105,9 @@ def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None =
     cmd = shlex.join(argv)
     root = cwd or os.getcwd()
     out: dict[str, Any] = {"rc": rc, "command": cmd}
-    if rc in (124, 127):
-        # Wrapper timeout / spawn failure: not a tree error to ask or remember.
+    if rc == 124 or (rc == 127 and not output):
+        # Wrapper timeout, or run_command's spawn failure (127 with nothing captured): not a tree error to ask or
+        # remember. A child that exits 127 itself (`sh -c` on a missing tool) has output, and that is the tree's.
         return out
     if rc != 0:
         err = _first_err_line(output) or ""

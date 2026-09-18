@@ -48,8 +48,10 @@ SKILL_DROPS = (
     "docs",
 )
 
+# src/claimidx/data/ copies ship in the wheel so MCP resources answer offline from a pip install.
 COPIES = {
-    "AGENTS.md": ("docs/AGENTS.md",),
+    "AGENTS.md": ("docs/AGENTS.md", "src/claimidx/data/AGENTS.md"),
+    "PROTOCOL.md": ("src/claimidx/data/PROTOCOL.md",),
     "llms.txt": ("docs/llms.txt",),
     "ai.txt": ("docs/ai.txt", "docs/.well-known/ai.txt"),
     "server.json": ("docs/server.json",),

@@ -90,10 +90,29 @@ def _git_diff(cwd: str) -> str:
     from .security import SecretError, reject_secrets, strip_control
 
     try:
-        stat = subprocess.run(["git", "diff", "--stat", "--", ".", *_DIFF_EXCLUDE], cwd=cwd, capture_output=True, text=True, timeout=10, check=False)
+        # git emits UTF-8 paths and hunks; decode as such, not via the locale codec.
+        stat = subprocess.run(
+            ["git", "diff", "--stat", "--", ".", *_DIFF_EXCLUDE],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            check=False,
+        )
         if stat.returncode != 0 or not (stat.stdout or "").strip():
             return ""
-        full = subprocess.run(["git", "diff", "--no-color", "--", ".", *_DIFF_EXCLUDE], cwd=cwd, capture_output=True, text=True, timeout=10, check=False)
+        full = subprocess.run(
+            ["git", "diff", "--no-color", "--", ".", *_DIFF_EXCLUDE],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            check=False,
+        )
     except (OSError, subprocess.TimeoutExpired):
         return ""
     stat_text = strip_control((stat.stdout or "").strip())
@@ -166,7 +185,16 @@ def deps_from_diff(diff: str, cwd: str, eco: str = "") -> list[str]:
         "print(json.dumps(out))"
     )
     try:
-        proc = subprocess.run([py or "python", "-c", code, *names[:12]], capture_output=True, text=True, timeout=20, check=False, cwd=cwd)
+        proc = subprocess.run(
+            [py or "python", "-c", code, *names[:12]],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=20,
+            check=False,
+            cwd=cwd,
+        )
         found = json.loads(proc.stdout or "{}") if proc.returncode == 0 else {}
     except (OSError, subprocess.TimeoutExpired, ValueError):
         return []

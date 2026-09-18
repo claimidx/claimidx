@@ -21,7 +21,8 @@ from pathlib import Path
 
 from .gate import graduation_gate
 from .models import Claim
-from .policy import _norm_head, eval_allowed, split_eval
+from .policy import _LOCAL_PIP, _norm_head, eval_allowed, split_eval
+from .public import eval_is_proof
 from .sandbox import ReplayResult, observe_env, replay
 from .store import Store
 from .team import resolve_owner
@@ -53,10 +54,6 @@ _SKIP_HEADS_WITHOUT_TREE = {
     "php",
     "make",
 }
-_TAUTOLOGY = re.compile(
-    r"^(python3?|node|go|cargo|rustc|npm|npx|docker|uv|php|ruby|java)(?:\.exe)?\s+(--version|-v|-V|version)\s*$",
-    re.I,
-)
 _WRAPPER = re.compile(
     r"node\s+-e.*spawnSync\(\s*['\"](cargo|rustc|go|docker|npx|npm|composer|gem|bundle|bundler|mvn|gradle|make|php|ruby|pip)['\"]",
     re.I | re.S,
@@ -209,7 +206,7 @@ def harness(c: Claim, scratch: Path) -> dict:
     pip = [str(py), "-m", "pip", "install", "--disable-pip-version-check", "-q"]
     if broken_req:
         try:
-            br = subprocess.run(pip + broken_req, capture_output=True, text=True, timeout=180)
+            br = subprocess.run(pip + broken_req, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
         except (subprocess.SubprocessError, OSError) as e:
             return {"action": "skip", "reason": f"harness-broken-install:{e}", "id": c.id}
         if br.returncode != 0:
@@ -221,7 +218,7 @@ def harness(c: Claim, scratch: Path) -> dict:
             }
     broken = _replay_py(py, c.eval.cmd, c.eval.expect)
     try:
-        fx = subprocess.run(pip + fixed_req, capture_output=True, text=True, timeout=180)
+        fx = subprocess.run(pip + fixed_req, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
     except (subprocess.SubprocessError, OSError) as e:
         return {"action": "skip", "reason": f"harness-pin-install:{e}", "id": c.id}
     if fx.returncode != 0:
@@ -277,18 +274,18 @@ def _today() -> str:
 
 
 _RUNNABLE_HEADS = {"python", "python3"}
-_PIP_EDITABLE = re.compile(r"\bpip\b.+\binstall\b.*(\s-e\s|\s\.(?:\s|$))", re.I)
 
 
 def is_runnable(c: Claim) -> bool:
     """Self-contained evals we can actually execute in an empty scratch dir."""
     cmd = (c.eval.cmd or "").strip()
-    if not cmd or _TAUTOLOGY.match(cmd) or _WRAPPER.search(cmd):
+    # public.eval_is_proof is the one tautology grammar: what it calls a hint, replay() skips as builtin.
+    if not eval_is_proof(cmd) or _WRAPPER.search(cmd):
         return False
     head = _head(cmd)
     if head not in _RUNNABLE_HEADS:
         return False
-    if re.search(r"\bpytest\b", cmd) or _PIP_EDITABLE.search(cmd):
+    if re.search(r"\bpytest\b", cmd) or _LOCAL_PIP.search(cmd):
         return False
     return True
 
@@ -325,14 +322,12 @@ def pick(
             if not is_runnable(c):
                 continue
         else:
-            head = _head(c.eval.cmd)
-            if head in {"true", "false"}:
-                continue
-            if _TAUTOLOGY.match((c.eval.cmd or "").strip()):
+            # Hints (true/false, version banners) would only burn a -k slot for replay() to skip them.
+            if not eval_is_proof(c.eval.cmd):
                 continue
             if _WRAPPER.search(c.eval.cmd or ""):
                 continue
-            if not head:
+            if not _head(c.eval.cmd):
                 continue
         wanted.append(c)
 
@@ -364,7 +359,7 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
     py = _venv_python(venv)
     pip = [str(py), "-m", "pip", "install", "--disable-pip-version-check", "-q", spec]
     try:
-        inst = subprocess.run(pip, capture_output=True, text=True, timeout=120)
+        inst = subprocess.run(pip, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
     except (subprocess.SubprocessError, OSError) as e:
         return {"action": "skip", "reason": f"pin-install-error:{e}", "id": c.id}
     if inst.returncode != 0:
@@ -373,9 +368,9 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
     env["VIRTUAL_ENV"] = str(venv)
     bindir = str(py.parent)
     env["PATH"] = bindir + os.pathsep + env.get("PATH", "")
-    result = replay(c.eval.cmd, c.eval.expect, cwd=str(tmp))
-    # replay uses sys.executable for python; force venv by rewriting via env PATH python.exe first
-    # On Windows resolve_argv uses sys.executable, ignoring venv. Run eval argv with venv python instead.
+    # sandbox.replay resolves `python` to sys.executable (CLAIMIDX_PYTHON / tree venv / PATH), never this
+    # throwaway venv. Run the eval argv under the venv interpreter directly; _head() above already
+    # proved the recipe is allowlisted, parseable, and python-headed.
     ok, reason = eval_allowed(c.eval.cmd)
     if not ok:
         return {"action": "skip", "reason": reason, "id": c.id}
@@ -383,62 +378,70 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
         extra_env, parts = split_eval(c.eval.cmd)
     except ValueError as e:
         return {"action": "skip", "reason": str(e), "id": c.id}
-    if _norm_head(parts[0]) in {"python", "python3"}:
-        argv = [str(py), *parts[1:]]
-        env.update(extra_env)
-        try:
-            proc = subprocess.run(argv, capture_output=True, text=True, timeout=45, cwd=str(tmp), env=env, stdin=subprocess.DEVNULL)
-        except subprocess.TimeoutExpired:
-            return {"action": "skip", "reason": "timeout", "id": c.id}
-        held = proc.returncode == c.eval.expect
-        if held:
-            probe = ReplayResult(
-                True,
-                True,
-                proc.returncode,
-                c.eval.expect,
-                True,
-                "held-pin",
-                env=observe_env([str(py)]),
-            )
-            decision = graduation_gate(c, probe, cwd=str(tmp))
-            if not decision.mint_nr:
-                return {
-                    "action": "skip",
-                    **decision.refusal(),
-                    "id": c.id,
-                    "rc": proc.returncode,
-                    "stderr": (proc.stderr or "")[-300:],
-                    "applied": spec,
-                    "replay": probe.as_dict(),
-                }
+    argv = [str(py), *parts[1:]]
+    env.update(extra_env)
+    try:
+        proc = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=45,
+            cwd=str(tmp),
+            env=env,
+            stdin=subprocess.DEVNULL,
+        )
+    except subprocess.TimeoutExpired:
+        return {"action": "skip", "reason": "timeout", "id": c.id}
+    held = proc.returncode == c.eval.expect
+    if held:
+        probe = ReplayResult(
+            True,
+            True,
+            proc.returncode,
+            c.eval.expect,
+            True,
+            "held-pin",
+            env=observe_env([str(py)]),
+        )
+        decision = graduation_gate(c, probe, cwd=str(tmp))
+        if not decision.mint_nr:
             return {
-                "action": "confirm",
-                "reason": "held-pin",
+                "action": "skip",
+                **decision.refusal(),
                 "id": c.id,
                 "rc": proc.returncode,
                 "stderr": (proc.stderr or "")[-300:],
                 "applied": spec,
                 "replay": probe.as_dict(),
             }
-        if not _eval_targets_pin(c.eval.cmd, [_pkg_name(spec)]):
-            return {
-                "action": "skip",
-                "reason": "pin-eval-unproven",
-                "id": c.id,
-                "rc": proc.returncode,
-                "stderr": (proc.stderr or "")[-300:],
-                "applied": spec,
-            }
         return {
-            "action": "fail",
-            "reason": "eval-miss-pin",
+            "action": "confirm",
+            "reason": "held-pin",
+            "id": c.id,
+            "rc": proc.returncode,
+            "stderr": (proc.stderr or "")[-300:],
+            "applied": spec,
+            "replay": probe.as_dict(),
+        }
+    if not _eval_targets_pin(c.eval.cmd, [_pkg_name(spec)]):
+        return {
+            "action": "skip",
+            "reason": "pin-eval-unproven",
             "id": c.id,
             "rc": proc.returncode,
             "stderr": (proc.stderr or "")[-300:],
             "applied": spec,
         }
-    return {"action": "skip", "reason": result.reason, "id": c.id, "replay": result.as_dict()}
+    return {
+        "action": "fail",
+        "reason": "eval-miss-pin",
+        "id": c.id,
+        "rc": proc.returncode,
+        "stderr": (proc.stderr or "")[-300:],
+        "applied": spec,
+    }
 
 
 def decide(c: Claim, *, scratch: Path, trust: str = "local", store: Store | None = None) -> dict:
@@ -468,7 +471,7 @@ def decide(c: Claim, *, scratch: Path, trust: str = "local", store: Store | None
     head = _head(cmd)
     if head in {"true", "false"}:
         return {"action": "skip", "reason": "builtin-eval", "id": c.id}
-    if _TAUTOLOGY.match((cmd or "").strip()):
+    if not eval_is_proof(cmd):
         return {"action": "skip", "reason": "tautology-eval", "id": c.id}
     wrap = _WRAPPER.search(cmd or "")
     if wrap:

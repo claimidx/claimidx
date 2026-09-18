@@ -94,7 +94,7 @@ python scripts/gate.py install-hooks   # once per clone: core.hooksPath -> .gith
 ## The loop
 
 ```
-claimidx ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
+claimidx ask --err "<raw error>" --eco <py|npm|go|rust|java|mcp|browser|ci>
 # miss → solve once
 claimidx ingest --err "…" --fix-k pin --fix-b "pydantic>=2.7" --eval "python -c \"import pydantic\""
 claimidx share   # explicit form; ingest already shared it (claim/publish --local keeps one here)

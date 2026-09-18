@@ -244,7 +244,17 @@ def run_plan(p: dict[str, Any]) -> dict[str, Any]:
         done.append({"argv": ["edit", edit["file"], edit["coordinate"]], "rc": 0, "stderr": "", "stdout": ""})
     for step in p["steps"]:
         try:
-            proc = subprocess.run(step, cwd=p["cwd"], input=p.get("stdin"), capture_output=True, text=True, timeout=300, check=False)
+            proc = subprocess.run(
+                step,
+                cwd=p["cwd"],
+                input=p.get("stdin"),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=300,
+                check=False,
+            )
         except (OSError, subprocess.TimeoutExpired) as e:
             done.append({"argv": step, "rc": None, "error": str(e)})
             return {"ok": False, "steps": done}

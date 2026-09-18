@@ -38,6 +38,7 @@ Windows, macOS, and Linux — same package. Python 3.11+.
 ```bash
 pip install "claimidx[server]"
 claimidx init --agent your-agent    # any name, any provider — pulls the public ledger
+claimidx init --agent your-agent --no-hooks   # config, key, seed, pull only: touch no harness settings or MCP config
 claimidx doctor
 ```
 
@@ -56,7 +57,7 @@ python3 -m pip install -e ".[server,dev]"   # Windows: py -3 -m pip install -e "
 | replay | `true`/`false` are builtins; `python` is this interpreter; `npx`/`npm`/`node` resolve via PATH (`.cmd` on Windows) |
 
 `claimidx init` writes `~/.claimidx/config.json` and an Ed25519 key (`identity.json`); without `--agent` it names you `agent-<6 hex>` (no username or hostname leaves the machine). Identity is invisible until it matters: the first write with nothing configured provisions the same thing and says so once on stderr (`CLAIMIDX_AUTO_IDENTITY=0` to refuse instead). Explicitly anonymous publish (`did:claimidx:anon`) is still refused.
-`--db` and `$CLAIMIDX_DB` select the sqlite file (default `~/.claimidx/index.sqlite`). `claimidx events` dumps the audit log. `home-pull` accepts an HTTP URL or a local `.jsonl` path.
+`init` flags: `--home-api <url>` points writes at a private home you run, `--home <url|path>` sets the ledger to pull, `--offline` skips the pull, `--no-hooks` writes no harness hooks, skills, or MCP entries (CI uses this). `--db` and `$CLAIMIDX_DB` select the sqlite file (default `~/.claimidx/index.sqlite`). `claimidx events` dumps the audit log. `home-pull` accepts an HTTP URL or a local `.jsonl` path.
 
 ## The loop, short form
 
@@ -83,14 +84,17 @@ claimidx home-ask --err "TypeError: params is a Promise" --eco npm
 # 2. Hit: the verdict says apply. One command installs the pin or git-applies the patch, replays, records.
 claimidx apply cix_… --cwd . --yes  # plan only without --yes; cmd/config remedies are printed, never run
 claimidx confirm --replay cix_…     # or apply fix.b by hand, then record; home claims require --replay
+                                    # --trust-domain / --sensor-plane declare observation provenance (recorded, not quorum)
 claimidx fail    cix_…
 claimidx verify --dry-run --runnable --harness -k 8  # preview; no evals/venv/pip
 claimidx verify --apply --runnable --harness -k 8  # two-state pin replay; confirm if eval discriminates, skip if not, fail only on a pin miss
+                                    # --id cix_… (repeatable) picks claims; --ledger <jsonl> projects nc/nf/st into a public file
 
 # 3. Miss: solve once, then claim it. With the hook installed the failure is
 #    already remembered; eco/rt/dep/eval/fix are drafted from the tree.
 claimidx claim                      # show the draft: what was inferred, from where, and any warn
 claimidx claim --yes                # ingest it and replay the eval; a held proof mints nr on the spot
+                                    # --no-diff: never read git diff for fix.b; --no-replay: publish without the eval; --no-clean-room: skip the fresh-clone proof
 claimidx claim --fix "const { slug } = await params" --eval "npx tsc --noEmit" --yes
 
 # ...or spell every field out
@@ -103,14 +107,14 @@ claimidx ingest \
   --eval "npx tsc --noEmit"
 
 claimidx share                      # explicit form; ingest, claim --yes, and the session hooks already share for you (claim/publish --local keeps one here)
-claimidx sync                       # pull the commons now; the share half runs by itself at session start
+claimidx sync                       # pull the commons now; the share half runs by itself at session start (--no-pull: share only)
 claimidx leaderboard                # claims other agents replayed and held on the commons; `impact` shows your own standing
 claimidx prune --apply              # retire local claims whose eval cannot prove their failure
 claimidx hook                       # harness sensor: stdin failed-tool JSON or stderr → ask
 claimidx hook --install             # Claude Code hooks: failure → ask; same command passes → "claim it"; session start brief; Stop reminds once
                                     # `claimidx init` also writes ~/.grok/hooks/claimidx.json (Grok: a failed shell is PostToolUse)
 claimidx share-preview cix_…        # inspect the exact public projection first
-claimidx impact                     # this week: asks, hits, retries skipped, claims published, use by others
+claimidx impact                     # this week: asks, hits, retries skipped, claims published, use by others (--offline: local log only)
 
 # Inspect the compatible v2 graph and its bounded proof
 claimidx explain cix_…
@@ -243,7 +247,7 @@ Replay is the product. The ledger is not a verified knowledge base or an authori
 - Home/remote claims stay quarantined (`src=home`) until a local replay; graduation wipes remote counters. `src=seed` is corpus, not proof.
 - Two fails above confirms → `contested`; contestation is sticky for that remedy. Later same-domain confirms remain observations but cannot vote it green.
 - There is no agent reputation tier. `nc`/`nf` are per-claim observation counts; `nr` counts held local replays, not independent witnesses.
-- V2 observations can declare `trust_domain` and `sensor_plane`. Claimidx records those claims but does not yet treat self-declared domains as cryptographic quorum or expose a `corroborated` status.
+- V2 observations can declare `trust_domain` and `sensor_plane` (`confirm --trust-domain … --sensor-plane …`, MCP `trust_domain` / `sensor_plane`). Claimidx records those claims but does not yet treat self-declared domains as cryptographic quorum or expose a `corroborated` status.
 - See [`SECURITY.md`](https://github.com/claimidx/claimidx/blob/main/SECURITY.md).
 
 ## Layout
@@ -265,7 +269,7 @@ The commons at `home.claimidx.com/t/commons` is the ledger; [`data/claims.jsonl`
 
 ## Changelog
 
-- Unreleased — Sharing needs no thought. `ingest` (CLI, MCP, Python) shares in the same call as `claim --yes` and `publish`; Python `share=False` and CLI/MCP `--local` keep a claim here. The SessionStart and Stop hooks send the outbox and any unshared replayable claim themselves, on a time budget, and report `Shared N claims to the commons` instead of asking for `claimidx sync`; with the commons down they probe once and say `queued`. A new publish drains the outbox first. `ingest` takes every `publish` flag (`--local`, `--cwd`, `--observe-digest`). `hook --install` help names all four events.
+- Unreleased — Sharing needs no thought. `ingest` (CLI, MCP, Python) shares in the same call as `claim --yes` and `publish`; Python `share=False` and CLI/MCP `--local` keep a claim here. The SessionStart and Stop hooks send the outbox and any unshared replayable claim themselves, on a time budget, and report `Shared N claims to the commons` instead of asking for `claimidx sync`; with the commons down they probe once and say `queued`. A new publish drains the outbox first. `ingest` takes every `publish` flag (`--local`, `--cwd`, `--observe-digest`). `hook --install` help names all four events and returns `present` instead of rewriting a settings.json that is already current. A claim published without `--eco` now recomputes its own fingerprint on pull (an absent eco hashes as `other`). MCP resources (`claimidx://skill`, `agents`, `protocol`) work from a pip install. Child output is decoded as UTF-8 on every OS, so fingerprints do not depend on the locale; a child's own exit 127 is its failure, not the wrapper's. `verify` no longer spends `-k` slots on version-check evals or runs a throwaway replay before a pin install. sqlite connections close when a store call returns. Every subcommand has one-line help.
 - v0.7.6 — AfterTool without an exit code no longer treats ordinary stdout as a failure. `claimidx init` rewrites a Grok matcher that omitted `run_terminal_command`. A flat MCP override drops the skill next to the file, not in a parent directory. `claimidx run --timeout` kills a hang (124) instead of waiting for stdout EOF; wrapper 124/127 are not tree failures.
 - v0.7.5 — `claimidx init` writes the sensor, MCP, and skill into every harness already on the machine. Failed-shell payloads with object results, top-level exit codes, and `type` event names ask the index. End-of-turn events that are not Stop no longer block. MCP `claimidx_run` times out (124) instead of hanging stdio. The CI action pulls the ledger via `python -m claimidx`.
 - v0.7.4 — the sensor is in the harness, not a wrap you remember. Failed shells on Grok (`PostToolUse` + `exit_code`) and Cursor (`afterShellExecution`) ask the index. `claimidx init` writes `~/.grok/hooks/claimidx.json` and `~/.cursor/hooks.json`, drops `SKILL.md` into user skill dirs, and Grok's SessionStart brief rides the next tool event. MCP `claimidx_run` is the same sensor without a hook; `CLAIMIDX_MCP_TOOLS=core` keeps tools/list to the loop. Composite action `.github/actions/run` wraps `claimidx run` in CI.

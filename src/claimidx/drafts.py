@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import secrets
 from typing import Any
 
@@ -46,6 +45,7 @@ def stash_draft(
     cls = classify(err)
     fp = fingerprint(err=err, cls=cls, eco=eco or "", rt=rt or "", dep=dep)
     did = _draft_id()
+    ts = utc_ts()
     payload = {
         "id": did,
         "err": err,
@@ -60,37 +60,15 @@ def stash_draft(
         "note": note or "",
         "own": own or "",
         "eval_proof": proof,
-        "ts": utc_ts(),
+        "ts": ts,
     }
-    with store._conn() as con:
-        con.execute(
-            """CREATE TABLE IF NOT EXISTS drafts (
-                id TEXT PRIMARY KEY, fp TEXT, json TEXT NOT NULL, ts TEXT NOT NULL
-            )"""
-        )
-        con.execute(
-            "INSERT OR REPLACE INTO drafts(id, fp, json, ts) VALUES (?,?,?,?)",
-            (did, fp, json.dumps(payload, ensure_ascii=False), payload["ts"]),
-        )
+    store.put_draft(did, fp, payload, ts)
     store.session_record(session_id(), kind="draft", fp=fp, claim_id=did, detail={"eval_proof": proof})
     return {"ok": True, "draft_id": did, "fp": fp, "eval_proof": proof, "warnings": warnings, "err": normalize_error(err)}
 
 
 def get_draft(store: Store, draft_id: str) -> dict[str, Any] | None:
-    with store._conn() as con:
-        con.execute(
-            """CREATE TABLE IF NOT EXISTS drafts (
-                id TEXT PRIMARY KEY, fp TEXT, json TEXT NOT NULL, ts TEXT NOT NULL
-            )"""
-        )
-        row = con.execute("SELECT json FROM drafts WHERE id=?", (draft_id,)).fetchone()
-    if not row:
-        return None
-    try:
-        data = json.loads(row["json"])
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
+    return store.get_draft(draft_id)
 
 
 def promote_draft(store: Store, draft_id: str, *, own: str | None = None) -> dict[str, Any]:
@@ -111,8 +89,7 @@ def promote_draft(store: Store, draft_id: str, *, own: str | None = None) -> dic
         own=own or str(data.get("own") or "") or None,
         db=store.path,
     )
-    with store._conn() as con:
-        con.execute("DELETE FROM drafts WHERE id=?", (draft_id,))
+    store.delete_draft(draft_id)
     out = dict(out)
     out["draft_id"] = draft_id
     out["ok"] = True

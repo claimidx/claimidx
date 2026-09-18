@@ -25,7 +25,7 @@ export CLAIMIDX_OWNER=did:claimidx:<your-name>
 claimidx doctor
 ```
 
-MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. `claimidx init` drops that skill into `~/.claude/skills`, `~/.grok/skills`, `~/.cursor/skills`, `~/.codex/skills`, `~/.gemini/skills`, and Cline/Continue/OpenCode/Windsurf user skill dirs when those harnesses exist. Harness sensor: `claimidx init` writes `claimidx hook` (MCP: `claimidx_hook`) on four Claude Code events (failure → ask; the same command passing → "claim it"; session brief, which also sends anything still unshared; Stop reminds once), writes the same sensor to `~/.grok/hooks/claimidx.json` (Grok fires `PostToolUse` for a failed shell; SessionStart stdout is ignored, so the brief rides the next tool event), `~/.cursor/hooks.json` (`afterShellExecution`), `~/.codex/hooks.json`, and Gemini `AfterTool` in `~/.gemini/settings.json`, and merges `claimidx-mcp` into Cursor, Grok, Codex, Gemini, OpenCode, VS Code, Cline, Continue, and Windsurf configs when those already exist. **Any other harness or a plain shell: `claimidx run -- <command>` or MCP `claimidx_run`.** It passes output and exit status through untouched and appends one `CLAIMIDX` line: the verdict on a failure, or "you fixed it: `claimidx claim --yes`" when the same command passes. `CLAIMIDX_MCP_TOOLS=core` keeps tools/list to ask/claim/apply/run/hook/whoami/doctor. In-process: `from claimidx import ask, ingest, verify`. Ingest locally even if you never share. `verify()` dry_run defaults true.
+MCP stdio: `claimidx-mcp` with `CLAIMIDX_OWNER` set (same on Windows, macOS, Linux). Skill: `skills/claimidx/SKILL.md`. `claimidx init` (`--no-hooks` to touch no harness config) drops that skill into `~/.claude/skills`, `~/.grok/skills`, `~/.cursor/skills`, `~/.codex/skills`, `~/.gemini/skills`, and Cline/Continue/OpenCode/Windsurf user skill dirs when those harnesses exist. Harness sensor: `claimidx init` writes `claimidx hook` (MCP: `claimidx_hook`) on four Claude Code events (failure → ask; the same command passing → "claim it"; session brief, which also sends anything still unshared; Stop reminds once), writes the same sensor to `~/.grok/hooks/claimidx.json` (Grok fires `PostToolUse` for a failed shell; SessionStart stdout is ignored, so the brief rides the next tool event), `~/.cursor/hooks.json` (`afterShellExecution`), `~/.codex/hooks.json`, and Gemini `AfterTool` in `~/.gemini/settings.json`, and merges `claimidx-mcp` into Cursor, Grok, Codex, Gemini, OpenCode, VS Code, Cline, Continue, and Windsurf configs when those already exist. **Any other harness or a plain shell: `claimidx run -- <command>` or MCP `claimidx_run`.** It passes output and exit status through untouched and appends one `CLAIMIDX` line: the verdict on a failure, or "you fixed it: `claimidx claim --yes`" when the same command passes. `CLAIMIDX_MCP_TOOLS=core` keeps tools/list to ask/claim/apply/run/hook/whoami/doctor. In-process: `from claimidx import ask, ingest, verify`. Ingest locally even if you never share. `verify()` dry_run defaults true.
 
 ## The loop
 
@@ -56,8 +56,8 @@ flowchart TD
 Ask needs no DID (`claimidx home-ask` against the public ledger). Write needs a DID. A live home is not one provider: HTTP ask logs the caller, not the process operator.
 
 ```bash
-claimidx home-ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
-claimidx ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci>
+claimidx home-ask --err "<raw error>" --eco <py|npm|go|rust|java|mcp|browser|ci>
+claimidx ask --err "<raw error>" --eco <py|npm|go|rust|java|mcp|browser|ci>
 claimidx hook                         # optional: stdin failed-tool JSON or stderr
 claimidx ingest --err "…" --fix-k pin --fix-b "pydantic>=2.7" --eval "python -c \"import pydantic\""
 claimidx verify --dry-run --runnable --harness -k 8   # preview; no evals/venv/pip

@@ -34,6 +34,11 @@ def _save(data: dict) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
+def count() -> int:
+    """Number of stored tokens (the env token is not counted)."""
+    return len(_load().get("tokens") or [])
+
+
 def mint(name: str) -> str:
     token = "spt_" + secrets.token_urlsafe(24)
     data = _load()

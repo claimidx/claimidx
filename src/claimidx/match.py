@@ -320,7 +320,9 @@ def verdict_for(query: Claim | dict, hits: list[tuple[Claim, float]]) -> dict:
         bits.append("contested")
     if not ann.get("eval_proof"):
         bits.append("eval is a hint")
-    if len(hits) > 1 and abs(hits[0][1] - hits[1][1]) <= 0.01:
+    from .hook import near_tie  # lazy: hook imports match lazily too; keep the edge out of module load
+
+    if len(hits) > 1 and near_tie(hits[0][1], hits[1][1]):
         bits.append(f"near-tie with {hits[1][0].id}")
     if action == "apply" and src != "local" and not int(getattr(claim, "nr", 0) or 0) and not int(getattr(claim, "nc", 0) or 0):
         action = "review"  # pulled and never held anywhere: read fix.b before touching the tree

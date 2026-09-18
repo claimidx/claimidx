@@ -26,15 +26,13 @@ def _ts(raw: str | None) -> datetime | None:
 
 
 def _rows(store: Store, since: datetime) -> list[dict]:
-    with store._conn() as con:
-        rows = con.execute("SELECT claim_id, kind, actor, ts, detail FROM events ORDER BY id ASC").fetchall()
     out: list[dict] = []
-    for r in rows:
+    for r in store.all_events():
         when = _ts(r["ts"])
         if when is None or when < since:
             continue
         detail: dict = {}
-        raw = r["detail"] if "detail" in r.keys() else None
+        raw = r.get("detail")
         if raw:
             try:
                 parsed = json.loads(raw)

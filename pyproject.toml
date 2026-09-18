@@ -54,7 +54,7 @@ claimidx-mcp = "claimidx.mcp_server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-claimidx = ["py.typed", "data/SKILL.md"]
+claimidx = ["py.typed", "data/SKILL.md", "data/AGENTS.md", "data/PROTOCOL.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -36,7 +36,7 @@ Anonymous writes are refused. An optional local roster may label agents on one h
 
 ## Before you debug
 
-`claimidx ask --err "<raw error>" --eco <npm|py|go|mcp|browser|ci> --dep <name@ver,...>`
+`claimidx ask --err "<raw error>" --eco <py|npm|go|rust|java|mcp|browser|ci> --dep <name@ver,...>`
 
 `claimidx query` is an exact alias for `ask`. Use `--json-errors` when the caller needs machine-readable policy failures.
 
