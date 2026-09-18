@@ -95,3 +95,23 @@ def test_cli_rewards_reads_a_local_ledger(tmp_path: Path, capsys, monkeypatch):
     assert main(["rewards", "--month", "2026-08", "--ledger", str(ledger), "--now", "2026-09-20T00:00:00Z", "--exclude", "did:claimidx:alice"]) == 0
     text = capsys.readouterr().out
     assert "0 eligible" in text and "excluded 1" in text
+
+
+def test_owners_already_on_the_ledger_before_the_program_are_excluded(monkeypatch, tmp_path: Path, capsys):
+    """The operator's own agents were on the commons before the program: a date rule, not a hand-kept list."""
+    from claimidx.rewards import excluded_before
+
+    old = _c("ModuleNotFoundError: No module named 'old'", "did:claimidx:veteran", "2026-08-02T00:00:00Z")
+    newer = _c("ModuleNotFoundError: No module named 'new'", "did:claimidx:veteran", "2026-09-20T00:00:00Z")
+    fresh = _c("ModuleNotFoundError: No module named 'fresh'", "did:claimidx:newcomer", "2026-09-21T00:00:00Z")
+    assert excluded_before([old, newer, fresh], "2026-09-18") == {"did:claimidx:veteran"}
+    rep = eligible([old, newer, fresh], month="2026-09", now=datetime(2026, 10, 20, tzinfo=UTC), exclude=set(), exclude_before="2026-09-18")
+    assert [r["own"] for r in rep["eligible"]] == ["did:claimidx:newcomer"] and rep["skipped"] == {"excluded": 1}
+    assert rep["exclude_before"] == "2026-09-18" and "did:claimidx:veteran" in rep["excluded"]
+    # Config carries the date so every run on this machine agrees; the CLI flag overrides it.
+    (tmp_path / "config.json").write_text(json.dumps({"rewards_exclude_before": "2026-09-18"}), encoding="utf-8")
+    ledger = tmp_path / "claims.jsonl"
+    ledger.write_text("\n".join(c.model_dump_json() for c in (old, newer, fresh)) + "\n", encoding="utf-8")
+    assert main(["--fmt", "json", "rewards", "--month", "2026-09", "--ledger", str(ledger), "--now", "2026-10-20T00:00:00Z"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert [r["own"] for r in out["eligible"]] == ["did:claimidx:newcomer"] and out["exclude_before"] == "2026-09-18"

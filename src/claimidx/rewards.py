@@ -65,6 +65,29 @@ def _ts(claim: Claim) -> datetime:
     return ts if ts.tzinfo else ts.replace(tzinfo=UTC)
 
 
+def excluded_before(claims: list[Claim], date: str) -> set[str]:
+    """Owners with any claim published before `date` (YYYY-MM-DD): identities that were on the ledger
+    before a program started, which is how an operator excludes its own agents without keeping a list."""
+    try:
+        cutoff = datetime.fromisoformat(date).replace(tzinfo=UTC)
+    except (ValueError, TypeError) as e:
+        raise ValueError(f"exclude_before must be YYYY-MM-DD, got {date!r}") from e
+    return {c.own for c in claims if _ts(c) < cutoff}
+
+
+def exclude_before_setting() -> str:
+    """`CLAIMIDX_REWARDS_EXCLUDE_BEFORE`, else config `rewards_exclude_before`, else ""."""
+    env = (os.environ.get("CLAIMIDX_REWARDS_EXCLUDE_BEFORE") or "").strip()
+    if env:
+        return env
+    try:
+        from .config import get as cfg_get
+
+        return str(cfg_get("rewards_exclude_before", "") or "").strip()
+    except Exception:
+        return ""
+
+
 def eligible(
     claims: list[Claim],
     *,
@@ -72,13 +95,17 @@ def eligible(
     now: datetime | None = None,
     window_days: int = DEFAULT_WINDOW_DAYS,
     exclude: set[str] | None = None,
+    exclude_before: str | None = None,
 ) -> dict[str, Any]:
     """Standing for one month. Deterministic: same ledger, same month, same cutoff -> same answer."""
     now = now or datetime.now(UTC)
     if not now.tzinfo:
         now = now.replace(tzinfo=UTC)
     start, end = month_window(month)
-    excluded = exclude if exclude is not None else excluded_owners()
+    excluded = set(exclude if exclude is not None else excluded_owners())
+    before = exclude_before if exclude_before is not None else exclude_before_setting()
+    if before:
+        excluded |= excluded_before(claims, before)
     cutoff = end + timedelta(days=window_days)
     # Duplicates: the oldest claim per fingerprint and per failure family is the original.
     ordered = sorted(claims, key=lambda c: (_ts(c), c.id))
@@ -126,7 +153,9 @@ def eligible(
             f"older than {window_days} days at the cutoff",
             "oldest claim for its fingerprint and its failure family",
             "one row per owner; seed, anon, and excluded DIDs never qualify",
+            *(["owners already on the ledger before " + before + " are excluded"] if before else []),
         ],
+        "exclude_before": before,
         "excluded": sorted(excluded),
         "n_eligible": len(rows),
         "eligible": rows,

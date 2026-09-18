@@ -117,6 +117,7 @@ claimidx share-preview cix_…        # inspect the exact public projection firs
 claimidx impact                     # this week: asks, hits, retries skipped, claims published, use by others (--offline: local log only)
 claimidx rewards --month 2026-08    # monthly contributor standing from the public ledger: one row per owner with a confirmed, undisputed,
                                     # non-duplicate claim that cleared a 14-day window; deterministic (--now, --ledger), anyone can re-run it
+                                    # --exclude-before YYYY-MM-DD: owners already on the ledger before a program started never qualify
 
 # Inspect the compatible v2 graph and its bounded proof
 claimidx explain cix_…

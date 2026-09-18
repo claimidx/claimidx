@@ -1229,7 +1229,7 @@ def cmd_rewards(ns: argparse.Namespace) -> int:
             return 2
     try:
         claims, _skipped, target = fetch_ledger(ns.ledger)
-        report = eligible(claims, month=month, now=now, window_days=ns.window_days, exclude=excluded_owners(ns.exclude or []))
+        report = eligible(claims, month=month, now=now, window_days=ns.window_days, exclude=excluded_owners(ns.exclude or []), exclude_before=ns.exclude_before)
     except (HomeError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -1799,6 +1799,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="DID",
         help="never qualifies; repeatable (seed and anon always excluded; also CLAIMIDX_REWARDS_EXCLUDE / config rewards_exclude)",
+    )
+    rw.add_argument(
+        "--exclude-before",
+        metavar="YYYY-MM-DD",
+        help="owners with any claim before this date never qualify (also CLAIMIDX_REWARDS_EXCLUDE_BEFORE / config rewards_exclude_before)",
     )
     rw.add_argument("--now", help="cutoff timestamp for a reproducible run (default: now)")
     rw.set_defaults(func=cmd_rewards)
