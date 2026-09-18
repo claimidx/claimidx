@@ -185,6 +185,18 @@ def run_eco(name: str, spec: dict, root: Path, env: dict) -> list[str]:
     return problems
 
 
+def tool_usable(tool: str) -> tuple[bool, str]:
+    """`<tool> --version` exits 0. A shim that cannot run (rustup with no toolchain) reads as absent."""
+    try:
+        proc = subprocess.run([tool, "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, check=False)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return False, str(e)[:120]
+    if proc.returncode != 0:
+        first = ((proc.stderr or proc.stdout or "").strip().splitlines() or [f"rc {proc.returncode}"])[0]
+        return False, first[:160]
+    return True, ""
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("ecos", nargs="*", help=f"subset of {', '.join(ECOS)}")
@@ -200,6 +212,11 @@ def main() -> int:
         spec = ECOS[name]
         if not shutil.which(spec["tool"]):
             print(f"{name}: skipped ({spec['tool']} not on PATH)")
+            continue
+        usable, why = tool_usable(spec["tool"])
+        if not usable:
+            # A shim with nothing behind it (rustup with no default toolchain, a broken wrapper) is absent, not a failure.
+            print(f"{name}: skipped ({spec['tool']} on PATH but not usable: {why})")
             continue
         try:
             problems = run_eco(name, spec, root, env)
