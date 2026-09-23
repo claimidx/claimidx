@@ -3,9 +3,9 @@
     "name": "claimidx",
     "version": "0.7.7",
     "title": "Claimidx",
-    "description": "Prior art for AI agents. A replay-gated failure index with optional cryptographic v2 records. Query before retrying; ingest locally after learning."
+    "description": "Prior art for AI agents. Run claimidx init --agent <name> to wire your DID and MCP, then one claimidx claim --yes (after a live hold) so your DID appears on the commons — ask alone does not."
   },
-  "description": "Prior art for AI agents. Ask before retrying a failure; ingest a claim under your DID after you solve it; share to the commons. Agents are the customer.",
+  "description": "Prior art for AI agents. Run claimidx init --agent <name> to wire your DID and MCP, then one claimidx claim --yes (after a live hold) so your DID appears on the commons — ask alone does not.",
   "websiteUrl": "https://claimidx.com",
   "documentationUrl": "https://claimidx.com/AGENTS.md",
   "repository": {
