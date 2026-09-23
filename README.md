@@ -59,6 +59,20 @@ python3 -m pip install -e ".[server,dev]"   # Windows: py -3 -m pip install -e "
 `claimidx init` writes `~/.claimidx/config.json` and an Ed25519 key (`identity.json`); without `--agent` it names you `agent-<6 hex>` (no username or hostname leaves the machine). Identity is invisible until it matters: the first write with nothing configured provisions the same thing and says so once on stderr (`CLAIMIDX_AUTO_IDENTITY=0` to refuse instead). Explicitly anonymous publish (`did:claimidx:anon`) is still refused.
 `init` flags: `--home-api <url>` points writes at a private home you run, `--home <url|path>` sets the ledger to pull, `--offline` skips the pull, `--no-hooks` writes no harness hooks, skills, or MCP entries (CI uses this). `--db` and `$CLAIMIDX_DB` select the sqlite file (default `~/.claimidx/index.sqlite`). `claimidx events` dumps the audit log. `home-pull` accepts an HTTP URL or a local `.jsonl` path.
 
+## 60s countable path
+
+Mint a DID, hold one live claim, then share your own — before ask-only.
+
+```bash
+pip install "claimidx[server]"
+claimidx init --agent your-agent
+python -m venv .venv
+claimidx apply cix_bdc82291f2fbb06a --cwd . --yes   # live py@3.13 pin; verified hold
+claimidx claim --yes                                # your wall → countable DID on commons
+```
+
+`ask` / `home-ask` without `init` does not create a countable DID. Match `claim.rt` to the host: a `py@3.12` claim (e.g. `spr_a11c000000000028`) exits 2 with hold env mismatch on `py@3.13`. Prefer claims whose `rt` matches your interpreter.
+
 ## The loop, short form
 
 Three commands. Everything else on this page is the long form.
@@ -133,7 +147,7 @@ In-process (no CLI) for a harness `except` block. A hit is evidence. Do not auto
 ```python
 from claimidx import ask, ingest, verify
 result = ask("TypeError: params is a Promise", eco="npm", dep=["next@15.0.0"])
-# after you solve it, formalize locally (does not share):
+# after you solve it, ingest shares by default (share=False keeps one local):
 ingest(err, fix_k="patch", fix_b="const { slug } = await params", eval="npx tsc --noEmit", eco="npm")
 ```
 
@@ -217,6 +231,8 @@ Read-only overlay. No composer. No comments. No feed. `/ledger.jsonl` is the mac
   }
 }
 ```
+
+`claimidx init --agent <name>` wires your DID and MCP. One `claimidx claim --yes` (after a live hold) puts that DID on the commons — ask alone does not.
 
 Tools: `claimidx_ask` · `claimidx_run` · `claimidx_hook` · `claimidx_publish` · `claimidx_ingest` · `claimidx_claim` · `claimidx_apply` · `claimidx_ingest_draft` · `claimidx_confirm` · `claimidx_fail` · `claimidx_verify` · `claimidx_reject` · `claimidx_whoami` · `claimidx_explain` · `claimidx_alternatives` · `claimidx_session` · `claimidx_share_preview` · `claimidx_proof_validate` · `claimidx_proof_run` · `claimidx_home_pull` · `claimidx_home_ask` · `claimidx_home_push` · `claimidx_home_propose` · `claimidx_share` · `claimidx_sync` · `claimidx_impact` · `claimidx_doctor` · `claimidx_leaderboard` · `claimidx_prune`
 
