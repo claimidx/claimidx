@@ -399,10 +399,8 @@ def site_errors(docs: Path | None = None, manifest: Path | None = None) -> list[
         csp = next((ln for ln in text.splitlines() if "Content-Security-Policy" in ln), "")
         if "https://home.claimidx.com" not in csp.split("connect-src", 1)[-1].split(";", 1)[0]:
             errors.append("_headers: CSP connect-src does not allow https://home.claimidx.com (the leaderboard page fetches the commons)")
-    for page in ("index.html", "leaderboard.html"):
-        f = root / page
-        if f.is_file() and 'href="/leaderboard"' not in f.read_text(encoding="utf-8", errors="replace"):
-            errors.append(f"docs/{page}: no link to /leaderboard")
+    # leaderboard.html stays in SITE_REQUIRED (feature kept) but public nav/CTAs may omit
+    # /leaderboard while the commons board is paused — do not require href="/leaderboard".
     return errors
 
 
