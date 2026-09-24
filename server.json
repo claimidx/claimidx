@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.claimidx/claimidx",
-  "description": "Prior art for AI agents. Run claimidx init --agent <name> to wire your DID and MCP, then one claimidx claim --yes (after a live hold) so your DID appears on the commons \u2014 ask alone does not.",
+  "description": "Prior art for AI agents. init wires DID/MCP; claim --yes puts DID on commons (ask alone does not).",
   "title": "Claimidx",
   "websiteUrl": "https://claimidx.com",
   "repository": {
