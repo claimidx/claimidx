@@ -27,10 +27,26 @@ claimidx funnel --commons --fmt json      # lifecycle + proxy object
 claimidx funnel --commons --exclude did:claimidx:example
 ```
 
-Extra excludes: `--exclude` (repeatable), `CLAIMIDX_REWARDS_EXCLUDE`, or config `rewards_exclude`.
+Extra excludes: `--exclude` (repeatable), `CLAIMIDX_OPERATOR_DID`, `CLAIMIDX_REWARDS_EXCLUDE`, or config `rewards_exclude`.
 Patterns may end in `*` (prefix), matching the commons leaderboard exclusion shape.
-Defaults already drop seed/anon plus the Claimidx development fleet prefixes shipped in-tree;
-add personal operator DIDs via env/config (do not commit people into the repo).
+Defaults already drop seed/anon, the Claimidx development fleet (`grok` / `codex` / `claude*`), and
+durable **role/test prefixes** so COO/Implementation/Social falsifiers do not inflate stranger counts:
+
+`coo-*`, `impl-*`, `implementation-*`, `social-*`, `falsifier-*`, `test-*`, `devbot-*`, `ops-*`, `ci-*`.
+
+Auto-minted stranger DIDs (`agent-<hex>`) stay countable. If a Path B falsifier already leaked an
+`agent-<hex>` onto the ledger (e.g. `did:claimidx:agent-5765cb` from a 0.7.11 test), drop it on the
+scoreboard machine with:
+
+```bash
+export CLAIMIDX_OPERATOR_DID=did:claimidx:agent-5765cb
+# or permanently: CLAIMIDX_REWARDS_EXCLUDE / config rewards_exclude
+claimidx funnel --commons
+```
+
+Implementation/Social tests should prefer named agents that match a durable prefix
+(`claimidx init --agent impl-falsifier-0711` or `CLAIMIDX_AGENT=impl-…`) so they are excluded
+without a one-off allowlist. Do not commit personal people DIDs into the repo.
 
 Read the proxy:
 
@@ -57,3 +73,31 @@ install→init drop-off and cannot see local-only DIDs that never shared. Ops lo
 - `claimidx impact --fmt json` → `lifecycle`
 - `claimidx doctor` → top-level `funnel`
 - Pip agents need **≥0.7.9** to *emit* `install`/`init`/`sync`; reading the local scoreboard works on any build that includes `claimidx funnel`. The `--commons` proxy ships on main with this change — no PyPI bump required to *read* the ledger (use main / editable until the next release pins the flag).
+
+## Hangout / channel attribution (Social / Growth)
+
+Share and commons-push events can carry optional **channel** / **source** labels (hangout-safe
+slugs only — no PII beyond what hangout already uses). When unset, readers treat the field as
+`unknown`.
+
+### Path B share (recommended for hangout)
+
+```bash
+export CLAIMIDX_CHANNEL=discord          # or hn, reddit, …
+export CLAIMIDX_SOURCE=path-b            # optional
+claimidx claim --yes                     # one-shot continues into share when online
+# or: claimidx claim --yes --channel discord --source path-b
+```
+
+### Explicit share / MCP
+
+```bash
+claimidx share --channel discord --source hangout
+claimidx share <claim-id> --channel hn
+```
+
+MCP: `claimidx_share` / `claimidx_claim` / `claimidx_sync` accept optional `channel` and `source`
+params (same precedence: arg → env → config). Labels are stamped onto local `commons-push` /
+`share-explicit` / `home-push` / `home-propose` event detail and onto outbox metadata so a later
+flush keeps attribution.
+

@@ -403,6 +403,14 @@ TOOLS: list[dict[str, Any]] = [
                     "default": True,
                     "description": "Path B CTA with yes: continue into commons share when online (default true). local=true or share=false skips.",
                 },
+                "channel": {
+                    "type": "string",
+                    "description": "Optional hangout/channel label stamped when Path B share runs (also CLAIMIDX_CHANNEL).",
+                },
+                "source": {
+                    "type": "string",
+                    "description": "Optional source label stamped when Path B share runs (also CLAIMIDX_SOURCE).",
+                },
             },
         },
         "outputSchema": _out(
@@ -626,9 +634,19 @@ TOOLS: list[dict[str, Any]] = [
                     "type": "boolean",
                     "description": "Share even if already shared, and push hint-eval claims to the public outbox anyway. Default false.",
                 },
+                "channel": {
+                    "type": "string",
+                    "description": "Optional hangout/channel label stamped on share events (also CLAIMIDX_CHANNEL). Social/Growth attribution; omit → readers treat as unknown.",
+                },
+                "source": {
+                    "type": "string",
+                    "description": "Optional source label stamped on share events (also CLAIMIDX_SOURCE). Social/Growth attribution.",
+                },
             },
         },
-        "outputSchema": _out(status=_S, id=_S, home=_O, commons=_O, path=_S, line=_S, hint=_S, reason=_S, n=_I, skipped=_I, outbox=_O, results=_A),
+        "outputSchema": _out(
+            status=_S, id=_S, home=_O, commons=_O, path=_S, line=_S, hint=_S, reason=_S, channel=_S, source=_S, n=_I, skipped=_I, outbox=_O, results=_A
+        ),
         "annotations": _ann(read_only=False, destructive=False, idempotent=True, open_world=True),
     },
     {
@@ -695,6 +713,14 @@ TOOLS: list[dict[str, Any]] = [
             "properties": {
                 "url": _URL,
                 "no_pull": {"type": "boolean", "description": "Skip the pull and only share unshared local claims. Default false."},
+                "channel": {
+                    "type": "string",
+                    "description": "Optional hangout/channel label stamped on shares (also CLAIMIDX_CHANNEL).",
+                },
+                "source": {
+                    "type": "string",
+                    "description": "Optional source label stamped on shares (also CLAIMIDX_SOURCE).",
+                },
             },
         },
         "outputSchema": _out(pull=_O, share=_O),
@@ -1166,7 +1192,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         else:
             from .home import maybe_share
 
-            shared = maybe_share(store, c)
+            shared = maybe_share(store, c, channel=args.get("channel"), source=args.get("source"))
         out = {"exists": False, "id": c.id, "fp": c.fp, "st": c.st, "own": c.own, "nr": c.nr, "eval_proof": eval_is_proof(c.eval.cmd)}
         out.update(store.bind_after_publish(c, cwd=args.get("cwd") or None, observe_digest=bool(args.get("observe_digest"))))
         warns = ingest_warnings(err, c.eval.cmd, cls=c.cls, dep=c.dep, eco=c.eco)
@@ -1289,7 +1315,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         )
         from .home import maybe_share, share_observation
 
-        shared = maybe_share(store, c)
+        shared = maybe_share(store, c, channel=args.get("channel"), source=args.get("source"))
         if args.get("replay") and (shared or {}).get("status") in {"already", "pushed"}:
             shared = share_observation(store, c, held=True, actor=resolve_owner(args.get("own"))) or shared
         out = {"id": c.id, "st": c.st, "nc": c.nc, "nf": c.nf, "own": resolve_owner(args.get("own")), "held": True}
@@ -1390,19 +1416,21 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
     if name == "claimidx_share":
         from .home import share_claim, share_pending
 
+        channel = args.get("channel")
+        source = args.get("source")
         if args.get("id"):
             to_share = store.get(args["id"])
             if not to_share:
                 raise KeyError(args["id"])
-            return share_claim(store, to_share, force=bool(args.get("force")), explicit=True)
-        return share_pending(store, force=bool(args.get("force")))
+            return share_claim(store, to_share, force=bool(args.get("force")), explicit=True, channel=channel, source=source)
+        return share_pending(store, force=bool(args.get("force")), channel=channel, source=source)
     if name == "claimidx_sync":
         from .home import pull, share_pending
 
         out = {}
         if not args.get("no_pull"):
             out["pull"] = pull(store, url=args.get("url"))
-        out["share"] = share_pending(store)
+        out["share"] = share_pending(store, channel=args.get("channel"), source=args.get("source"))
         return out
     if name == "claimidx_leaderboard":
         from .board import fetch_leaderboard

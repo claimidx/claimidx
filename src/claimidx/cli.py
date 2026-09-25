@@ -671,7 +671,12 @@ def cmd_claim(ns: argparse.Namespace) -> int:
         local=local,
     )
     if out.get("ok") and want_share:
-        out = ensure_online_share(_store(ns), out)
+        out = ensure_online_share(
+            _store(ns),
+            out,
+            channel=getattr(ns, "channel", None),
+            source=getattr(ns, "source", None),
+        )
     if out.get("ok"):
         out["path_b"] = path_b_cta(_store(ns), resolve_owner(ns.own))
     if ns.fmt == "json":
@@ -1175,15 +1180,17 @@ def cmd_share(ns: argparse.Namespace) -> int:
     from .home import HomeError, share_claim, share_pending
 
     store = _store(ns)
+    channel = getattr(ns, "channel", None)
+    source = getattr(ns, "source", None)
     try:
         if ns.id:
             c = store.get(ns.id)
             if not c:
                 print("missing", file=sys.stderr)
                 return 1
-            result = share_claim(store, c, api=ns.api, token=ns.token, force=ns.force, explicit=True)
+            result = share_claim(store, c, api=ns.api, token=ns.token, force=ns.force, explicit=True, channel=channel, source=source)
         else:
-            result = share_pending(store, api=ns.api, token=ns.token, force=ns.force)
+            result = share_pending(store, api=ns.api, token=ns.token, force=ns.force, channel=channel, source=source)
     except HomeError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -1204,7 +1211,13 @@ def cmd_sync(ns: argparse.Namespace) -> int:
             print(f"error: {e}", file=sys.stderr)
             return 1
     try:
-        out["share"] = share_pending(store, api=ns.api, token=ns.token)
+        out["share"] = share_pending(
+            store,
+            api=ns.api,
+            token=ns.token,
+            channel=getattr(ns, "channel", None),
+            source=getattr(ns, "source", None),
+        )
     except HomeError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -1755,6 +1768,14 @@ def build_parser() -> argparse.ArgumentParser:
     cl.add_argument("--no-replay", action="store_true", help="publish without replaying the eval")
     cl.add_argument("--no-clean-room", action="store_true", help="skip the fresh-clone proof of fix.b; nr then comes from the working tree only")
     cl.add_argument("--local", action="store_true", help="keep this claim on this machine until claimidx share <id>: sync and bulk share skip it")
+    cl.add_argument(
+        "--channel",
+        help="optional hangout/channel label stamped on Path B share (also CLAIMIDX_CHANNEL); Social/Growth attribution",
+    )
+    cl.add_argument(
+        "--source",
+        help="optional source label stamped on Path B share (also CLAIMIDX_SOURCE); Social/Growth attribution",
+    )
     cl.set_defaults(func=cmd_claim)
     rn = sub.add_parser("run", help="run a command through the sensor: failure -> ask + remember; the fix -> `claim --yes` nudge; exit status is the command's")
     rn.add_argument("--cwd")
@@ -1929,12 +1950,22 @@ def build_parser() -> argparse.ArgumentParser:
     sh.add_argument("--api")
     sh.add_argument("--token")
     sh.add_argument("--force", action="store_true")
+    sh.add_argument(
+        "--channel",
+        help="optional hangout/channel label for share events (also CLAIMIDX_CHANNEL); Social/Growth attribution",
+    )
+    sh.add_argument(
+        "--source",
+        help="optional source label for share events (also CLAIMIDX_SOURCE); Social/Growth attribution",
+    )
     sh.set_defaults(func=cmd_share)
     sy = sub.add_parser("sync", help="pull the public ledger, then share anything the hooks have not already sent (they share at session start)")
     sy.add_argument("--url")
     sy.add_argument("--api")
     sy.add_argument("--token")
     sy.add_argument("--no-pull", action="store_true")
+    sy.add_argument("--channel", help="optional hangout/channel label stamped on shares this sync (also CLAIMIDX_CHANNEL)")
+    sy.add_argument("--source", help="optional source label stamped on shares this sync (also CLAIMIDX_SOURCE)")
     sy.set_defaults(func=cmd_sync)
     imp = sub.add_parser("impact", help="what the index did for you: retries skipped, claims published, use by other agents")
     imp.add_argument("--days", type=int, default=7)
@@ -1958,7 +1989,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=None,
         metavar="DID",
-        help="extra DID or prefix* to exclude from the --commons proxy (also CLAIMIDX_REWARDS_EXCLUDE / config rewards_exclude)",
+        help="extra DID or prefix* to exclude from the --commons proxy (also CLAIMIDX_OPERATOR_DID / CLAIMIDX_REWARDS_EXCLUDE / config rewards_exclude)",
     )
     fn.set_defaults(func=cmd_funnel)
     rw = sub.add_parser(

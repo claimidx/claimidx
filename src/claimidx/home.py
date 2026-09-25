@@ -417,48 +417,64 @@ def commons_travels(claim: Claim) -> tuple[bool, str]:
     return True, ""
 
 
-def push_commons(store, claim: Claim, *, force: bool = False, timeout: float = 20.0) -> dict[str, Any]:
+def push_commons(
+    store,
+    claim: Claim,
+    *,
+    force: bool = False,
+    timeout: float = 20.0,
+    channel: str | None = None,
+    source: str | None = None,
+) -> dict[str, Any]:
     """Push the public projection to the commons; queue it in the outbox only when the commons is unreachable.
 
     A policy refusal (400/409/410/422, or a 403/404 whose body is a row judgment) is recorded as
     `commons-refused` and never retried; transient 4xx (401/408/425/429) stay in the outbox like transport failures.
     A projection with no replayable eval is recorded as `commons-skip` before any request.
     Settled skips/refusals stop the hooks nudging about the claim.
+    Optional channel/source (CLI/env/MCP) are stamped on share events for Social/Growth attribution.
     """
+    from .attribution import merge_attribution, resolve_attribution
     from .public import PublicSkip
 
+    attrib = resolve_attribution(channel=channel, source=source)
     if not force and commons_shared(store, claim.id):
         return {"status": "already", "id": claim.id}
     ok, why = commons_travels(claim)
     if not ok and not force:
-        store.log("commons-skip", claim.own, claim.id, {"reason": why})
-        return {"status": "skipped", "id": claim.id, "reason": why}
+        store.log("commons-skip", claim.own, claim.id, merge_attribution({"reason": why}, attrib))
+        return {"status": "skipped", "id": claim.id, "reason": why, **attrib}
     try:
         payload = _public_payload(claim)
     except PublicSkip as e:
-        store.log("commons-skip", claim.own, claim.id, {"reason": str(e)[:200]})
-        return {"status": "skipped", "id": claim.id, "reason": str(e)}
+        store.log("commons-skip", claim.own, claim.id, merge_attribution({"reason": str(e)[:200]}, attrib))
+        return {"status": "skipped", "id": claim.id, "reason": str(e), **attrib}
     if force:
         payload["force"] = True
+    # Commons metadata: optional attribution labels travel with the outbox row (not Claim fields).
+    if attrib:
+        payload.update(attrib)
     try:
         result = _post(commons_api() + "/api/publish", payload, timeout=timeout)
     except HomeError as e:
         if _is_refusal(str(e)):
-            store.log("commons-refused", claim.own, claim.id, {"error": str(e)[:300]})
-            return {"status": "refused", "id": claim.id, "reason": str(e)[:300]}
+            store.log("commons-refused", claim.own, claim.id, merge_attribution({"error": str(e)[:300]}, attrib))
+            return {"status": "refused", "id": claim.id, "reason": str(e)[:300], **attrib}
         path = outbox_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(payload, separators=(",", ":"), ensure_ascii=False) + "\n")
-        store.log("home-propose", claim.own, claim.id, {"commons": "outbox", "error": str(e)[:200]})
+        store.log("home-propose", claim.own, claim.id, merge_attribution({"commons": "outbox", "error": str(e)[:200]}, attrib))
         return {
             "status": "outbox",
             "id": claim.id,
             "path": str(path),
             "hint": f"commons unreachable ({str(e)[:80]}); queued, sent on the next claim or session (`claimidx sync` sends it now)",
+            **attrib,
         }
-    store.log("commons-push", claim.own, claim.id, {"exists": bool(result.get("exists")) if isinstance(result, dict) else False})
-    return {"status": "commons", "id": claim.id, "commons": result}
+    detail = {"exists": bool(result.get("exists")) if isinstance(result, dict) else False}
+    store.log("commons-push", claim.own, claim.id, merge_attribution(detail, attrib))
+    return {"status": "commons", "id": claim.id, "commons": result, **attrib}
 
 
 def flush_outbox(store, *, timeout: float = 20.0, stop_on_unreachable: bool = False) -> dict[str, Any]:
@@ -489,7 +505,15 @@ def flush_outbox(store, *, timeout: float = 20.0, stop_on_unreachable: bool = Fa
                 refused += 1  # a decision, not an outage: drop it, record it
                 cid = str(payload.get("id") or "")
                 if cid:
-                    store.log("commons-refused", str(payload.get("own") or "did:claimidx:anon"), cid, {"error": str(e)[:300], "from": "outbox"})
+                    from .attribution import merge_attribution, resolve_attribution
+
+                    attrib = resolve_attribution(channel=payload.get("channel"), source=payload.get("source"))
+                    store.log(
+                        "commons-refused",
+                        str(payload.get("own") or "did:claimidx:anon"),
+                        cid,
+                        merge_attribution({"error": str(e)[:300], "from": "outbox"}, attrib),
+                    )
                 continue
             kept.append(line)
             if stop_on_unreachable:
@@ -500,7 +524,15 @@ def flush_outbox(store, *, timeout: float = 20.0, stop_on_unreachable: bool = Fa
         sent += 1
         cid = str(payload.get("id") or "")
         if cid:
-            store.log("commons-push", str(payload.get("own") or "did:claimidx:anon"), cid, {"from": "outbox"})
+            from .attribution import merge_attribution, resolve_attribution
+
+            attrib = resolve_attribution(channel=payload.get("channel"), source=payload.get("source"))
+            store.log(
+                "commons-push",
+                str(payload.get("own") or "did:claimidx:anon"),
+                cid,
+                merge_attribution({"from": "outbox"}, attrib),
+            )
     if kept:
         path.write_text("\n".join(kept) + "\n", encoding="utf-8")
     else:
@@ -518,20 +550,33 @@ def already_shared(store, claim_id: str) -> bool:
 
 
 def share_claim(
-    store, claim: Claim, *, api: str | None = None, token: str | None = None, force: bool = False, explicit: bool = False, timeout: float = 20.0
+    store,
+    claim: Claim,
+    *,
+    api: str | None = None,
+    token: str | None = None,
+    force: bool = False,
+    explicit: bool = False,
+    timeout: float = 20.0,
+    channel: str | None = None,
+    source: str | None = None,
 ) -> dict[str, Any]:
     """Push a local claim: the full record to a private home when one is configured, and the public
     projection to the commons unless it is switched off. With neither, the projection is queued.
 
     A claim recorded with --local is skipped unless `explicit` (the agent named it): that is the
     separate publication decision, and it clears the keep-local mark.
+    Optional channel/source stamp hangout attribution onto share events (and outbox metadata).
     """
+    from .attribution import merge_attribution, resolve_attribution
+
+    attrib = resolve_attribution(channel=channel, source=source)
     if keep_local(store, claim.id):
         if not explicit:
-            return local_status(claim.id)
-        store.log("share-explicit", claim.own, claim.id)
+            return {**local_status(claim.id), **attrib}
+        store.log("share-explicit", claim.own, claim.id, merge_attribution(None, attrib))
     base = (api if api is not None else api_url()).rstrip("/")
-    out: dict[str, Any] = {"status": "already", "id": claim.id}
+    out: dict[str, Any] = {"status": "already", "id": claim.id, **attrib}
     if base and (force or not already_shared(store, claim.id)):
         try:
             result = publish_home(claim, api=base, token=token, force=force, timeout=timeout)
@@ -541,10 +586,10 @@ def share_claim(
             if not commons_enabled():
                 raise
         else:
-            store.log("home-push", claim.own, claim.id)
+            store.log("home-push", claim.own, claim.id, merge_attribution(None, attrib))
             out.update({"status": "pushed", "home": result})
     if commons_enabled():
-        commons = push_commons(store, claim, force=force, timeout=timeout)
+        commons = push_commons(store, claim, force=force, timeout=timeout, channel=channel, source=source)
         out["commons"] = commons
         if commons.get("status") in {"commons", "outbox"} and out["status"] == "already":
             out["status"] = commons["status"]
@@ -561,26 +606,43 @@ def share_claim(
     if not force and not eval_is_proof(claim.eval.cmd):
         # The public ledger is prior art other agents replay. A `true` eval
         # cannot be replayed, so it stays local until it carries a recipe.
-        return {"status": "skipped", "id": claim.id, "reason": HINT_WARN + " (or share --force)"}
+        return {"status": "skipped", "id": claim.id, "reason": HINT_WARN + " (or share --force)", **attrib}
     try:
         line = propose_line(claim)
     except PublicSkip as e:
-        return {"status": "skipped", "id": claim.id, "reason": str(e)}
+        return {"status": "skipped", "id": claim.id, "reason": str(e), **attrib}
     path = outbox_path()
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Attach attribution to the queued public projection for later flush event stamps.
+    if attrib:
+        try:
+            payload = json.loads(line)
+            payload.update(attrib)
+            line = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+        except (ValueError, TypeError):
+            pass
     with path.open("a", encoding="utf-8") as f:
         f.write(line + "\n")
-    store.log("home-propose", claim.own, claim.id)
+    store.log("home-propose", claim.own, claim.id, merge_attribution(None, attrib))
     return {
         "status": "outbox",
         "id": claim.id,
         "path": str(path),
         "line": line,
         "hint": "no CLAIMIDX_HOME_API; queued a public projection for data/claims.jsonl",
+        **attrib,
     }
 
 
-def share_pending(store, *, api: str | None = None, token: str | None = None, force: bool = False) -> dict[str, Any]:
+def share_pending(
+    store,
+    *,
+    api: str | None = None,
+    token: str | None = None,
+    force: bool = False,
+    channel: str | None = None,
+    source: str | None = None,
+) -> dict[str, Any]:
     """Share every local (non-seed, non-home) claim that has not been submitted yet."""
     results: list[dict[str, Any]] = []
     skipped = 0
@@ -601,7 +663,7 @@ def share_pending(store, *, api: str | None = None, token: str | None = None, fo
             skipped += 1
             continue
         try:
-            r = share_claim(store, c, api=api, token=token, force=force)
+            r = share_claim(store, c, api=api, token=token, force=force, channel=channel, source=source)
         except HomeError as e:
             results.append({"status": "error", "id": c.id, "error": str(e)[:300]})  # one refusal never stops the run
             continue
@@ -612,21 +674,30 @@ def share_pending(store, *, api: str | None = None, token: str | None = None, fo
     return {"n": len(results), "skipped": skipped, "outbox": flushed, "results": results}
 
 
-def maybe_share(store, claim: Claim) -> dict[str, Any] | None:
+def maybe_share(
+    store,
+    claim: Claim,
+    *,
+    channel: str | None = None,
+    source: str | None = None,
+) -> dict[str, Any] | None:
     """Auto-submit after ingest/confirm: the private home when one is configured, the commons unless it is off.
 
     Anything queued from an earlier outage goes first, so a new publish drains the outbox
     without anyone asking for a sync.
+    Channel/source come from CLI/MCP args or CLAIMIDX_CHANNEL / CLAIMIDX_SOURCE for hangout attribution.
     """
     if not share_enabled():
         return None
     if keep_local(store, claim.id):
-        return local_status(claim.id)
+        from .attribution import resolve_attribution
+
+        return {**local_status(claim.id), **resolve_attribution(channel=channel, source=source)}
     if not api_url() and not commons_enabled():
         return None
     flushed = flush_outbox(store, timeout=HOOK_REQUEST_SECONDS, stop_on_unreachable=True) if outbox_path().exists() else None
     try:
-        out = share_claim(store, claim)
+        out = share_claim(store, claim, channel=channel, source=source)
     except HomeError as e:
         out = {"status": "error", "id": claim.id, "error": str(e)}
     if flushed and flushed.get("sent"):
@@ -637,11 +708,18 @@ def maybe_share(store, claim: Claim) -> dict[str, Any] | None:
 _SHARE_LANDED = frozenset({"commons", "pushed", "already", "outbox", "local"})
 
 
-def ensure_online_share(store, out: dict[str, Any]) -> dict[str, Any]:
+def ensure_online_share(
+    store,
+    out: dict[str, Any],
+    *,
+    channel: str | None = None,
+    source: str | None = None,
+) -> dict[str, Any]:
     """Path B one-shot: after claim --yes, continue into share when online and not keep-local.
 
     No-op when sharing is off, commons/home unavailable (offline), the claim is keep-local,
     or share already landed (including outbox). Never raises.
+    Channel/source (or CLAIMIDX_CHANNEL / CLAIMIDX_SOURCE) stamp hangout attribution on the share.
     """
     if not isinstance(out, dict) or not out.get("ok") or not out.get("id"):
         return out
@@ -659,7 +737,7 @@ def ensure_online_share(store, out: dict[str, Any]) -> dict[str, Any]:
     claim = store.get(out["id"])
     if claim is None or keep_local(store, claim.id):
         return out
-    shared = maybe_share(store, claim)
+    shared = maybe_share(store, claim, channel=channel, source=source)
     if not shared:
         return out
     updated = dict(out)

@@ -203,7 +203,10 @@ _FUNNEL_EXCLUDED = frozenset({"did:claimidx:seed", "did:claimidx:anon", "anon", 
 
 # Commons-derived proxy (production ledger). Not install->init drop-off.
 # Prefix patterns end in * (same shape as commons_excluded on the home worker).
-# Personal operator DIDs stay in CLAIMIDX_REWARDS_EXCLUDE / config — do not hardcode people.
+# Personal operator DIDs stay in CLAIMIDX_OPERATOR_DID / CLAIMIDX_REWARDS_EXCLUDE / config —
+# do not hardcode people. Role/test prefixes below drop COO/Implementation/Social falsifiers
+# that use named agents (e.g. CLAIMIDX_AGENT=impl-falsifier-…). Auto-minted agent-<hex>
+# stranger DIDs stay countable; exclude a leaked test DID via CLAIMIDX_OPERATOR_DID.
 _PROXY_DEFAULT_EXCLUDE = frozenset(
     {
         "did:claimidx:seed",
@@ -213,18 +216,36 @@ _PROXY_DEFAULT_EXCLUDE = frozenset(
         "did:claimidx:grok",
         "did:claimidx:codex",
         "did:claimidx:claude*",
+        # Durable role/test prefixes (honest stranger scoreboard).
+        "did:claimidx:coo-*",
+        "did:claimidx:impl-*",
+        "did:claimidx:implementation-*",
+        "did:claimidx:social-*",
+        "did:claimidx:falsifier-*",
+        "did:claimidx:test-*",
+        "did:claimidx:devbot-*",
+        "did:claimidx:ops-*",
+        "did:claimidx:ci-*",
     }
 )
 COUNTABLE_GOAL = 100
 
 
+def _operator_did_patterns() -> list[str]:
+    """CLAIMIDX_OPERATOR_DID (comma-separated exact DID or prefix*): ops allowlist to drop."""
+    import os
+
+    env = os.environ.get("CLAIMIDX_OPERATOR_DID") or ""
+    return [x.strip() for x in env.split(",") if x.strip()]
+
+
 def _proxy_excluded(extra: list[str] | None = None) -> list[str]:
-    """Exact DIDs and trailing-* prefixes: defaults + rewards_exclude + extras."""
+    """Exact DIDs and trailing-* prefixes: defaults + operator DID + rewards_exclude + extras."""
     from .rewards import excluded_owners
 
     out: list[str] = []
     seen: set[str] = set()
-    for raw in (*_PROXY_DEFAULT_EXCLUDE, *sorted(excluded_owners(extra))):
+    for raw in (*_PROXY_DEFAULT_EXCLUDE, *_operator_did_patterns(), *sorted(excluded_owners(extra))):
         v = (raw or "").strip()
         if v in seen:
             continue
@@ -261,6 +282,7 @@ def commons_owner_proxy(
     Proxy only: the ledger has no install/init/sync stage events. Local-only DIDs that
     never shared are invisible. `countable` is all-time published owners after exclude;
     `recent_published` is owners with a claim.ts inside the lookback window.
+    Excludes defaults + CLAIMIDX_OPERATOR_DID + CLAIMIDX_REWARDS_EXCLUDE + --exclude.
     """
     from .models import Claim
 
