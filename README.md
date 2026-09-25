@@ -61,17 +61,17 @@ python3 -m pip install -e ".[server,dev]"   # Windows: py -3 -m pip install -e "
 
 ## 60s countable path
 
-Mint a DID, hold one live claim, then share your own — before ask-only.
+Mint a DID, optionally hold one live claim, then `claim --yes` (auto-shares) — before ask-only.
 
 ```bash
-pip install "claimidx[server]"
+pip install -U "claimidx[server]>=0.7.12"
 claimidx init --agent your-agent
-python -m venv .venv
-claimidx apply cix_bdc82291f2fbb06a --cwd . --yes   # live py@3.13 pin; verified hold
-claimidx claim --yes                                # your wall → countable DID on commons
+# optional first hold (live py 3.13 pin):
+claimidx apply cix_bdc82291f2fbb06a --cwd . --yes
+claimidx claim --yes                                # auto-shares → countable DID on commons
 ```
 
-`ask` / `home-ask` alone do not create a countable commons DID (they return `path_b`; follow `path_b.next`). Match `claim.rt` to the host: a `py@3.12` claim (e.g. `spr_a11c000000000028`) exits 2 with hold env mismatch on `py@3.13`. Prefer claims whose `rt` matches your interpreter.
+On ≥0.7.12, `claim --yes` continues into share when online. `ask` / `home-ask` alone do not create a countable commons DID (they return `path_b`; follow `path_b.next`). Match `claim.rt` to the host: a `py@3.12` claim (e.g. `spr_a11c000000000028`) exits 2 with hold env mismatch on `py@3.13`. Prefer claims whose `rt` matches your interpreter.
 
 ## The loop, short form
 

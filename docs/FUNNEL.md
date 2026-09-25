@@ -34,15 +34,15 @@ durable **role/test prefixes** so COO/Implementation/Social falsifiers do not in
 
 `coo-*`, `impl-*`, `implementation-*`, `social-*`, `falsifier-*`, `test-*`, `devbot-*`, `ops-*`, `ci-*`.
 
-Auto-minted stranger DIDs (`agent-<hex>`) stay countable. Known leaked Path B falsifiers that
-prefixes cannot catch are hardcoded in the default exclude list (currently
-`did:claimidx:agent-5765cb` from a 0.7.11 test). Additional bare `agent-<hex>` leaks still need
-`CLAIMIDX_OPERATOR_DID` / `CLAIMIDX_REWARDS_EXCLUDE` / config `rewards_exclude` on the scoreboard
-machine until they are added to defaults.
-
-Implementation/Social tests should prefer named agents that match a durable prefix
-(`claimidx init --agent impl-falsifier-0711` or `CLAIMIDX_AGENT=impl-…`) so they are excluded
-without a one-off allowlist. Do not commit personal people DIDs into the repo.
+Auto-minted stranger DIDs (`agent-<hex>`) stay countable. On **≥0.7.12**,
+`did:claimidx:agent-5765cb` (leaked Path B falsifier from a 0.7.11 test) is **hardcoded in the
+default `--commons` exclude list** — no `CLAIMIDX_OPERATOR_DID` workaround is required for that
+DID. Prefer prefix excludes for new Implementation/Social tests
+(`claimidx init --agent impl-falsifier-0712` / `falsifier-*`, or `CLAIMIDX_AGENT=impl-…`) so they
+never need a one-off. Only additional bare `agent-<hex>` leaks (not yet in defaults) still need
+`--exclude` / `CLAIMIDX_OPERATOR_DID` / `CLAIMIDX_REWARDS_EXCLUDE` / config `rewards_exclude` on
+the scoreboard machine until they are added to defaults. Do not commit personal people DIDs into
+the repo.
 
 Read the proxy:
 
@@ -78,8 +78,14 @@ slugs only — no PII beyond what hangout already uses). When unset, readers tre
 
 ### Path B share (recommended for hangout)
 
+Pin ≥0.7.12 so `claim --yes` auto-shares (ask alone does not count):
+
 ```bash
-export CLAIMIDX_CHANNEL=discord          # or hn, reddit, …
+pip install -U "claimidx[server]>=0.7.12"
+claimidx init --agent YOUR_AGENT_NAME
+# optional first hold:
+claimidx apply cix_bdc82291f2fbb06a --cwd . --yes
+export CLAIMIDX_CHANNEL=discord          # or hangout-moltbook, hn, reddit, …
 export CLAIMIDX_SOURCE=path-b            # optional
 claimidx claim --yes                     # one-shot continues into share when online
 # or: claimidx claim --yes --channel discord --source path-b
