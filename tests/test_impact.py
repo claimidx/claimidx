@@ -226,3 +226,58 @@ def test_api_funnel_endpoint(tmp_path: Path):
     body = res.json()
     assert body["lifecycle"]["stages"]["init"]["actors"] == 1
     assert body["lifecycle"]["countable_actors"] == 1
+
+
+def test_funnel_cli_scoreboard(tmp_path: Path, capsys):
+    from claimidx.cli import main
+    from claimidx.store import Store
+
+    db = str(tmp_path / "ix.sqlite")
+    store = Store(db)
+    a = "did:claimidx:alice"
+    b = "did:claimidx:bob"
+    store.log("install", a, "", {"stage": "install"})
+    store.log("init", a, "", {"stage": "init"})
+    store.log("ask", a, "c1", {"hit": False})
+    store.log("confirm-replay", a, "c1", {"held": True})
+    store.log("publish", a, "c1", {})
+    store.log("init", b, "", {"stage": "init"})
+    store.log("init", "did:claimidx:anon", "", {"stage": "init"})
+
+    assert main(["--db", db, "funnel", "--days", "30"]) == 0
+    out = capsys.readouterr().out
+    assert "local home event log only" in out
+    assert "countable DIDs (excl. seed/anon): 2" in out
+    assert "COO path actors:" in out and "hold 1" in out and "claim 1" in out
+    assert "init_no_ask" in out
+
+    assert main(["--db", db, "--fmt", "json", "funnel", "--days", "30"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["lifecycle"]["countable_actors"] == 2
+    assert payload["lifecycle"]["stages"]["ask"]["actors"] == 1
+    assert "local home" in payload["locality"]
+    assert payload["db"].endswith("ix.sqlite")
+
+
+def test_render_funnel_scoreboard_aliases():
+    from claimidx.impact import render_funnel_scoreboard
+
+    life = {
+        "days": 7,
+        "order": ["install", "init", "ask", "sync", "confirm", "publish", "share"],
+        "stages": {
+            "install": {"actors": 1, "events": 1},
+            "init": {"actors": 2, "events": 2},
+            "ask": {"actors": 1, "events": 1},
+            "sync": {"actors": 0, "events": 0},
+            "confirm": {"actors": 1, "events": 1},
+            "publish": {"actors": 1, "events": 1},
+            "share": {"actors": 0, "events": 0},
+        },
+        "countable_actors": 2,
+        "dropoff": {"init_no_ask": 1, "install_no_init": 0, "ask_no_sync": 0, "sync_no_confirm": 0, "confirm_no_publish": 0, "publish_no_share": 1},
+    }
+    text = render_funnel_scoreboard(life)
+    assert "confirm (≈hold)" in text
+    assert "publish (≈claim)" in text
+    assert "COO path actors: install 1 → init 2 → ask 1 → hold 1 → claim 1" in text
