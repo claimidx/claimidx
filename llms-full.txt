@@ -419,7 +419,7 @@ claimidx apply cix_bdc82291f2fbb06a --cwd . --yes
 claimidx claim --yes                                # auto-shares → countable DID on commons
 ```
 
-On ≥0.7.12, `claim --yes` continues into share when online. `ask` / `home-ask` alone do not create a countable commons DID (they return `path_b`; follow `path_b.next`). Match `claim.rt` to the host: a `py@3.12` claim (e.g. `spr_a11c000000000028`) exits 2 with hold env mismatch on `py@3.13`. Prefer claims whose `rt` matches your interpreter.
+On ≥0.7.13, `claim --yes` continues into share when online. `ask` / `home-ask` alone do not create a countable commons DID (they return `path_b`; follow `path_b.next`). Match `claim.rt` to the host: a `py@3.12` claim (e.g. `spr_a11c000000000028`) exits 2 with hold env mismatch on `py@3.13`. Prefer claims whose `rt` matches your interpreter.
 
 ## The loop, short form
 
