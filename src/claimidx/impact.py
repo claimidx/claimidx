@@ -182,10 +182,117 @@ def commons_funnel(store: Store, *, days: int = 30) -> dict[str, Any]:
     }
 
 
+_LIFECYCLE_KINDS = {
+    "install": "install",
+    "init": "init",
+    "ask": "ask",
+    "hook": "ask",
+    "sync": "sync",
+    "home-pull": "sync",
+    "confirm": "confirm",
+    "confirm-replay": "confirm",
+    "publish": "publish",
+    "commons-push": "share",
+    "share-explicit": "share",
+    "home-push": "share",
+}
+
+_LIFECYCLE_ORDER = ("install", "init", "ask", "sync", "confirm", "publish", "share")
+
+_FUNNEL_EXCLUDED = frozenset({"did:claimidx:seed", "did:claimidx:anon", "anon", ""})
+
+
+def harness_surfaces(harness: dict | None) -> list[str]:
+    """Harness names that were written this run. Names only — never paths."""
+    out: list[str] = []
+    if not isinstance(harness, dict):
+        return out
+    for name, rec in harness.items():
+        if name == "skills":
+            if isinstance(rec, dict) and any(isinstance(v, dict) and v.get("status") in {"installed", "updated", "present"} for v in rec.values()):
+                out.append("skills")
+            continue
+        if isinstance(rec, dict) and rec.get("status") in {"installed", "updated", "present"}:
+            out.append(str(name))
+    return out
+
+
+def log_stage(store: Store, stage: str, actor: str, *, detail: dict | None = None) -> None:
+    """Append a funnel stage event. Kind == stage; detail carries only anonymous counters."""
+    stage = (stage or "").strip()
+    if stage not in _LIFECYCLE_ORDER:
+        return
+    blob: dict[str, Any] = {"stage": stage}
+    if detail:
+        if detail.get("auto") is True:
+            blob["auto"] = True
+        if detail.get("offline") is True:
+            blob["offline"] = True
+        surfaces = detail.get("surfaces")
+        if isinstance(surfaces, list):
+            clean = [str(s)[:40] for s in surfaces if isinstance(s, str) and s][:20]
+            if clean:
+                blob["surfaces"] = clean
+                blob["n_surfaces"] = len(clean)
+        n = detail.get("n_surfaces")
+        if isinstance(n, int) and n >= 0 and "n_surfaces" not in blob:
+            blob["n_surfaces"] = n
+    store.log(stage, (actor or "").strip() or "did:claimidx:anon", "", blob)
+
+
+def lifecycle_funnel(store: Store, *, days: int = 30) -> dict[str, Any]:
+    """DID lifecycle funnel from the local event log (no network, no PII beyond DID).
+
+    Stages: install -> init -> ask -> sync -> confirm -> publish -> share.
+    `countable` excludes seed/anon so Growth can see stranger drop-off before a commons share.
+    """
+    since = datetime.now(UTC) - timedelta(days=days)
+    rows = _rows(store, since)
+    stages: dict[str, dict[str, Any]] = {s: {"events": 0, "actors": 0, "actor_ids": []} for s in _LIFECYCLE_ORDER}
+    actors_by: dict[str, set[str]] = {s: set() for s in _LIFECYCLE_ORDER}
+    for r in rows:
+        stage = _LIFECYCLE_KINDS.get(r["kind"])
+        if not stage:
+            continue
+        stages[stage]["events"] += 1
+        actor = r["actor"]
+        if actor and actor not in _FUNNEL_EXCLUDED:
+            actors_by[stage].add(actor)
+    for stage, actors in actors_by.items():
+        ordered = sorted(actors)
+        stages[stage]["actors"] = len(ordered)
+        stages[stage]["actor_ids"] = ordered[:20]
+
+    # Max stage each countable actor reached (for drop-off).
+    reached: dict[str, int] = {}
+    for i, stage in enumerate(_LIFECYCLE_ORDER):
+        for actor in actors_by[stage]:
+            reached[actor] = max(reached.get(actor, -1), i)
+    dropoff: dict[str, int] = {}
+    for i, stage in enumerate(_LIFECYCLE_ORDER[:-1]):
+        nxt = _LIFECYCLE_ORDER[i + 1]
+        n = sum(1 for actor, idx in reached.items() if idx == i)
+        dropoff[f"{stage}_no_{nxt}"] = n
+
+    countable = sorted(reached)
+    return {
+        "days": days,
+        "order": list(_LIFECYCLE_ORDER),
+        "stages": stages,
+        "countable_actors": len(countable),
+        "countable_actor_ids": countable[:20],
+        "dropoff": dropoff,
+    }
+
+
 def impact(store: Store, *, days: int = 7, own: str = "", offline: bool = False, url: str | None = None) -> dict[str, Any]:
     out: dict[str, Any] = {"own": own, **local_impact(store, days=days, own=own)}
     from .home import commons_enabled
 
+    try:
+        out["lifecycle"] = lifecycle_funnel(store, days=days)
+    except Exception as e:  # local-only; keep parity with optional bits
+        out["lifecycle"] = {"error": str(e)[:200]}
     if commons_enabled():
         try:
             out["funnel"] = commons_funnel(store, days=days)
@@ -226,6 +333,14 @@ def render_line(out: dict[str, Any]) -> str:
         rank = f", rank {com['rank']}" if com.get("rank") else ""
         bits.append(
             f"commons {com.get('days', 30)}d: held by others {com.get('held_by_others', 0)} ({com.get('verifiers', 0)} verifiers{rank}), you held {com.get('you_held', 0)}"
+        )
+    life = out.get("lifecycle") or {}
+    if life and not life.get("error"):
+        stages = life.get("stages") or {}
+        bits.append(
+            "lifecycle: "
+            + " -> ".join(f"{s} {(stages.get(s) or {}).get('actors', 0)}" for s in (life.get("order") or _LIFECYCLE_ORDER))
+            + f" countable {life.get('countable_actors', 0)}"
         )
     funnel = out.get("funnel") or {}
     if funnel and not funnel.get("error"):
