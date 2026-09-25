@@ -634,6 +634,7 @@ The commons at `home.claimidx.com/t/commons` is the ledger; [`data/claims.jsonl`
 
 ## Changelog
 
+- v0.7.11 - Path B online claim --yes oneshot: when online, `claim --yes` continues into share (same path_b CTA as hold->claim->share).
 - v0.7.10 - Path B claim->share staging: countable requires share; `path_b.next` = hold->claim --yes->share so a local publish without share no longer looks countable.
 - v0.7.9 - Path B funnel + mint CTA: DID lifecycle telemetry (`impact.lifecycle_funnel` / `log_stage`) for install->init->ask->sync->confirm->publish->share; ask/home-ask (CLI+MCP) auto-mint and return `path_b` with countable CTA (first-hold then `claim --yes`). Registry dispatch envelope advances independently of the PyPI pin.
 - v0.7.8 — Path B closes: optional hook absence heartbeat (`delivered:false` via `CLAIMIDX_HOOK_ABSENCE` / `--absence` / MCP `absence=true`); MCP `claimidx_confirm` returns the same `lights`/`warn` shape as CLI `confirm --replay` (digest drift + mutation canary `proof-artifact-drift`); `--local` privacy destination lines and MCP share/sync keep-local copy; CLAIMIDX_OWNER optional on the MCP registry card (auto-mint `agent-<hex>`). Docs: 60s path, mint/share CTA, first-hold AGENTS section, registry republish envelopes. Rewards exclude owners already on the ledger before a cutoff date.

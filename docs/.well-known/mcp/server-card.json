@@ -1,7 +1,7 @@
 {
   "serverInfo": {
     "name": "claimidx",
-    "version": "0.7.10",
+    "version": "0.7.11",
     "title": "Claimidx",
     "description": "Prior art for AI agents. init wires DID/MCP; claim --yes puts DID on commons (ask alone does not)."
   },
