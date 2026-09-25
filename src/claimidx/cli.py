@@ -119,8 +119,10 @@ def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidate
             print(json.dumps(out, default=str))
         else:
             print(encode_miss(out))
-            if path_b is not None and not path_b.get("countable"):
-                print(f"# path_b countable=false — {path_b.get('why')}; next: {path_b.get('next')}")
+            if path_b is not None:
+                line = _path_b_line(path_b)
+                if line:
+                    print(line)
         return 2
     verdict = verdict_for(q, hits)
     if fmt == "json":
@@ -136,8 +138,10 @@ def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidate
         print(json.dumps(body, default=str))
     else:
         print(f"# verdict {verdict['action']} {verdict['id']} - {verdict['why']}; next: {verdict['next']}")
-        if path_b is not None and not path_b.get("countable"):
-            print(f"# path_b countable=false — {path_b.get('why')}; next: {path_b.get('next')}")
+        if path_b is not None:
+            line = _path_b_line(path_b)
+            if line:
+                print(line)
         for i, (c, s) in enumerate(hits):
             meta = annotate(q, c, s)
             extra = f" age={meta['age_days']} src={getattr(c, 'src', 'local')} evidence={meta['evidence']} match={meta['match']}"
@@ -697,11 +701,22 @@ def cmd_claim(ns: argparse.Namespace) -> int:
                 print(f"warn {w}", file=sys.stderr)
             print(_destination_line(out.get("share") or {}, out["id"]), file=sys.stderr)
             path_b = out.get("path_b") or {}
-            if path_b and not path_b.get("countable"):
-                print(f"# path_b countable=false — {path_b.get('why')}; next: {path_b.get('next')}", file=sys.stderr)
+            line = _path_b_line(path_b)
+            if line:
+                print(line, file=sys.stderr)
             if rp.get("suggest", {}).get("eval"):
                 print(f"suggest eval: {rp['suggest']['eval']}", file=sys.stderr)
     return 0 if out.get("ok") else 2
+
+
+def _path_b_line(path_b: dict) -> str:
+    """One stderr line for Path B status: finish conversion, or invite another agent."""
+    if not path_b:
+        return ""
+    flag = "true" if path_b.get("countable") else "false"
+    why = path_b.get("why") or ""
+    nxt = path_b.get("next") or ""
+    return f"# path_b countable={flag} — {why}; next: {nxt}"
 
 
 def _destination_line(share: dict, claim_id: str) -> str:
@@ -832,8 +847,9 @@ def cmd_apply(ns: argparse.Namespace) -> int:
                 if (rp.get("suggest") or {}).get("hint"):
                     print(f"suggest: {rp['suggest']['hint']}", file=sys.stderr)
         path_b = out.get("path_b") or {}
-        if path_b and not path_b.get("countable"):
-            print(f"# path_b countable=false — {path_b.get('why')}; next: {path_b.get('next')}", file=sys.stderr)
+        line = _path_b_line(path_b)
+        if line:
+            print(line, file=sys.stderr)
     if out.get("manual"):
         return 3
     if not out["applied"]:
@@ -1132,8 +1148,9 @@ def cmd_home_ask(ns: argparse.Namespace) -> int:
         print(json.dumps(result, default=str))
         return 0 if result.get("hit") else 2
     path_b = result.get("path_b") or {}
-    if path_b and not path_b.get("countable"):
-        print(f"# path_b countable=false — {path_b.get('why')}; next: {path_b.get('next')}")
+    line = _path_b_line(path_b)
+    if line:
+        print(line)
     if not result.get("hit"):
         print(encode_miss({"fp": q["fp"], "cls": q["cls"], "err": normalize_error(err)}))
         return 2
@@ -1194,7 +1211,18 @@ def cmd_share(ns: argparse.Namespace) -> int:
     except HomeError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
-    print(json.dumps(result, default=str, indent=2 if ns.fmt == "json" else None))
+    from .impact import path_b_cta
+
+    path_b = path_b_cta(store, resolve_owner(getattr(ns, "own", None)))
+    if ns.fmt == "json":
+        if isinstance(result, dict):
+            result = {**result, "path_b": path_b}
+        print(json.dumps(result, default=str, indent=2))
+    else:
+        print(json.dumps(result, default=str))
+        line = _path_b_line(path_b)
+        if line:
+            print(line, file=sys.stderr)
     return 0
 
 

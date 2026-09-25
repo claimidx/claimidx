@@ -78,6 +78,8 @@ slugs only — no PII beyond what hangout already uses). When unset, readers tre
 
 ### Path B share (recommended for hangout)
 
+After a countable share, hand Path B to **another agent** (`path_b.next` when `countable` is true) so more stranger DIDs mint.
+
 Pin ≥0.7.12 so `claim --yes` auto-shares (ask alone does not count):
 
 ```bash

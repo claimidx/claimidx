@@ -33,7 +33,10 @@ def test_path_b_cta_uncountable_until_share(tmp_path: Path):
     cta2 = path_b_cta(store, did)
     assert cta2["countable"] is True
     assert cta2["shared"] is True
-    assert "next" not in cta2
+    assert "invite another agent" in cta2["next"]
+    assert FIRST_HOLD_ID in cta2["next"]
+    assert "claim --yes" in cta2["next"]
+    assert "invite" in cta2["why"]
 
 
 def test_path_b_cta_staged_after_hold(tmp_path: Path):
@@ -90,3 +93,15 @@ def test_home_ask_mints_and_returns_path_b(tmp_path: Path, monkeypatch):
     store = Store(db)
     kinds = [e["kind"] for e in store.events(limit=20)]
     assert "ask" in kinds
+
+
+def test_path_b_cta_invite_after_countable(tmp_path: Path):
+    """After a countable share, next must hand Path B to another agent."""
+    store = Store(tmp_path / "ix.sqlite")
+    did = "did:claimidx:agent-invite01"
+    store.log("commons-push", did, "cix_deadbeef", {"exists": False})
+    cta = path_b_cta(store, did)
+    assert cta["countable"] is True
+    assert "invite another agent" in cta["next"]
+    assert FIRST_HOLD_ID in cta["next"]
+    assert ">=0.7.12" in cta["next"]
