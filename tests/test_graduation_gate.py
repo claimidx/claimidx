@@ -1,15 +1,13 @@
 """Graduation gate contract: what `confirm --replay` may mint `nr` from.
 
 Source: `Validated Results/` (excelsior colony mutation-canary, optional
-observed-digest warn). These tests assert the DESIRED contract. Checks that
-are not implemented yet are `xfail(strict=True)`: they must keep failing until
-the closing step lands, and flipping one green is the definition of done for
-that step.
+observed-digest warn). These tests lock the shipped contract.
 
 - X1  eval that never observes the claimed target must not mint nr
 - X2  eval artifact mutated after binding must not mint nr
 - X2b tree recipe with no binding must not mint nr (strict)
 - I1  observed_digest on a dep pin must warn `digest_drift` when local bytes change
+      (warn+lights by default; refuse with --strict-digest; MCP Path B same lights)
 """
 
 from __future__ import annotations
@@ -23,8 +21,6 @@ from pathlib import Path
 
 from claimidx.cli import main
 from claimidx.sandbox import ReplayResult
-
-NOT_YET = "graduation gate: closing step not implemented yet"
 
 
 def _py_rt() -> str:
@@ -376,16 +372,108 @@ def test_i1_observed_digest_warns_digest_drift_under_same_pin(tmp_path: Path, ca
         fix_b="bytecanary==1.0.0",
         extra=["--dep", "bytecanary@1.0.0", "--observe-digest", "--cwd", str(tree)],
     )
+    assert main(["--db", db, "--fmt", "json", "show", cid]) == 0
+    shown = json.loads(capsys.readouterr().out)
+    fp0 = shown["fp"]
+    nr0 = int(shown["nr"])
+
     rc, out = _confirm(db, capsys, cid, cwd=str(tree))
     assert rc == 0, out
     assert "digest_drift" not in json.dumps(out)
+    assert out["lights"]["integrity"] == "ok"
+    assert _nr(db, capsys, cid) == nr0 + 1
 
     init = _write_pkg(tree, "MUTATED_PAYLOAD_B_SUPPLY_CHAIN")
     assert hashlib.sha256(init.read_bytes()).hexdigest() != sha_a
 
     rc, out = _confirm(db, capsys, cid, cwd=str(tree))
-    # Default is warn-only: the hold still records, the drift is surfaced.
-    assert "digest_drift" in json.dumps(out), out
+    # Default is warn-only: the hold still records; drift is on warn + lights.
+    assert rc == 0, out
+    assert any("digest_drift" in w for w in out.get("warn", [])), out
+    assert out["lights"]["integrity"] == "digest_drift", out
+    assert out["claim"]["fp"] == fp0
+    assert _nr(db, capsys, cid) == nr0 + 2
+
+
+def test_i1_strict_digest_refuses_nr_on_drift(tmp_path: Path, capsys):
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    _write_pkg(tree, "CLEAN_PAYLOAD_A")
+    db = str(tmp_path / "ix.sqlite")
+    tree_esc = str(tree).replace("\\", "\\\\")
+    eval_cmd = "python -c \"import sys; sys.path.insert(0, r'" + tree_esc + "'); import bytecanary as d; assert d.__version__=='1.0.0'\""
+    cid = _publish(
+        db,
+        capsys,
+        err="ModuleNotFoundError: No module named 'bytecanary'",
+        eval_cmd=eval_cmd,
+        fix_k="pin",
+        fix_b="bytecanary==1.0.0",
+        extra=["--dep", "bytecanary@1.0.0", "--observe-digest", "--cwd", str(tree)],
+    )
+    rc, out = _confirm(db, capsys, cid, cwd=str(tree))
+    assert rc == 0 and _nr(db, capsys, cid) == 1
+
+    _write_pkg(tree, "MUTATED_PAYLOAD_B_SUPPLY_CHAIN")
+    rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", "--strict-digest", "--cwd", str(tree), cid])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 2 and out.get("recorded") is False, out
+    assert "digest_drift" in out.get("reason", ""), out
+    assert out["lights"]["integrity"] == "digest_drift"
+    assert out["lights"]["recovery"] == "held_unrecorded"
+    assert _nr(db, capsys, cid) == 1
+
+
+def test_i1_mcp_path_b_confirm_surfaces_digest_drift_lights(tmp_path: Path, monkeypatch):
+    """Path B (MCP) must return the same integrity light as CLI confirm --replay."""
+    from claimidx.mcp_server import _call
+    from claimidx.store import Store
+
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:path-b-digest")
+    monkeypatch.setenv("CLAIMIDX_SHARE", "0")
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    _write_pkg(tree, "CLEAN_PAYLOAD_A")
+    store = Store(tmp_path / "ix.sqlite")
+    tree_esc = str(tree).replace("\\", "\\\\")
+    eval_cmd = "python -c \"import sys; sys.path.insert(0, r'" + tree_esc + "'); import bytecanary as d; assert d.__version__=='1.0.0'\""
+    pub = _call(
+        "claimidx_publish",
+        {
+            "err": "ModuleNotFoundError: No module named 'bytecanary'",
+            "eco": "py",
+            "rt": _py_rt(),
+            "fix_k": "pin",
+            "fix_b": "bytecanary==1.0.0",
+            "eval": eval_cmd,
+            "dep": ["bytecanary@1.0.0"],
+            "observe_digest": True,
+            "cwd": str(tree),
+            "local": True,
+        },
+        store,
+    )
+    cid = pub["id"]
+    assert pub.get("observed_digest"), pub
+    ok = _call("claimidx_confirm", {"id": cid, "replay": True, "cwd": str(tree)}, store)
+    assert ok.get("held") is True and ok["lights"]["integrity"] == "ok", ok
+
+    _write_pkg(tree, "MUTATED_PAYLOAD_B_SUPPLY_CHAIN")
+    drifted = _call("claimidx_confirm", {"id": cid, "replay": True, "cwd": str(tree)}, store)
+    assert drifted.get("held") is True, drifted
+    assert any("digest_drift" in w for w in (drifted.get("warn") or [])), drifted
+    assert drifted["lights"]["integrity"] == "digest_drift", drifted
+    assert drifted["lights"]["recovery"] == "reproduced"
+
+    refused = _call(
+        "claimidx_confirm",
+        {"id": cid, "replay": True, "cwd": str(tree), "strict_digest": True},
+        store,
+    )
+    assert refused.get("recorded") is False, refused
+    assert "digest_drift" in (refused.get("reason") or ""), refused
+    assert refused["lights"]["integrity"] == "digest_drift"
+    assert refused["lights"]["recovery"] == "held_unrecorded"
 
 
 # --------------------------------------------------------------------------

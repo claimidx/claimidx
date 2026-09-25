@@ -491,7 +491,10 @@ TOOLS: list[dict[str, Any]] = [
             "provenance, not attested. Use after a hit from claimidx_ask worked for you; use claimidx_verify to replay many claims. "
             "Evals from claims not published on this machine only run when they fit the portable proof grammar; otherwise "
             "recorded=false with reason eval-untrusted and suggest, and trust_eval=true runs them deliberately. "
-            "Returns id, st, held, and nc, nf, own when recorded; replay adds replay detail, or recorded=false with reason and suggest."
+            "On replay, returns the same three lights as CLI confirm (prior_art/integrity/recovery): integrity becomes "
+            "digest_drift when a published observed_digest no longer matches local bytes under the same pin (warn by default; "
+            "strict_digest=true refuses nr). Returns id, st, held, nc, nf, own when recorded; replay adds replay, lights, and "
+            "optional warn, or recorded=false with reason and suggest."
         ),
         "inputSchema": {
             "type": "object",
@@ -517,7 +520,7 @@ TOOLS: list[dict[str, Any]] = [
                 "sensor_plane": {"type": "string", "description": "Declared sensor plane that produced the observation (e.g. hook, manual). Provenance only."},
             },
         },
-        "outputSchema": _out(id=_S, st=_S, held=_B, recorded=_B, nc=_I, nf=_I, own=_S, reason=_S, replay=_O, share=_O),
+        "outputSchema": _out(id=_S, st=_S, held=_B, recorded=_B, nc=_I, nf=_I, own=_S, reason=_S, replay=_O, share=_O, warn=_A, lights=_O, suggest=_O),
         "annotations": _ann(read_only=False, destructive=False, idempotent=False, open_world=True),
     },
     {
@@ -1181,23 +1184,48 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             }
             if result.is_hint():
                 from .gate import hint_refusal
+                from .match import confirm_lights
 
+                refusal = hint_refusal(current, result, cwd=args.get("cwd"))
                 return {
                     "id": current.id,
                     "st": current.st,
                     "held": False,
                     "recorded": False,
-                    **hint_refusal(current, result, cwd=args.get("cwd")),
+                    **refusal,
                     "replay": result.as_dict(),
+                    "lights": confirm_lights(held=False, recorded=False, reason=str(refusal.get("reason") or ""), contested=current.st == "contested"),
                 }
             if not result.held:
                 from .gate import unapplied_refusal
+                from .match import confirm_lights
 
                 unapplied = unapplied_refusal(current, result, cwd=args.get("cwd"))
                 if unapplied:
-                    return {"id": current.id, "st": current.st, "held": False, "recorded": False, **unapplied, "replay": result.as_dict()}
+                    return {
+                        "id": current.id,
+                        "st": current.st,
+                        "held": False,
+                        "recorded": False,
+                        **unapplied,
+                        "replay": result.as_dict(),
+                        "lights": confirm_lights(
+                            held=False,
+                            recorded=False,
+                            reason=str(unapplied.get("reason") or ""),
+                            contested=current.st == "contested",
+                        ),
+                    }
                 failed = store.fail(args["id"], resolve_owner(args.get("own")), detail=eval_detail)
-                return {"id": failed.id, "st": failed.st, "nc": failed.nc, "nf": failed.nf, "replay": result.as_dict(), "held": False}
+                return {
+                    "id": failed.id,
+                    "st": failed.st,
+                    "nc": failed.nc,
+                    "nf": failed.nf,
+                    "replay": result.as_dict(),
+                    "held": False,
+                    "lights": confirm_lights(held=False, recorded=True, contested=failed.st == "contested"),
+                }
             decision = graduation_gate(
                 current,
                 result,
@@ -1208,13 +1236,23 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             )
             gate_warns = list(decision.warns)
             if not decision.mint_nr:
+                from .match import confirm_lights
+
+                refusal = decision.refusal()
                 return {
                     "id": current.id,
                     "st": current.st,
                     "held": True,
                     "recorded": False,
-                    **decision.refusal(),
+                    **refusal,
                     "replay": result.as_dict(),
+                    "lights": confirm_lights(
+                        held=True,
+                        recorded=False,
+                        warns=gate_warns,
+                        reason=str(refusal.get("reason") or ""),
+                        contested=current.st == "contested",
+                    ),
                 }
         confirm_detail = None
         if args.get("replay") or args.get("trust_domain") or args.get("sensor_plane"):
@@ -1239,6 +1277,10 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         if args.get("replay") and (shared or {}).get("status") in {"already", "pushed"}:
             shared = share_observation(store, c, held=True, actor=resolve_owner(args.get("own"))) or shared
         out = {"id": c.id, "st": c.st, "nc": c.nc, "nf": c.nf, "own": resolve_owner(args.get("own")), "held": True}
+        if args.get("replay"):
+            from .match import confirm_lights
+
+            out["lights"] = confirm_lights(held=True, recorded=True, warns=gate_warns, contested=c.st == "contested")
         if gate_warns:
             out["warn"] = gate_warns
         if shared:
