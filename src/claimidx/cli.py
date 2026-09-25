@@ -153,7 +153,17 @@ def cmd_ask(ns: argparse.Namespace) -> int:
 
 def cmd_hook(ns: argparse.Namespace) -> int:
     """Harness sensor. Reads Claude-Code / Grok hook JSON or raw stderr. Never applies fix.b."""
-    from .hook import claude_context, extract_hook_err, grok_session, hook_is_failure, install_claude_hook
+    from .hook import (
+        absence_heartbeat,
+        absence_telemetry_enabled,
+        claude_context,
+        extract_hook_err,
+        format_absence_line,
+        grok_session,
+        hook_absence_reason,
+        hook_is_failure,
+        install_claude_hook,
+    )
 
     if getattr(ns, "install", False):
         rec = install_claude_hook()
@@ -202,6 +212,19 @@ def cmd_hook(ns: argparse.Namespace) -> int:
             extra = take_pending_brief()
         if extra:
             print(claude_context(event or "PostToolUse", extra))
+            return 0
+        # Optional typed absence vs silence (CLAIMIDX_HOOK_ABSENCE / --absence / --fmt json).
+        want = absence_telemetry_enabled(flag=True if getattr(ns, "absence", False) else None)
+        if not want and getattr(ns, "fmt", "dense") == "json":
+            want = True
+        if want:
+            reason = hook_absence_reason(raw, err=err, event=event)
+            if reason:
+                payload = absence_heartbeat(reason=reason, event=event)
+                if getattr(ns, "fmt", "dense") == "json":
+                    print(json.dumps(payload))
+                else:
+                    print(format_absence_line(payload), file=sys.stderr)
         return 0
     store = _store(ns)
     from .env import deps_from_traceback, last_failure, remember_failure
@@ -1583,6 +1606,11 @@ def build_parser() -> argparse.ArgumentParser:
     hk.add_argument("--dep", action=_AppendCsv, default=None)
     hk.add_argument("-k", type=int, default=5)
     hk.add_argument("--install", action="store_true", help="write the four Claude Code hook events (failure, success, session start, stop) into settings.json")
+    hk.add_argument(
+        "--absence",
+        action="store_true",
+        help="emit typed delivered:false when no observation envelope (also CLAIMIDX_HOOK_ABSENCE=1; --fmt json enables it)",
+    )
     hk.set_defaults(func=cmd_hook)
     cl = sub.add_parser("claim", help="draft a claim from the last failure and this tree; --yes publishes and replays it")
     cl.add_argument("--err", help="failure text; defaults to the last failure the hook saw")

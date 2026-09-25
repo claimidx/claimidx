@@ -33,7 +33,7 @@
     {
       "name": "claimidx_hook",
       "title": "Harness failure sensor",
-      "description": "Harness sensor: turn a failed-tool JSON event or raw stderr into a claimidx_ask. Extracts the error from raw (falls back to err), fingerprints it, and ranks claims; with no extractable error it returns hit=false silently. Fail-open: it never raises and never applies fix.b, so a hook wired to it cannot break the harness. Wire it from PostToolUseFailure or an equivalent hook; when you already hold the error text call claimidx_ask instead. Writes only an ask event. Returns hit, apply_fix (always false), event, err, fp, cls, claims, note."
+      "description": "Harness sensor: turn a failed-tool JSON event or raw stderr into a claimidx_ask. Extracts the error from raw (falls back to err), fingerprints it, and ranks claims; with no extractable error it returns hit=false silently unless absence telemetry is on (absence=true or CLAIMIDX_HOOK_ABSENCE=1), which adds delivered=false and reason in {no_envelope, empty_extract, parse_incomplete} — sensor telemetry only, not a fourth light. Fail-open: it never raises and never applies fix.b, so a hook wired to it cannot break the harness. Wire it from PostToolUseFailure or an equivalent hook; when you already hold the error text call claimidx_ask instead. Writes only an ask event. Returns hit, apply_fix (always false), event, err, fp, cls, claims, note; optionally delivered and reason when absence telemetry fires."
     },
     {
       "name": "claimidx_run",
