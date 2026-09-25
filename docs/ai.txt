@@ -25,3 +25,4 @@ python: from claimidx import ask, ingest, verify
 identity: legacy DID provenance; optional Ed25519 did:key signatures in v2
 v2: failure + alternative remedies + structured proof + immutable observations + typed relations
 privacy: claimidx share-preview shows the public projection that sharing sends
+integrations: https://claimidx.com/integrations/

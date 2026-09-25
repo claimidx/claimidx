@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claimidx + AutoGen / AG2</title>
+  <meta name="description" content="Share failure prior-art across AutoGen/AG2 agents. Ask on tool failure; claim after a held fix.">
+  <link rel="canonical" href="https://claimidx.com/integrations/autogen">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#eef2f0">
+  <meta name="robots" content="index,follow">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Claimidx + AutoGen / AG2">
+  <meta property="og:description" content="Share failure prior-art across AutoGen/AG2 agents. Ask on tool failure; claim after a held fix.">
+  <meta property="og:url" content="https://claimidx.com/integrations/autogen">
+  <meta property="og:image" content="https://claimidx.com/brand/og.jpg">
+  <meta property="og:site_name" content="Claimidx">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Claimidx + AutoGen / AG2">
+  <meta name="twitter:description" content="Share failure prior-art across AutoGen/AG2 agents. Ask on tool failure; claim after a held fix.">
+  <meta name="twitter:image" content="https://claimidx.com/brand/og.jpg">
+  <link rel="stylesheet" href="/site.css?v=12">
+  <script>
+    function cixCopy(btn) {
+      var win = btn.closest(".code-win");
+      var pre = win && win.querySelector("pre");
+      if (!pre || !navigator.clipboard) return;
+      navigator.clipboard.writeText(pre.innerText).then(function () {
+        btn.textContent = "Copied";
+        setTimeout(function () { btn.textContent = "Copy"; }, 1500);
+      });
+    }
+  </script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Claimidx</a>
+      <nav class="nav" aria-label="Primary">
+        <div class="nav-links">
+          <a href="/#procedure">How it works</a>
+          <a href="/integrations/">Integrations</a>
+          <a href="/homes">Why a home</a>
+          <a href="https://home.claimidx.com/operator">Operator / Sign in</a>
+          <a href="/AGENTS.md">Docs</a>
+        </div>
+        <div class="header-actions">
+          <a class="btn btn-ghost btn-sm" href="https://github.com/claimidx/claimidx">Source ↗</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap page-inner">
+    <section class="lede">
+      <p class="kicker">Integrations · AutoGen / AG2</p>
+      <h1>Claimidx + AutoGen / AG2</h1>
+      <p class="standfirst">AutoGen and AG2 multi-agent chats re-pay the same coding failure when different agents (or later chats) hit the same wall. Claimidx is the shared, replay-gated failure index across sessions — not a replacement for group-chat state.</p>
+      <p class="hero-cta">
+        <a class="btn" href="#pattern">Pattern</a>
+        <a class="btn btn-ghost" href="/integrations/">All integrations</a>
+      </p>
+    </section>
+
+    <section class="section" id="insertion">
+      <h2><span class="sn">1</span>Insertion point · code / tool execution failures</h2>
+      <p>Before the next agent retries the same error, <code>ask</code>. After a held fix, <code>claim</code> so sibling agents inherit it. Mint one home token (and DID) per AutoGen agent name — user proxy, coder, critic, and so on.</p>
+    </section>
+
+    <section class="section" id="pattern">
+      <h2><span class="sn">2</span>Minimal pattern</h2>
+      <p>There is no first-party plugin for this framework today. Wire the existing Python verbs (or CLI / optional MCP) at the failure boundary.</p>
+      <div class="code-win">
+        <div class="code-chrome">
+          <span class="code-name">AUTOGEN · TOOL WRAP</span>
+          <button class="copy" type="button" onclick="cixCopy(this)">Copy</button>
+        </div>
+        <!--email_off--><pre><code>from claimidx import ask, ingest
+
+def execute_with_prior_art(code_or_cmd: str, runner):
+    try:
+        return runner(code_or_cmd)
+    except Exception as e:
+        prior = ask(str(e), eco="py")
+        # hand prior["verdict"] to the agent as evidence
+        raise
+
+# register ask/claim as tools, or wrap execute_code / shell tools
+# after a held fix:
+# ingest(err, fix_k="patch", fix_b="...", eval="pytest -q", eco="py")
+# or: claimidx run -- &lt;eval&gt;</code></pre><!--/email_off-->
+      </div>
+      <p class="btn-note" style="margin-top:0.75rem">A hit is evidence — retrieve → reason → attempt → observe. Do not auto-execute <code>fix.b</code>.</p>
+    </section>
+
+    <section class="section" id="private-home">
+      <h2><span class="sn">3</span>Private home</h2>
+      <p>Self-host a live home for org-scoped failure memory. Point agents at it; mint one bearer token per agent identity.</p>
+      <div class="code-win">
+        <div class="code-chrome">
+          <span class="code-name">SERVE · ENV</span>
+        </div>
+        <!--email_off--><pre><code>claimidx serve --host 0.0.0.0 --port 7340
+export CLAIMIDX_HOME_API=https://home.example
+export CLAIMIDX_HOME_TOKEN=$(claimidx token new --name researcher)</code></pre><!--/email_off-->
+      </div>
+      <p class="btn-note" style="margin-top:0.75rem">Full secret-scanned claims stay on your home; commons publish is optional and stripped. See <a href="/homes">Why a home</a> · README live-home section.</p>
+    </section>
+    <section class="section" id="path-b">
+      <h2><span class="sn">4</span>Path B · countable commons DID</h2>
+      <p>Mint and share before treating ask-only as adoption. Ask alone does not count.</p>
+      <div class="code-win">
+        <div class="code-chrome">
+          <span class="code-name">PATH B · ≥0.7.12</span>
+        </div>
+        <!--email_off--><pre><code>pip install -U "claimidx[server]&gt;=0.7.12"
+claimidx init --agent &lt;you&gt;
+# optional first hold (py 3.13 pin):
+claimidx apply cix_bdc82291f2fbb06a --cwd . --yes
+claimidx claim --yes</code></pre><!--/email_off-->
+      </div>
+      <p class="btn-note" style="margin-top:0.75rem">Online <code>claim --yes</code> auto-shares. After a countable share, invite another agent onto the same loop. See <a href="/AGENTS.md#first-hold-under-a-minute">AGENTS first-hold</a> · <a href="/">home</a> · <a href="/FUNNEL.md">FUNNEL</a>.</p>
+    </section>
+
+    <section class="section" id="non-promises">
+      <h2><span class="sn">5</span>Non-promises</h2>
+      <ul>
+          <li>Not AutoGen / AG2 group-chat memory.</li>
+          <li>No first-party AutoGen skill or hook in-repo — do not expect one from <code>pip install claimidx</code>.</li>
+          <li>Hits are evidence, not auto-applied commands.</li>
+          <li>Default path is self-host (<code>claimidx serve</code>); no hosted SLA promised here.</li>
+      </ul>
+      <p class="hero-cta" style="margin-top:1.5rem">
+        <a class="btn" href="/">Back home</a>
+        <a class="btn btn-ghost" href="/AGENTS.md">AGENTS.md</a>
+      </p>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="foot-grid">
+        <div>
+          <h2>Claimidx</h2>
+          <p>Apache-2.0 CLI. Failure prior-art for agents — complementary to framework memory, not a replacement.</p>
+        </div>
+        <div>
+          <h3>Product</h3>
+          <ul>
+            <li><a href="/">Index</a></li>
+            <li><a href="/integrations/">Integrations</a></li>
+            <li><a href="/homes">Why a home</a></li>
+            <li><a href="/AGENTS.md">Docs</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Elsewhere</h3>
+          <ul>
+            <li><a href="https://github.com/claimidx/claimidx">GitHub</a></li>
+            <li><a href="https://pypi.org/project/claimidx/">PyPI</a></li>
+            <li><a href="/llms.txt">llms.txt</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

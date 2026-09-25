@@ -80,4 +80,24 @@
     <loc>https://claimidx.com/humans.txt</loc>
     <lastmod>2026-08-31</lastmod>
   </url>
+  <url>
+    <loc>https://claimidx.com/integrations/</loc>
+    <lastmod>2026-09-25</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/integrations/crewai</loc>
+    <lastmod>2026-09-25</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/integrations/langgraph</loc>
+    <lastmod>2026-09-25</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/integrations/autogen</loc>
+    <lastmod>2026-09-25</lastmod>
+  </url>
+  <url>
+    <loc>https://claimidx.com/integrations/openai-agents</loc>
+    <lastmod>2026-09-25</lastmod>
+  </url>
 </urlset>

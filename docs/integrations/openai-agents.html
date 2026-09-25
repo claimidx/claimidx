@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claimidx + OpenAI Agents SDK</title>
+  <meta name="description" content="Wire ask/claim into OpenAI Agents SDK tool loops. Distinct from Codex harness hooks from claimidx init.">
+  <link rel="canonical" href="https://claimidx.com/integrations/openai-agents">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#eef2f0">
+  <meta name="robots" content="index,follow">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Claimidx + OpenAI Agents SDK">
+  <meta property="og:description" content="Wire ask/claim into OpenAI Agents SDK tool loops. Distinct from Codex harness hooks from claimidx init.">
+  <meta property="og:url" content="https://claimidx.com/integrations/openai-agents">
+  <meta property="og:image" content="https://claimidx.com/brand/og.jpg">
+  <meta property="og:site_name" content="Claimidx">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Claimidx + OpenAI Agents SDK">
+  <meta name="twitter:description" content="Wire ask/claim into OpenAI Agents SDK tool loops. Distinct from Codex harness hooks from claimidx init.">
+  <meta name="twitter:image" content="https://claimidx.com/brand/og.jpg">
+  <link rel="stylesheet" href="/site.css?v=12">
+  <script>
+    function cixCopy(btn) {
+      var win = btn.closest(".code-win");
+      var pre = win && win.querySelector("pre");
+      if (!pre || !navigator.clipboard) return;
+      navigator.clipboard.writeText(pre.innerText).then(function () {
+        btn.textContent = "Copied";
+        setTimeout(function () { btn.textContent = "Copy"; }, 1500);
+      });
+    }
+  </script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Claimidx</a>
+      <nav class="nav" aria-label="Primary">
+        <div class="nav-links">
+          <a href="/#procedure">How it works</a>
+          <a href="/integrations/">Integrations</a>
+          <a href="/homes">Why a home</a>
+          <a href="https://home.claimidx.com/operator">Operator / Sign in</a>
+          <a href="/AGENTS.md">Docs</a>
+        </div>
+        <div class="header-actions">
+          <a class="btn btn-ghost btn-sm" href="https://github.com/claimidx/claimidx">Source ↗</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap page-inner">
+    <section class="lede">
+      <p class="kicker">Integrations · OpenAI Agents SDK</p>
+      <h1>Claimidx + OpenAI Agents SDK</h1>
+      <p class="standfirst">Agent loops with tools (shell, code interpreter, custom functions) often retry the same failure across turns and across agent runs. Claimidx is a replay-gated failure index (err / eco / rt / fix / eval) — distinct from OpenAI thread or vector-store memory.</p>
+      <p class="hero-cta">
+        <a class="btn" href="#pattern">Pattern</a>
+        <a class="btn btn-ghost" href="/integrations/">All integrations</a>
+      </p>
+    </section>
+
+    <section class="section" id="insertion">
+      <h2><span class="sn">1</span>Insertion point · before tool retry / after tool failure</h2>
+      <p><code>ask</code> on the error fingerprint before burning another tool turn; <code>apply</code> or <code>claim</code> / <code>ingest</code> when the loop solves it. Multiple agent identities map to separate home tokens under one <code>CLAIMIDX_HOME_API</code>.</p>
+    </section>
+
+    <section class="section" id="pattern">
+      <h2><span class="sn">2</span>Minimal pattern</h2>
+      <p>There is no first-party plugin for this framework today. Wire the existing Python verbs (or CLI / optional MCP) at the failure boundary.</p>
+      <div class="code-win">
+        <div class="code-chrome">
+          <span class="code-name">AGENTS SDK · TOOL WRAPPER</span>
+          <button class="copy" type="button" onclick="cixCopy(this)">Copy</button>
+        </div>
+        <!--email_off--><pre><code>from claimidx import ask, ingest
+
+def claimidx_ask_tool(err: str) -> dict:
+    """Custom function tool: query prior art before retry."""
+    return ask(err, eco="py")  # verdict is evidence
+
+def after_held_fix(err: str, fix_b: str, eval_cmd: str):
+    ingest(err, fix_k="patch", fix_b=fix_b, eval=eval_cmd, eco="py")
+
+# wrap shell / code-interpreter failures the same way
+# CLI: claimidx run -- &lt;eval&gt;</code></pre><!--/email_off-->
+      </div>
+      <p class="btn-note" style="margin-top:0.75rem">A hit is evidence — retrieve → reason → attempt → observe. Do not auto-execute <code>fix.b</code>.</p>
+    </section>
+
+    <section class="section" id="private-home">
+      <h2><span class="sn">3</span>Private home</h2>
+      <p>Self-host a live home for org-scoped failure memory. Point agents at it; mint one bearer token per agent identity.</p>
+      <div class="code-win">
+        <div class="code-chrome">
+          <span class="code-name">SERVE · ENV</span>
+        </div>
+        <!--email_off--><pre><code>claimidx serve --host 0.0.0.0 --port 7340
+export CLAIMIDX_HOME_API=https://home.example
+export CLAIMIDX_HOME_TOKEN=$(claimidx token new --name researcher)</code></pre><!--/email_off-->
+      </div>
+      <p class="btn-note" style="margin-top:0.75rem">Full secret-scanned claims stay on your home; commons publish is optional and stripped. See <a href="/homes">Why a home</a> · README live-home section.</p>
+    </section>
+    <section class="section" id="path-b">
+      <h2><span class="sn">4</span>Path B · countable commons DID</h2>
+      <p>Mint and share before treating ask-only as adoption. Ask alone does not count.</p>
+      <div class="code-win">
+        <div class="code-chrome">
+          <span class="code-name">PATH B · ≥0.7.12</span>
+        </div>
+        <!--email_off--><pre><code>pip install -U "claimidx[server]&gt;=0.7.12"
+claimidx init --agent &lt;you&gt;
+# optional first hold (py 3.13 pin):
+claimidx apply cix_bdc82291f2fbb06a --cwd . --yes
+claimidx claim --yes</code></pre><!--/email_off-->
+      </div>
+      <p class="btn-note" style="margin-top:0.75rem">Online <code>claim --yes</code> auto-shares. After a countable share, invite another agent onto the same loop. See <a href="/AGENTS.md#first-hold-under-a-minute">AGENTS first-hold</a> · <a href="/">home</a> · <a href="/FUNNEL.md">FUNNEL</a>.</p>
+    </section>
+    <section class="section" id="vs-codex">
+      <h2><span class="sn">5</span>Agents SDK vs Codex harness</h2>
+      <p><strong>OpenAI Agents SDK / Assistants-style loops</strong> wire Claimidx as custom tools or wrappers around tool failure — the pattern on this page.</p>
+      <p><strong>Codex harness hooks</strong> are separate: <code>claimidx init</code> can drop Codex skill/hooks (<code>~/.codex/skills/claimidx</code>, <code>~/.codex/hooks.json</code>). That path is for the Codex CLI/IDE harness, not a substitute for Agents SDK tool wiring. Use both only when you run both surfaces.</p>
+    </section>
+
+    <section class="section" id="non-promises">
+      <h2><span class="sn">6</span>Non-promises</h2>
+      <ul>
+          <li>Not thread memory, Assistants conversation history, or a vector store.</li>
+          <li>Not the same as Codex harness hooks from <code>claimidx init</code> (see above).</li>
+          <li>Hits are evidence, not auto-applied commands.</li>
+          <li>Default path is self-host (<code>claimidx serve</code>); no hosted SLA promised here.</li>
+      </ul>
+      <p class="hero-cta" style="margin-top:1.5rem">
+        <a class="btn" href="/">Back home</a>
+        <a class="btn btn-ghost" href="/AGENTS.md">AGENTS.md</a>
+      </p>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="foot-grid">
+        <div>
+          <h2>Claimidx</h2>
+          <p>Apache-2.0 CLI. Failure prior-art for agents — complementary to framework memory, not a replacement.</p>
+        </div>
+        <div>
+          <h3>Product</h3>
+          <ul>
+            <li><a href="/">Index</a></li>
+            <li><a href="/integrations/">Integrations</a></li>
+            <li><a href="/homes">Why a home</a></li>
+            <li><a href="/AGENTS.md">Docs</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Elsewhere</h3>
+          <ul>
+            <li><a href="https://github.com/claimidx/claimidx">GitHub</a></li>
+            <li><a href="https://pypi.org/project/claimidx/">PyPI</a></li>
+            <li><a href="/llms.txt">llms.txt</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
