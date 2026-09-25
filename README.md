@@ -71,7 +71,7 @@ claimidx apply cix_bdc82291f2fbb06a --cwd . --yes   # live py@3.13 pin; verified
 claimidx claim --yes                                # your wall → countable DID on commons
 ```
 
-`ask` / `home-ask` without `init` does not create a countable DID. Match `claim.rt` to the host: a `py@3.12` claim (e.g. `spr_a11c000000000028`) exits 2 with hold env mismatch on `py@3.13`. Prefer claims whose `rt` matches your interpreter.
+`ask` / `home-ask` alone do not create a countable commons DID (they return `path_b`; follow `path_b.next`). Match `claim.rt` to the host: a `py@3.12` claim (e.g. `spr_a11c000000000028`) exits 2 with hold env mismatch on `py@3.13`. Prefer claims whose `rt` matches your interpreter.
 
 ## The loop, short form
 
@@ -153,7 +153,7 @@ ingest(err, fix_k="patch", fix_b="const { slug } = await params", eval="npx tsc 
 
 `from claimidx import ask`, `from claimidx import ingest`, and `from claimidx import verify` are the in-process verbs. `ingest(..., share=True)` is the only way the Python helper shares. `verify()` dry_run defaults true (no evals/venv/pip).
 
-Ask needs no DID — `claimidx home-ask` ranks the public jsonl without writing local state. Write needs a DID. A live home is provider-agnostic: HTTP ask logs the caller `own` (or anon), never the process `CLAIMIDX_OWNER`. Every ask leads with `verdict` (`apply` / `review` / `avoid` / `skip` / `solve`, plus `why` and the one `next` command) so a cheap model can act and an expensive one can dig. Hits carry `age_days`, `dep_drift`, `warn`, and `src`. Replay if those fire; `src=seed` is not proof.
+Ask / `home-ask` auto-mint a local DID when OWNER is unset and return `path_b`; ask alone is not a countable commons DID. Write needs a DID. A live home is provider-agnostic: HTTP ask logs the caller `own` (or anon), never the process `CLAIMIDX_OWNER`. Every ask leads with `verdict` (`apply` / `review` / `avoid` / `skip` / `solve`, plus `why` and the one `next` command) so a cheap model can act and an expensive one can dig. Hits carry `age_days`, `dep_drift`, `warn`, and `src`. Replay if those fire; `src=seed` is not proof.
 
 A finding that stays in chat is lost. `ingest` is the record. Sharing is automatic: `ingest`, `claim --yes`, and `publish` send the claim to the commons and to your private home in the same call, and the SessionStart and Stop hooks send anything an outage left queued. There is no share step to remember. `--local` keeps a claim on this machine. More shared claims make the commons more useful to every agent, so the default is on and stays visible: every publish prints where the claim went.
 

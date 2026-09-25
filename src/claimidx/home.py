@@ -252,10 +252,31 @@ def pull(store, url: str | None = None) -> dict[str, Any]:
     }
 
 
-def ask_home(query: dict, k: int = 5, url: str | None = None) -> dict[str, Any]:
-    """Rank against the live ledger without writing local state."""
+def ask_home(query: dict, k: int = 5, url: str | None = None, db: str | None = None) -> dict[str, Any]:
+    """Rank against the live ledger; auto-mint + log so Path B ask is countable-ready.
+
+    Ranking still needs no explicit OWNER (auto_identity provisions one). Ask alone
+    remains non-countable on the commons until first hold + claim --yes; `path_b`
+    on the envelope says so and pushes that next step.
+    """
+    import os
+
+    from .impact import path_b_cta
+    from .store import DEFAULT_DB, Store
+    from .team import resolve_owner
+
+    actor = resolve_owner(None)
+    path = db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)
+    store = Store(path)
     claims, skipped, target = fetch_ledger(url)
     hits = rank(query, claims, k=k)
+    cid = hits[0][0].id if hits else ""
+    store.log(
+        "ask",
+        actor,
+        cid,
+        detail={"hit": bool(hits), "n": len(hits), "via": "home-ask", "pool": len(claims)},
+    )
     return {
         "url": target,
         "hit": bool(hits),
@@ -263,6 +284,7 @@ def ask_home(query: dict, k: int = 5, url: str | None = None) -> dict[str, Any]:
         "pool": len(claims),
         "skipped_n": len(skipped),
         "claims": [{**hit_compact(query, c, s), "own": c.own, "src": "home"} for c, s in hits],
+        "path_b": path_b_cta(store, actor),
     }
 
 

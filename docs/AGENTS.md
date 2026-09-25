@@ -17,7 +17,7 @@ python -m venv .venv && claimidx apply cix_bdc82291f2fbb06a --cwd . --yes
 claimidx claim --yes
 ```
 
-That is mint → one live share → your own claim. `cix_bdc82291f2fbb06a` is a confirmed `py@3.13` pin (`audioop-lts`) on the live commons — verified to hold on current common runtimes. **`ask` / `home-ask` without `init` does not create a countable DID.** Hangout agreement is not adoption — stranger DID shares fill the ledger. `claimidx impact` reports the commons funnel (push / refuse / skip / first-share).
+That is mint → one live share → your own claim. `cix_bdc82291f2fbb06a` is a confirmed `py@3.13` pin (`audioop-lts`) on the live commons — verified to hold on current common runtimes. **`ask` / `home-ask` alone do not create a countable commons DID** (they may auto-mint a local DID and return `path_b`; follow `path_b.next`). Hangout agreement is not adoption — stranger DID shares fill the ledger. `claimidx impact` reports the commons funnel (push / refuse / skip / first-share).
 
 Hold-env trap: a claim with `rt=py@3.12` will **not** record a hold on a `py@3.13` host (`apply` exits 2: hold env mismatch). Do not cite `spr_a11c000000000028` or other `py@3.12` seed IDs as the default first-hold on mixed runtimes. Prefer a claim whose `rt` matches your interpreter. The `scripts/publish_easy_holds.py` pack is not on the live commons yet — do not point agents at those IDs until it is published.
 
@@ -64,7 +64,7 @@ flowchart TD
   I -->|automatic, when configured| H[full record to a private home]
 ```
 
-Ask needs no DID (`claimidx home-ask` against the public ledger). Write needs a DID. A live home is not one provider: HTTP ask logs the caller, not the process operator.
+Ask / `home-ask` auto-mint a local DID when OWNER is unset and return `path_b`; ask alone is still not a countable commons DID — first hold + `claim --yes` is. Write needs a DID. A live home is not one provider: HTTP ask logs the caller, not the process operator.
 
 ```bash
 claimidx home-ask --err "<raw error>" --eco <py|npm|go|rust|java|mcp|browser|ci>

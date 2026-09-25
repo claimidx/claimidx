@@ -202,6 +202,36 @@ _LIFECYCLE_ORDER = ("install", "init", "ask", "sync", "confirm", "publish", "sha
 _FUNNEL_EXCLUDED = frozenset({"did:claimidx:seed", "did:claimidx:anon", "anon", ""})
 
 
+# Live py@3.13 first-hold on the commons (audioop-lts). Do not default spr_a11c… (py@3.12).
+FIRST_HOLD_ID = "cix_bdc82291f2fbb06a"
+FIRST_HOLD_RT = "py@3.13"
+_SHARE_KINDS = frozenset({"commons-push", "share-explicit", "home-push", "publish"})
+
+
+def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
+    """Path B conversion status for ask / home-ask envelopes.
+
+    Ask may auto-mint a local DID; that is not a countable commons DID until
+    first hold + claim/share. When not countable, next pushes the live
+    py@3.13 first-hold path so agents cannot treat ask-only as adoption.
+    """
+    did = (actor or "").strip()
+    minted = bool(did) and did.startswith("did:") and did not in _FUNNEL_EXCLUDED
+    shared = False
+    if minted and store is not None:
+        for ev in store.events(limit=500, actor=did):
+            if (ev.get("kind") or "") in _SHARE_KINDS:
+                shared = True
+                break
+    countable = bool(minted and shared)
+    out: dict[str, Any] = {"countable": countable, "minted": minted, "did": did if minted else ""}
+    if not countable:
+        out["why"] = "ask alone does not create a countable commons DID"
+        out["next"] = f"claimidx init --agent <you> && claimidx apply {FIRST_HOLD_ID} --cwd . --yes && claimidx claim --yes"
+        out["first_hold"] = {"id": FIRST_HOLD_ID, "rt": FIRST_HOLD_RT}
+    return out
+
+
 def harness_surfaces(harness: dict | None) -> list[str]:
     """Harness names that were written this run. Names only — never paths."""
     out: list[str] = []

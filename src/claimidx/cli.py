@@ -96,6 +96,9 @@ def _ask_hits(store: Store, ns: argparse.Namespace, err: str):
 
 
 def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidates: list | None = None) -> int:
+    from .impact import path_b_cta
+
+    path_b = path_b_cta(store, resolve_owner(None)) if store is not None else None
     if not hits:
         out: dict[str, Any] = {
             "verdict": verdict_for(q, []),
@@ -106,28 +109,35 @@ def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidate
             "n": 0,
             "claims": [],
         }
+        if path_b is not None:
+            out["path_b"] = path_b
         if store is not None:
             from .query import miss_enrichment
 
             out.update(miss_enrichment(store, q, list(candidates or []), k=5))
-        print(json.dumps(out, default=str) if fmt == "json" else encode_miss(out))
+        if fmt == "json":
+            print(json.dumps(out, default=str))
+        else:
+            print(encode_miss(out))
+            if path_b is not None and not path_b.get("countable"):
+                print(f"# path_b countable=false — {path_b.get('why')}; next: {path_b.get('next')}")
         return 2
     verdict = verdict_for(q, hits)
     if fmt == "json":
-        print(
-            json.dumps(
-                {
-                    "verdict": verdict,
-                    "hit": True,
-                    "fp": q["fp"],
-                    "n": len(hits),
-                    "claims": [hit_row(q, c, s) for c, s in hits],
-                },
-                default=str,
-            )
-        )
+        body: dict[str, Any] = {
+            "verdict": verdict,
+            "hit": True,
+            "fp": q["fp"],
+            "n": len(hits),
+            "claims": [hit_row(q, c, s) for c, s in hits],
+        }
+        if path_b is not None:
+            body["path_b"] = path_b
+        print(json.dumps(body, default=str))
     else:
-        print(f"# verdict {verdict['action']} {verdict['id']} — {verdict['why']}; next: {verdict['next']}")
+        print(f"# verdict {verdict['action']} {verdict['id']} - {verdict['why']}; next: {verdict['next']}")
+        if path_b is not None and not path_b.get("countable"):
+            print(f"# path_b countable=false — {path_b.get('why')}; next: {path_b.get('next')}")
         for i, (c, s) in enumerate(hits):
             meta = annotate(q, c, s)
             extra = f" age={meta['age_days']} src={getattr(c, 'src', 'local')} evidence={meta['evidence']} match={meta['match']}"
@@ -1072,13 +1082,16 @@ def cmd_home_ask(ns: argparse.Namespace) -> int:
     q = {"err": err, "cls": ns.cls or classify(err), "eco": ns.eco or "", "rt": ns.rt or "", "dep": ns.dep or []}
     q["fp"] = fingerprint(err=q["err"], cls=q["cls"], eco=q["eco"], rt=q["rt"], dep=q["dep"])
     try:
-        result = ask_home(q, k=ns.k, url=ns.url)
+        result = ask_home(q, k=ns.k, url=ns.url, db=_db_path(ns))
     except HomeError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     if ns.fmt == "json":
         print(json.dumps(result, default=str))
         return 0 if result.get("hit") else 2
+    path_b = result.get("path_b") or {}
+    if path_b and not path_b.get("countable"):
+        print(f"# path_b countable=false — {path_b.get('why')}; next: {path_b.get('next')}")
     if not result.get("hit"):
         print(encode_miss({"fp": q["fp"], "cls": q["cls"], "err": normalize_error(err)}))
         return 2
