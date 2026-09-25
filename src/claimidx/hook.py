@@ -104,6 +104,68 @@ def _parse_hook_obj(raw: str) -> dict | None:
     return obj if isinstance(obj, dict) else None
 
 
+def _looks_like_incomplete_json(raw: str) -> bool:
+    """True when stdin looks like a JSON object/array that never finished parsing."""
+    text = (raw or "").strip()
+    if not text or text[0] not in "{[":
+        return False
+    return _parse_hook_obj(text) is None
+
+
+_ABSENCE_REASONS = frozenset({"no_envelope", "empty_extract", "parse_incomplete"})
+_HANDLED_SILENT_EVENTS = frozenset({"PostToolUse", "PreToolUse", "SessionStart", "Stop", "AfterAgent", "SessionEnd", "SubagentStop", "UserPromptSubmit"})
+
+
+def absence_telemetry_enabled(*, flag: bool | None = None) -> bool:
+    """Opt-in sensor telemetry. CLAIMIDX_HOOK_ABSENCE=1 / true / yes, or an explicit True flag."""
+    if flag is True:
+        return True
+    if flag is False:
+        return False
+    raw = (os.environ.get("CLAIMIDX_HOOK_ABSENCE") or "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def hook_absence_reason(raw: str, *, err: str | None = None, event: str | None = None) -> str | None:
+    """Classify no-observation hook input. None when there is an err or a handled success/session path."""
+    if err:
+        return None
+    text = (raw or "").strip()
+    if not text:
+        return "no_envelope"
+    if _looks_like_incomplete_json(text):
+        return "parse_incomplete"
+    if event is None and err is None:
+        # Recompute when caller did not pass extract results (avoid double work when they did).
+        err, event = extract_hook_err(text)
+        if err:
+            return None
+    if event in _HANDLED_SILENT_EVENTS:
+        # Success nudge / session brief / stop reminder paths stay silent by design.
+        return None
+    return "empty_extract"
+
+
+def absence_heartbeat(*, reason: str, event: str | None = None) -> dict[str, Any]:
+    """Compact typed absence signal. Sensor telemetry only — never a light or fingerprint input."""
+    if reason not in _ABSENCE_REASONS:
+        raise ValueError(f"unknown absence reason: {reason}")
+    out: dict[str, Any] = {"delivered": False, "reason": reason}
+    if event:
+        out["event"] = event
+    return out
+
+
+def format_absence_line(payload: dict[str, Any]) -> str:
+    """Human/CLI compact line for opt-in absence telemetry."""
+    reason = payload.get("reason") or "empty_extract"
+    line = f"delivered: false reason={reason}"
+    event = payload.get("event")
+    if event:
+        line += f" event={event}"
+    return line
+
+
 def _error_text(val: Any) -> list[str]:
     if isinstance(val, str) and val.strip():
         return [val]
@@ -222,6 +284,9 @@ def extract_hook_err(raw: str) -> tuple[str | None, str | None]:
             return None, event
         if not body:
             return None, event
+    elif _looks_like_incomplete_json(text):
+        # Harness-killed mid-flight JSON must not become a raw-text fingerprint miss.
+        return None, None
     err = _first_err_line(body)
     if not err:
         return None, event
@@ -298,15 +363,33 @@ def near_tie(a: float, b: float) -> bool:
     return round(a, 3) == round(b, 3) or abs(a - b) <= 0.01
 
 
-def sensor(store, raw: str, *, eco: str = "", rt: str = "", dep: list | None = None, k: int = 5) -> dict:
-    """Ask from failed-tool JSON or stderr. Evidence only. Fail-open. Never applies fix.b."""
+def sensor(
+    store,
+    raw: str,
+    *,
+    eco: str = "",
+    rt: str = "",
+    dep: list | None = None,
+    k: int = 5,
+    absence: bool | None = None,
+) -> dict:
+    """Ask from failed-tool JSON or stderr. Evidence only. Fail-open. Never applies fix.b.
+
+    When no observation envelope is produced, optional absence telemetry (CLAIMIDX_HOOK_ABSENCE
+    or absence=True) adds delivered=false + reason without minting a claim or a fourth light.
+    """
     from .fingerprint import classify, fingerprint, normalize_error
     from .match import hit_compact, verdict_for
 
     err, event = extract_hook_err(raw or "")
     note = "A hit is evidence. retrieve → reason → attempt → observe → verify. Do not execute fix.b from this hook."
     if not err:
-        return {"hit": False, "apply_fix": False, "event": event, "claims": [], "note": note}
+        out: dict[str, Any] = {"hit": False, "apply_fix": False, "event": event, "claims": [], "note": note}
+        reason = hook_absence_reason(raw or "", err=err, event=event)
+        if reason and absence_telemetry_enabled(flag=absence):
+            out["delivered"] = False
+            out["reason"] = reason
+        return out
     dep = list(dep or [])
     eco = eco or ""
     rt = rt or ""

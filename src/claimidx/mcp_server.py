@@ -204,10 +204,13 @@ TOOLS: list[dict[str, Any]] = [
         "title": "Harness failure sensor",
         "description": (
             "Harness sensor: turn a failed-tool JSON event or raw stderr into a claimidx_ask. Extracts the error from raw "
-            "(falls back to err), fingerprints it, and ranks claims; with no extractable error it returns hit=false silently. "
+            "(falls back to err), fingerprints it, and ranks claims; with no extractable error it returns hit=false silently "
+            "unless absence telemetry is on (absence=true or CLAIMIDX_HOOK_ABSENCE=1), which adds delivered=false and "
+            "reason in {no_envelope, empty_extract, parse_incomplete} — sensor telemetry only, not a fourth light. "
             "Fail-open: it never raises and never applies fix.b, so a hook wired to it cannot break the harness. "
             "Wire it from PostToolUseFailure or an equivalent hook; when you already hold the error text call claimidx_ask instead. "
-            "Writes only an ask event. Returns hit, apply_fix (always false), event, err, fp, cls, claims, note."
+            "Writes only an ask event. Returns hit, apply_fix (always false), event, err, fp, cls, claims, note; "
+            "optionally delivered and reason when absence telemetry fires."
         ),
         "inputSchema": {
             "type": "object",
@@ -221,9 +224,16 @@ TOOLS: list[dict[str, Any]] = [
                 "rt": _RT,
                 "dep": _DEP,
                 "k": _k(5),
+                "absence": {
+                    "type": "boolean",
+                    "description": (
+                        "When true, return delivered=false + reason if no observation envelope was produced. "
+                        "Also enabled by CLAIMIDX_HOOK_ABSENCE=1. Default false keeps today's silent empty extract."
+                    ),
+                },
             },
         },
-        "outputSchema": _out(hit=_B, apply_fix=_B, event=_ANY, err=_S, fp=_S, cls=_S, claims=_A, note=_S),
+        "outputSchema": _out(hit=_B, apply_fix=_B, event=_ANY, err=_S, fp=_S, cls=_S, claims=_A, note=_S, delivered=_B, reason=_S),
         "annotations": _ann(read_only=True, idempotent=True),
     },
     {
@@ -1053,6 +1063,9 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         from .hook import sensor
 
         raw = args.get("raw") or args.get("err") or ""
+        absence = args.get("absence")
+        if absence is not None:
+            absence = bool(absence)
         return sensor(
             store,
             raw,
@@ -1060,6 +1073,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             rt=args.get("rt") or "",
             dep=args.get("dep") or [],
             k=int(args.get("k") or 5),
+            absence=absence,
         )
     if name == "claimidx_publish":
         err = args["err"]

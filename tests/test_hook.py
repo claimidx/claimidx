@@ -633,3 +633,142 @@ def test_cursor_after_shell_exit_zero_stays_silent(tmp_path, capsys):
     )
     assert main(["--db", db, "hook", "--err", payload]) == 0
     assert capsys.readouterr().out == ""
+
+
+def test_truncated_json_is_not_a_raw_text_miss():
+    """Harness-killed mid-flight JSON must not invent a fingerprint miss (VR1)."""
+    from claimidx.hook import extract_hook_err, hook_absence_reason
+
+    raw = '{"hook_event_name":"PostToolUseFailure","tool_response":"ModuleNot'
+    err, event = extract_hook_err(raw)
+    assert err is None and event is None
+    assert hook_absence_reason(raw, err=err, event=event) == "parse_incomplete"
+
+
+def test_absence_reason_empty_and_envelope():
+    from claimidx.hook import extract_hook_err, hook_absence_reason
+
+    assert hook_absence_reason("") == "no_envelope"
+    assert hook_absence_reason("   \n") == "no_envelope"
+
+    empty_obj = "{}"
+    err, event = extract_hook_err(empty_obj)
+    assert err is None
+    assert hook_absence_reason(empty_obj, err=err, event=event) == "empty_extract"
+
+    after = json.dumps({"hookEventName": "afterShellExecution", "command": "ls", "output": ""})
+    err, event = extract_hook_err(after)
+    assert err is None and event == "PostToolUse"
+    # handled success/session-shaped path stays silent (no absence)
+    assert hook_absence_reason(after, err=err, event=event) is None
+
+    fail_empty = json.dumps({"hook_event_name": "PostToolUseFailure", "tool_response": ""})
+    err, event = extract_hook_err(fail_empty)
+    assert err is None and event == "PostToolUseFailure"
+    assert hook_absence_reason(fail_empty, err=err, event=event) == "empty_extract"
+
+
+def test_sensor_absence_opt_in(tmp_path, monkeypatch):
+    from claimidx.hook import sensor
+    from claimidx.store import Store
+
+    store = Store(str(tmp_path / "ix.sqlite"))
+    note_keys = {"hit", "apply_fix", "event", "claims", "note"}
+
+    silent = sensor(store, "")
+    assert set(silent) <= note_keys | {"delivered", "reason"}
+    assert "delivered" not in silent
+
+    monkeypatch.delenv("CLAIMIDX_HOOK_ABSENCE", raising=False)
+    off = sensor(store, "{}", absence=False)
+    assert "delivered" not in off
+
+    on = sensor(store, "{}", absence=True)
+    assert on["delivered"] is False
+    assert on["reason"] == "empty_extract"
+    assert on["hit"] is False
+    assert on["apply_fix"] is False
+    assert "lights" not in on
+
+    monkeypatch.setenv("CLAIMIDX_HOOK_ABSENCE", "1")
+    env_on = sensor(store, "")
+    assert env_on["delivered"] is False
+    assert env_on["reason"] == "no_envelope"
+
+    truncated = '{"hook_event_name":"PostToolUseFailure","tool_response":"ModuleNot'
+    parse = sensor(store, truncated, absence=True)
+    assert parse["delivered"] is False
+    assert parse["reason"] == "parse_incomplete"
+    assert "fp" not in parse
+
+
+def test_hook_cli_absence_flag_and_default_silent(tmp_path, capsys, monkeypatch):
+    db = str(tmp_path / "ix.sqlite")
+    monkeypatch.delenv("CLAIMIDX_HOOK_ABSENCE", raising=False)
+
+    monkeypatch.setattr("sys.stdin", StringIO(""))
+    assert main(["--db", db, "hook"]) == 0
+    out = capsys.readouterr()
+    assert out.out == ""
+    assert out.err == ""
+
+    monkeypatch.setattr("sys.stdin", StringIO("{}"))
+    assert main(["--db", db, "hook", "--absence"]) == 0
+    out = capsys.readouterr()
+    assert out.out == ""
+    assert "delivered: false" in out.err
+    assert "reason=empty_extract" in out.err
+
+    truncated = '{"hook_event_name":"PostToolUseFailure","tool_response":"ModuleNot'
+    monkeypatch.setattr("sys.stdin", StringIO(truncated))
+    assert main(["--db", db, "hook"]) == 0
+    out = capsys.readouterr()
+    assert "CLAIMIDX miss" not in out.out
+    assert out.out == ""
+
+    monkeypatch.setattr("sys.stdin", StringIO(truncated))
+    assert main(["--db", db, "--fmt", "json", "hook"]) == 0
+    out = capsys.readouterr()
+    payload = json.loads(out.out)
+    assert payload == {"delivered": False, "reason": "parse_incomplete"}
+
+
+def test_mcp_hook_absence_arg(tmp_path, monkeypatch):
+    monkeypatch.delenv("CLAIMIDX_HOOK_ABSENCE", raising=False)
+    store = Store(tmp_path / "ix.sqlite")
+
+    def _call(arguments):
+        rec = handle(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "claimidx_hook", "arguments": arguments},
+            },
+            store,
+        )
+        assert rec.get("result", {}).get("isError") is not True
+        return json.loads(rec["result"]["content"][0]["text"])
+
+    silent = _call({"raw": "{}"})
+    assert "delivered" not in silent
+
+    typed = _call({"raw": "{}", "absence": True})
+    assert typed["delivered"] is False
+    assert typed["reason"] == "empty_extract"
+
+    # Real failure envelope unchanged: still miss/hit path, no delivered heartbeat.
+    miss = _call(
+        {
+            "raw": json.dumps(
+                {
+                    "hook_event_name": "PostToolUseFailure",
+                    "tool_response": "RuntimeError: absence probe uniquely missing\n",
+                }
+            ),
+            "absence": True,
+        }
+    )
+    assert miss.get("hit") is False
+    assert "fp" in miss
+    assert "delivered" not in miss
