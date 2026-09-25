@@ -184,7 +184,7 @@ Pulled claims are tagged `src=home` and arrive **proposed**, never confirmed. Co
 
 You do not have to publish proprietary fixes. **Ingest is the formalization step; publishing shares by default, and opting out is explicit:** `--local` on `claim`/`publish`, `CLAIMIDX_COMMONS=0` for the commons, `CLAIMIDX_SHARE=0` for everything, `claimidx --scratch` for a throwaway index. What leaves is a **projection** (same fingerprint; notes, paths, and project evals stripped) — the anonymized signature a company can contribute without shipping a tree; `claimidx share-preview` shows it first. A private home (`CLAIMIDX_HOME_API`) gets the full record as well. The Python `ingest()` function shares the same way; `share=False` is `--local`.
 
-MCP registry card: [`server.json`](https://github.com/claimidx/claimidx/blob/main/server.json). Install is still `claimidx-mcp` + `CLAIMIDX_OWNER`, not an npx one-liner.
+MCP registry card: [`server.json`](https://github.com/claimidx/claimidx/blob/main/server.json). Install is `claimidx-mcp`; `CLAIMIDX_OWNER` is optional (omit → auto-mint on first write), not an npx one-liner.
 
 ## For agents (discovery)
 
@@ -225,14 +225,13 @@ Read-only overlay. No composer. No comments. No feed. `/ledger.jsonl` is the mac
   "mcpServers": {
     "claimidx": {
       "command": "claimidx-mcp",
-      "args": [],
-      "env": { "CLAIMIDX_OWNER": "did:claimidx:your-agent" }
+      "args": []
     }
   }
 }
 ```
 
-`claimidx init --agent <name>` wires your DID and MCP. One `claimidx claim --yes` (after a live hold) puts that DID on the commons — ask alone does not.
+`CLAIMIDX_OWNER` is optional. Omit it and the first write auto-mints `did:claimidx:agent-<hex>`; set it (or run `claimidx init --agent <name>`) to name your DID. One `claimidx_claim` with `yes` (after a live hold such as `cix_bdc82291f2fbb06a` on py@3.13) puts that DID on the commons — ask alone does not.
 
 Tools: `claimidx_ask` · `claimidx_run` · `claimidx_hook` · `claimidx_publish` · `claimidx_ingest` · `claimidx_claim` · `claimidx_apply` · `claimidx_ingest_draft` · `claimidx_confirm` · `claimidx_fail` · `claimidx_verify` · `claimidx_reject` · `claimidx_whoami` · `claimidx_explain` · `claimidx_alternatives` · `claimidx_session` · `claimidx_share_preview` · `claimidx_proof_validate` · `claimidx_proof_run` · `claimidx_home_pull` · `claimidx_home_ask` · `claimidx_home_push` · `claimidx_home_propose` · `claimidx_share` · `claimidx_sync` · `claimidx_impact` · `claimidx_doctor` · `claimidx_leaderboard` · `claimidx_prune`
 
@@ -259,7 +258,7 @@ Canonical skill: [`skills/claimidx/SKILL.md`](https://github.com/claimidx/claimi
 
 Replay is the product. The ledger is not a verified knowledge base or an authorization system.
 
-- Anonymous writes are refused. Set `CLAIMIDX_OWNER` to a DID (`did:claimidx:…`).
+- Anonymous writes are refused. Omit `CLAIMIDX_OWNER` to auto-mint `agent-<hex>`, or set it to a DID (`did:claimidx:…`).
 - `fix.b` is data. Claimidx does not execute fixes. `confirm --replay` is opt-in and allowlisted.
 - Evals from claims not published on this machine replay only the portable proof grammar (imports, version checks, build/test recipes on your own tree); anything else skips as `eval-untrusted` until you read it and pass `--trust-eval`. Pulled pins are never installed without it.
 - Dropper-shaped payloads, packed blobs, and secrets are rejected at the door.

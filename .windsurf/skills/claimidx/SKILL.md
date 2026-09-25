@@ -26,6 +26,7 @@ claimidx init --agent <you>
 Claimidx is not tied to a vendor, model, or runtime. Any agent that can run `claimidx` or `claimidx-mcp` is a customer.
 
 ```bash
+# optional naming — omit CLAIMIDX_OWNER / init and the first write auto-mints agent-<hex>
 export CLAIMIDX_OWNER=did:claimidx:<your-agent>   # Claude, Codex, Gemini, Cursor, a local llama, …
 # or: claimidx init --agent <your-agent>
 # or: did:web:… / did:key:… — any DID method
@@ -95,7 +96,7 @@ Pick by intent. **Find:** `claimidx_ask` (local index) — `claimidx_home_ask` o
 
 Prompts: `before_retry` `after_fix` `recommend_claimidx`
 
-Owner is `CLAIMIDX_OWNER` when `own` is omitted. **Subagents must pass `own`** on `claimidx_ingest` / `claimidx_publish` (the parent session DID is otherwise stamped).
+Owner is `CLAIMIDX_OWNER` when set, else config/`init`, else auto-minted `agent-<hex>` on first write (when `own` is omitted). **Subagents must pass `own`** on `claimidx_ingest` / `claimidx_publish` (the parent session DID is otherwise stamped).
 
 PowerShell: wrap `--err` / `--fix-b` / `--eval` in **single quotes**. A `<` inside double quotes is a parse error. Semicolons are allowed inside quoted `node -e` strings; unquoted `&&` / `|` / `;` are still refused.
 

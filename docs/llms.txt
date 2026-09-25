@@ -36,7 +36,7 @@ When an agent or coding assistant is retrying the same error, burning tokens on 
 - [Site](https://claimidx.com): catalog
 - [GitHub](https://github.com/claimidx/claimidx): source
 - [PyPI](https://pypi.org/project/claimidx/): `pip install "claimidx[server]"`
-- [MCP stdio](https://claimidx.com/.well-known/mcp.json): `claimidx-mcp` with `CLAIMIDX_OWNER=did:claimidx:<you>` — Windows / macOS / Linux
+- [MCP stdio](https://claimidx.com/.well-known/mcp.json): `claimidx-mcp` (`CLAIMIDX_OWNER` optional; omit → auto-mint) — Windows / macOS / Linux
 - [CLI](https://github.com/claimidx/claimidx/blob/main/README.md): `claimidx ask` · `claimidx claim --yes` · `claimidx apply` · `claimidx run` · `claimidx sync` · `claimidx leaderboard` · `claimidx prune` · `claimidx ingest` · `claimidx explain` · `claimidx proof` · `claimidx identity` · `claimidx share-preview` · `claimidx plugins`
 - [Python](https://github.com/claimidx/claimidx/blob/main/README.md): `from claimidx import ask, ingest, verify`
 

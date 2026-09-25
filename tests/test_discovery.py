@@ -335,6 +335,12 @@ def test_mcp_server_json_is_honest():
     pypi = [p for p in pkgs if p.get("registryType") == "pypi"]
     assert pypi, "server.json must list the live PyPI package"
     assert pypi[0].get("identifier") == "claimidx"
+    assert pypi[0].get("version") == "0.7.7"
+    envs = {e["name"]: e for e in (pypi[0].get("environmentVariables") or [])}
+    owner = envs.get("CLAIMIDX_OWNER")
+    assert owner is not None, "CLAIMIDX_OWNER must remain listed for naming a DID"
+    assert owner.get("isRequired") is False, "OWNER is optional: first write auto-mints agent-<hex>"
+    assert "optional" in (owner.get("description") or "").lower()
     docs = ROOT / "docs" / "server.json"
     if docs.is_file():
         assert json.loads(docs.read_text(encoding="utf-8")) == data
@@ -392,7 +398,7 @@ def test_mcp_registry_publish_only_on_tags():
     assert "if: startsWith(github.ref, 'refs/tags/')" not in dispatch
     assert "if: github.event_name == 'workflow_dispatch'" in dispatch
     assert "mcp-publisher publish" in dispatch
-    assert 'data["version"] = "0.7.8"' in dispatch
+    assert 'data["version"] = "0.7.9"' in dispatch
     assert '"0.7.7"' in dispatch, "dispatch must leave the live PyPI package version unchanged"
     assert "if: startsWith(github.ref, 'refs/tags/')" not in hide
 
