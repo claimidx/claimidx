@@ -1885,7 +1885,7 @@ def build_parser() -> argparse.ArgumentParser:
     imp.set_defaults(func=cmd_impact)
     fn = sub.add_parser(
         "funnel",
-        help="DID lifecycle scoreboard from the local event log (no serve): countable DIDs + install→…→share drop-off",
+        help="lifecycle scoreboard from the local event log (no serve): countable DIDs + install→…→share drop-off",
     )
     fn.add_argument("--days", type=int, default=30, help="lookback window (default 30)")
     fn.add_argument(
