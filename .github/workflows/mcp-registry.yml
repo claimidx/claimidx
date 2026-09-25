@@ -40,9 +40,9 @@ jobs:
 
           path = Path("server.json")
           data = json.loads(path.read_text(encoding="utf-8"))
-          # 0.7.7 is the live PyPI package; only the registry envelope advances.
-          data["version"] = "0.7.9"
-          assert all(p.get("version") == "0.7.7" for p in data.get("packages", []))
+          # 0.7.8 is the live PyPI package; only the registry envelope advances.
+          data["version"] = "0.7.10"
+          assert all(p.get("version") == "0.7.8" for p in data.get("packages", []))
           path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
           PY
       - name: Install mcp-publisher
