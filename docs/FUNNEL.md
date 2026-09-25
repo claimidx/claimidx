@@ -34,15 +34,11 @@ durable **role/test prefixes** so COO/Implementation/Social falsifiers do not in
 
 `coo-*`, `impl-*`, `implementation-*`, `social-*`, `falsifier-*`, `test-*`, `devbot-*`, `ops-*`, `ci-*`.
 
-Auto-minted stranger DIDs (`agent-<hex>`) stay countable. If a Path B falsifier already leaked an
-`agent-<hex>` onto the ledger (e.g. `did:claimidx:agent-5765cb` from a 0.7.11 test), drop it on the
-scoreboard machine with:
-
-```bash
-export CLAIMIDX_OPERATOR_DID=did:claimidx:agent-5765cb
-# or permanently: CLAIMIDX_REWARDS_EXCLUDE / config rewards_exclude
-claimidx funnel --commons
-```
+Auto-minted stranger DIDs (`agent-<hex>`) stay countable. Known leaked Path B falsifiers that
+prefixes cannot catch are hardcoded in the default exclude list (currently
+`did:claimidx:agent-5765cb` from a 0.7.11 test). Additional bare `agent-<hex>` leaks still need
+`CLAIMIDX_OPERATOR_DID` / `CLAIMIDX_REWARDS_EXCLUDE` / config `rewards_exclude` on the scoreboard
+machine until they are added to defaults.
 
 Implementation/Social tests should prefer named agents that match a durable prefix
 (`claimidx init --agent impl-falsifier-0711` or `CLAIMIDX_AGENT=impl-…`) so they are excluded

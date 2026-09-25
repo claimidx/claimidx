@@ -206,7 +206,8 @@ _FUNNEL_EXCLUDED = frozenset({"did:claimidx:seed", "did:claimidx:anon", "anon", 
 # Personal operator DIDs stay in CLAIMIDX_OPERATOR_DID / CLAIMIDX_REWARDS_EXCLUDE / config —
 # do not hardcode people. Role/test prefixes below drop COO/Implementation/Social falsifiers
 # that use named agents (e.g. CLAIMIDX_AGENT=impl-falsifier-…). Auto-minted agent-<hex>
-# stranger DIDs stay countable; exclude a leaked test DID via CLAIMIDX_OPERATOR_DID.
+# stranger DIDs stay countable. Known leaked Path B falsifiers (bare agent-<hex> that
+# prefixes cannot catch) are listed exactly below.
 _PROXY_DEFAULT_EXCLUDE = frozenset(
     {
         "did:claimidx:seed",
@@ -226,6 +227,8 @@ _PROXY_DEFAULT_EXCLUDE = frozenset(
         "did:claimidx:devbot-*",
         "did:claimidx:ops-*",
         "did:claimidx:ci-*",
+        # Leaked Path B falsifier (0.7.11 test); prefixes miss bare agent-<hex>.
+        "did:claimidx:agent-5765cb",
     }
 )
 COUNTABLE_GOAL = 100

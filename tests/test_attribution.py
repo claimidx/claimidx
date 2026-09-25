@@ -105,19 +105,22 @@ def test_commons_proxy_excludes_role_prefixes_and_operator_did(monkeypatch):
         _c("did:claimidx:impl-falsifier-0711"),
         _c("did:claimidx:coo-grind"),
         _c("did:claimidx:social-outreach"),
-        _c("did:claimidx:agent-5765cb"),  # auto-mint stays countable unless OPERATOR_DID
+        _c("did:claimidx:agent-5765cb"),  # known leaked falsifier; default-excluded
+        _c("did:claimidx:agent-aabbcc"),  # other auto-mint stays countable
         _c("did:claimidx:grok"),
     ]
     out = commons_owner_proxy(days=30, claims=rows, ledger="test")
     assert "did:claimidx:stranger-a" in out["countable_ids"]
-    assert "did:claimidx:agent-5765cb" in out["countable_ids"]
+    assert "did:claimidx:agent-aabbcc" in out["countable_ids"]
+    assert "did:claimidx:agent-5765cb" not in out["countable_ids"]
     assert "did:claimidx:impl-falsifier-0711" not in out["countable_ids"]
     assert "did:claimidx:coo-grind" not in out["countable_ids"]
     assert "did:claimidx:social-outreach" not in out["countable_ids"]
     assert "did:claimidx:grok" not in out["countable_ids"]
     assert out["countable"] == 2
 
-    monkeypatch.setenv("CLAIMIDX_OPERATOR_DID", "did:claimidx:agent-5765cb,did:claimidx:stranger-*")
+    monkeypatch.setenv("CLAIMIDX_OPERATOR_DID", "did:claimidx:stranger-*")
     out2 = commons_owner_proxy(days=30, claims=rows, ledger="test")
     assert "did:claimidx:agent-5765cb" not in out2["countable_ids"]
-    assert out2["countable"] == 0  # stranger-a also matched stranger-*
+    assert "did:claimidx:agent-aabbcc" in out2["countable_ids"]
+    assert out2["countable"] == 1  # agent-aabbcc; stranger-a matched stranger-*
