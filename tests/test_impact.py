@@ -281,3 +281,92 @@ def test_render_funnel_scoreboard_aliases():
     assert "confirm (≈hold)" in text
     assert "publish (≈claim)" in text
     assert "COO path actors: install 1 → init 2 → ask 1 → hold 1 → claim 1" in text
+
+
+def test_commons_owner_proxy_counts_and_excludes():
+    from datetime import UTC, datetime, timedelta
+
+    from claimidx.fingerprint import fingerprint
+    from claimidx.impact import commons_owner_proxy
+    from claimidx.models import Claim, EvalSpec, Fix
+
+    now = datetime.now(UTC)
+
+    def _c(own: str, *, nr: int = 0, st: str = "proposed", days_ago: int = 0) -> Claim:
+        err = f"RuntimeError: proxy {own} {nr} {st} {days_ago}"
+        return Claim(
+            fp=fingerprint(err=err, eco="py"),
+            cls="other",
+            err=err,
+            eco="py",
+            fix=Fix(k="patch", b="x"),
+            eval=EvalSpec(cmd="true"),
+            own=own,
+            nr=nr,
+            st=st,  # type: ignore[arg-type]
+            ts=now - timedelta(days=days_ago),
+        )
+
+    rows = [
+        _c("did:claimidx:seed", nr=2, st="confirmed"),
+        _c("did:claimidx:grok", nr=1, st="confirmed"),
+        _c("did:claimidx:claude-npm-resolve"),
+        _c("did:claimidx:stranger-a", nr=1, st="confirmed"),
+        _c("did:claimidx:stranger-b", days_ago=40),
+        _c("did:claimidx:stranger-c", st="confirmed", days_ago=2),
+    ]
+    out = commons_owner_proxy(days=30, claims=rows, ledger="test-ledger")
+    assert out["kind"] == "commons_proxy"
+    assert out["ledger"] == "test-ledger"
+    assert out["claims"] == 6
+    assert out["countable"] == 3
+    assert out["countable_goal"] == 100
+    assert out["held"] == 1
+    assert out["confirmed"] == 2
+    assert out["recent_published"] == 2
+    assert "did:claimidx:stranger-a" in out["countable_ids"]
+    assert "did:claimidx:stranger-b" in out["countable_ids"]
+    assert "did:claimidx:stranger-c" in out["countable_ids"]
+    assert "did:claimidx:grok" not in out["countable_ids"]
+    assert "not install" in out["limits"]
+
+    out2 = commons_owner_proxy(days=30, claims=rows, exclude=["did:claimidx:stranger-b"], ledger="test-ledger")
+    assert out2["countable"] == 2
+    assert "did:claimidx:stranger-b" not in out2["countable_ids"]
+
+
+def test_funnel_cli_commons_proxy(tmp_path: Path, capsys, monkeypatch):
+    from claimidx.cli import main
+    from claimidx.fingerprint import fingerprint
+    from claimidx.models import Claim, EvalSpec, Fix
+    from claimidx.store import Store
+
+    db = str(tmp_path / "ix.sqlite")
+    store = Store(db)
+    store.log("init", "did:claimidx:alice", "", {"stage": "init"})
+
+    claim = Claim(
+        fp=fingerprint(err="RuntimeError: funnel proxy", eco="py"),
+        cls="other",
+        err="RuntimeError: funnel proxy",
+        eco="py",
+        fix=Fix(k="patch", b="x"),
+        eval=EvalSpec(cmd="true"),
+        own="did:claimidx:stranger-z",
+        nr=1,
+        st="confirmed",
+    )
+    monkeypatch.setattr("claimidx.home.fetch_ledger", lambda url=None: ([claim], [], "mock-ledger"))
+
+    assert main(["--db", db, "funnel", "--commons", "--days", "30"]) == 0
+    out = capsys.readouterr().out
+    assert "commons proxy (public ledger): countable 1/100" in out
+    assert "held 1" in out
+    assert "proxy limits:" in out
+
+    assert main(["--db", db, "--fmt", "json", "funnel", "--commons", "--days", "30"]) == 0
+    payload = __import__("json").loads(capsys.readouterr().out)
+    assert payload["proxy"]["countable"] == 1
+    assert payload["proxy"]["held"] == 1
+    assert payload["proxy"]["ledger"] == "mock-ledger"
+    assert "commons-derived" in payload["locality"]
