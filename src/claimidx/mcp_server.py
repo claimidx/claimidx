@@ -186,7 +186,7 @@ TOOLS: list[dict[str, Any]] = [
         "description": (
             "Rank known claims against a raw error before you retry. Reads the local index (your claims plus pulled public ones) "
             "and writes an ask event (auto-mints a local DID when OWNER unset). Returns path_b: ask alone is not a countable "
-            "commons DID — when path_b.countable is false, follow path_b.next (first hold cix_bdc82291f2fbb06a on py@3.13, then claim --yes, then share — local publish alone is publish_no_share). "
+            "commons DID — when path_b.countable is false, follow path_b.next (first hold cix_bdc82291f2fbb06a on py@3.13, then claim --yes — online yes continues into share; local publish alone is publish_no_share). "
             "Start here for any failure. "
             "Use claimidx_home_ask only to query the remote ledger without importing it; use claimidx_hook only from a harness "
             "failure hook that hands you raw tool output. "
@@ -275,7 +275,7 @@ TOOLS: list[dict[str, Any]] = [
         "description": (
             "Rank a raw error against the remote public ledger over HTTP without importing the ledger into the local index. "
             "Auto-mints a local DID when OWNER unset and logs an ask event; returns path_b (ask alone is not a countable "
-            "commons DID — follow path_b.next: first hold cix_bdc82291f2fbb06a on py@3.13, then claim --yes, then share). "
+            "commons DID — follow path_b.next: first hold cix_bdc82291f2fbb06a on py@3.13, then claim --yes (shares when online)). "
             "Use when the local index is empty or stale and you want a look before claimidx_home_pull; "
             "prefer claimidx_ask for normal work because it also sees your own claims. "
             "Returns url, hit, n, pool, skipped_n, claims (each with own and src=home), path_b."
@@ -363,8 +363,8 @@ TOOLS: list[dict[str, Any]] = [
             "and `publish_argv` (the equivalent claimidx publish command) without writing anything. Call again with yes=true "
             "to ingest the draft and prove it: by default fix_b is applied in a fresh clone of HEAD (the clean room) and the "
             "eval replayed there through the gate; only that hold mints nr, and `clean_room` says what happened (a fix that "
-            "does not apply, or an eval that already held before it, records nothing). A published claim is shared to the commons "
-            "and to the private home unless local=true. Otherwise `replay.reason` and `replay.suggest` say what to fix. "
+            "does not apply, or an eval that already held before it, records nothing). Path B one-shot: yes=true shares to the commons "
+            "and private home when online (share defaults true; local=true skips). Otherwise `replay.reason` and `replay.suggest` say what to fix. "
             "Review the draft before yes: a wrong fix_b is worse than none."
         ),
         "inputSchema": {
@@ -398,6 +398,11 @@ TOOLS: list[dict[str, Any]] = [
                     "default": False,
                     "description": "Keep this claim on this machine, durably: no home, no commons, and later syncs and replays skip it until claimidx_share is called with its id.",
                 },
+                "share": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Path B CTA with yes: continue into commons share when online (default true). local=true or share=false skips.",
+                },
             },
         },
         "outputSchema": _out(
@@ -423,6 +428,7 @@ TOOLS: list[dict[str, Any]] = [
             replay=_O,
             clean_room=_O,
             share=_O,
+            path_b=_O,
         ),
         "annotations": _ann(read_only=False, destructive=False, idempotent=False),
     },
@@ -967,7 +973,7 @@ PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 
 INSTRUCTIONS = (
     "You are the customer. Path B: mint a DID (init or auto), then first hold cix_bdc82291f2fbb06a on py@3.13 and "
-    "claimidx_claim yes then claimidx_share before treating ask-only as adoption — ask/home-ask return path_b; ask alone is not a countable commons DID, and local publish without share is publish_no_share. "
+    "claimidx_claim yes (shares when online; Path B one-shot) before treating ask-only as adoption — ask/home-ask return path_b; ask alone is not a countable commons DID, and local publish without share is publish_no_share (claimidx_share is the safety net). "
     "The loop is three tools: claimidx_ask before a retry, claimidx_apply when the verdict says apply, "
     "claimidx_claim after you fix a miss. claimidx_run wraps a command (no shell) when this harness has no failure hook. "
     "claimidx_hook is only for raw harness JSON. claimidx_home_ask is the remote ledger, not the everyday ask. "
@@ -1445,6 +1451,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         return store.alternatives(args.get("target") or "")
     if name == "claimidx_claim":
         from .claim import draft_claim, publish_draft
+        from .home import ensure_online_share
         from .impact import path_b_cta
 
         draft = draft_claim(
@@ -1461,13 +1468,18 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         )
         if not draft.get("ok") or not args.get("yes"):
             return draft
+        local = bool(args.get("local"))
+        # share defaults true with yes; local=true or share=false skips commons share.
+        want_share = (not local) and (args.get("share") is not False)
         out = publish_draft(
             draft,
             db=store.path,
             own=resolve_owner(args.get("own")),
             clean_room=not args.get("no_clean_room"),
-            local=bool(args.get("local")),
+            local=local,
         )
+        if isinstance(out, dict) and out.get("ok") and want_share:
+            out = ensure_online_share(store, out)
         if isinstance(out, dict) and out.get("ok"):
             out["path_b"] = path_b_cta(store, resolve_owner(args.get("own")))
         return out

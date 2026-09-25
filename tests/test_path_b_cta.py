@@ -21,7 +21,7 @@ def test_path_b_cta_uncountable_until_share(tmp_path: Path):
     assert cta["first_hold"] == {"id": FIRST_HOLD_ID, "rt": FIRST_HOLD_RT}
     assert FIRST_HOLD_ID in cta["next"]
     assert "claim --yes" in cta["next"]
-    assert "share" in cta["next"]
+    # One-shot: share is not a separate CTA step (recovery still uses claimidx share after publish_no_share).
     # Local publish alone is publish_no_share — still not countable.
     store.log("publish", did, "cix_localonly", {})
     cta_pub = path_b_cta(store, did)
@@ -43,7 +43,8 @@ def test_path_b_cta_staged_after_hold(tmp_path: Path):
     cta = path_b_cta(store, did)
     assert cta["held"] is True
     assert cta["countable"] is False
-    assert cta["next"] == "claimidx claim --yes && claimidx share"
+    assert cta["next"] == "claimidx claim --yes"
+    assert "&&" not in cta["next"]
     assert "hold alone" in cta["why"]
 
 
