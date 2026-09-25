@@ -5,6 +5,7 @@ observed-digest warn). These tests lock the shipped contract.
 
 - X1  eval that never observes the claimed target must not mint nr
 - X2  eval artifact mutated after binding must not mint nr
+      (CLI + MCP Path B lights integrity=proof-artifact-drift)
 - X2b tree recipe with no binding must not mint nr (strict)
 - I1  observed_digest on a dep pin must warn `digest_drift` when local bytes change
       (warn+lights by default; refuse with --strict-digest; MCP Path B same lights)
@@ -268,6 +269,8 @@ def test_x2_binding_at_publish_cwd_refuses_mutated_artifact(tmp_path: Path, caps
     rc, out = _confirm(db, capsys, cid, cwd=str(tree))
     assert rc != 0, out
     assert "proof-artifact-drift" in out.get("reason", ""), out
+    assert out["lights"]["integrity"] == "proof-artifact-drift", out
+    assert out["lights"]["recovery"] == "held_unrecorded", out
     assert _nr(db, capsys, cid) == 0
 
 
@@ -295,7 +298,51 @@ def test_x2_tofu_then_mutation_refuses(tmp_path: Path, capsys):
     rc, out = _confirm(db, capsys, cid, cwd=str(tree))
     assert rc != 0, out
     assert "proof-artifact-drift" in out.get("reason", ""), out
+    assert out["lights"]["integrity"] == "proof-artifact-drift", out
+    assert out["lights"]["recovery"] == "held_unrecorded", out
     assert _nr(db, capsys, cid) == 1
+
+
+def test_x2_mcp_path_b_confirm_surfaces_proof_artifact_drift_lights(tmp_path: Path, monkeypatch):
+    """Path B (MCP) must return integrity=proof-artifact-drift like CLI confirm --replay."""
+    from claimidx.mcp_server import _call
+    from claimidx.store import Store
+
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:path-b-canary")
+    monkeypatch.setenv("CLAIMIDX_SHARE", "0")
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (tree / "marker.txt").write_text("good\n", encoding="utf-8")
+    _write_check(tree, honest=True)
+    store = Store(tmp_path / "ix.sqlite")
+    pub = _call(
+        "claimidx_publish",
+        {
+            "err": "RuntimeError: marker contract broken for canary_mod",
+            "eco": "py",
+            "rt": _py_rt(),
+            "fix_k": "patch",
+            "fix_b": "restore marker.txt to good",
+            "eval": "python check.py",
+            "cwd": str(tree),
+            "local": True,
+        },
+        store,
+    )
+    cid = pub["id"]
+    assert pub.get("binding"), pub
+    ok = _call("claimidx_confirm", {"id": cid, "replay": True, "cwd": str(tree)}, store)
+    assert ok.get("held") is True and ok.get("recorded") is not False, ok
+    assert ok["lights"]["integrity"] == "ok", ok
+
+    _write_check(tree, honest=False)
+    (tree / "marker.txt").write_text("evil\n", encoding="utf-8")
+    drifted = _call("claimidx_confirm", {"id": cid, "replay": True, "cwd": str(tree)}, store)
+    assert drifted.get("held") is True, drifted
+    assert drifted.get("recorded") is False, drifted
+    assert "proof-artifact-drift" in (drifted.get("reason") or ""), drifted
+    assert drifted["lights"]["integrity"] == "proof-artifact-drift", drifted
+    assert drifted["lights"]["recovery"] == "held_unrecorded", drifted
 
 
 def test_x2b_tree_recipe_outside_its_tree_is_not_a_miss(tmp_path: Path, capsys, monkeypatch):
