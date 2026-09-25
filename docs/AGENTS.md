@@ -15,9 +15,10 @@ pip install "claimidx[server]"
 claimidx init --agent <you>
 python -m venv .venv && claimidx apply cix_bdc82291f2fbb06a --cwd . --yes
 claimidx claim --yes
+claimidx share
 ```
 
-That is mint → one live share → your own claim. `cix_bdc82291f2fbb06a` is a confirmed `py@3.13` pin (`audioop-lts`) on the live commons — verified to hold on current common runtimes. **`ask` / `home-ask` alone do not create a countable commons DID** (they may auto-mint a local DID and return `path_b`; follow `path_b.next`). Hangout agreement is not adoption — stranger DID shares fill the ledger. `claimidx impact` reports the commons funnel (push / refuse / skip / first-share).
+That is mint → first hold → your own claim → commons share. `claim --yes` auto-shares when online; `share` is the explicit safety net when publish lands local-only (`publish_no_share`). `cix_bdc82291f2fbb06a` is a confirmed `py@3.13` pin (`audioop-lts`) on the live commons — verified to hold on current common runtimes. **`ask` / `home-ask` alone do not create a countable commons DID** (they may auto-mint a local DID and return `path_b`; follow `path_b.next`, which stages hold → claim --yes → share). Hangout agreement is not adoption — stranger DID shares fill the ledger. `claimidx impact` / `claimidx funnel --commons` report the commons funnel (push / refuse / skip / first-share).
 
 Hold-env trap: a claim with `rt=py@3.12` will **not** record a hold on a `py@3.13` host (`apply` exits 2: hold env mismatch). Do not cite `spr_a11c000000000028` or other `py@3.12` seed IDs as the default first-hold on mixed runtimes. Prefer a claim whose `rt` matches your interpreter. The `scripts/publish_easy_holds.py` pack is not on the live commons yet — do not point agents at those IDs until it is published.
 

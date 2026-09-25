@@ -637,6 +637,7 @@ def cmd_alternatives(ns: argparse.Namespace) -> int:
 def cmd_claim(ns: argparse.Namespace) -> int:
     """Draft a claim from the last failure + the tree; publish on --yes."""
     from .claim import draft_claim, publish_draft, render_draft
+    from .impact import path_b_cta
 
     draft = draft_claim(
         err=ns.err or "",
@@ -656,7 +657,16 @@ def cmd_claim(ns: argparse.Namespace) -> int:
     if not ns.yes:
         print(json.dumps(draft, default=str) if ns.fmt == "json" else render_draft(draft))
         return 0
-    out = publish_draft(draft, db=_db_path(ns), own=resolve_owner(ns.own), replay=not ns.no_replay, clean_room=not ns.no_clean_room, local=bool(ns.local))
+    out = publish_draft(
+        draft,
+        db=_db_path(ns),
+        own=resolve_owner(ns.own),
+        replay=not ns.no_replay,
+        clean_room=not ns.no_clean_room,
+        local=bool(ns.local),
+    )
+    if out.get("ok"):
+        out["path_b"] = path_b_cta(_store(ns), resolve_owner(ns.own))
     if ns.fmt == "json":
         print(json.dumps(out, default=str))
     else:
@@ -674,9 +684,13 @@ def cmd_claim(ns: argparse.Namespace) -> int:
             for w in out.get("warn") or []:
                 print(f"warn {w}", file=sys.stderr)
             print(_destination_line(out.get("share") or {}, out["id"]), file=sys.stderr)
+            path_b = out.get("path_b") or {}
+            if path_b and not path_b.get("countable"):
+                print(f"# path_b countable=false — {path_b.get('why')}; next: {path_b.get('next')}", file=sys.stderr)
             if rp.get("suggest", {}).get("eval"):
                 print(f"suggest eval: {rp['suggest']['eval']}", file=sys.stderr)
     return 0 if out.get("ok") else 2
+
 
 
 def _destination_line(share: dict, claim_id: str) -> str:
@@ -704,7 +718,13 @@ def _destination_line(share: dict, claim_id: str) -> str:
     if parts:
         return "# shared: " + ", ".join(parts)
     if not share:
-        return f"# not shared: sharing is off (CLAIMIDX_SHARE=0 or the commons disabled); `claimidx share {claim_id}` publishes it"
+        return (
+            f"# publish_no_share: sharing is off (CLAIMIDX_SHARE=0 or the commons disabled); "
+            f"`claimidx share {claim_id}` publishes it"
+        )
+    if status in {"skipped", "error"} or (share.get("commons") or {}).get("status") in {"skipped", "error", "refused"}:
+        reason = share.get("reason") or share.get("hint") or (share.get("commons") or {}).get("reason") or status or "unknown"
+        return f"# publish_no_share: {reason}; `claimidx share {claim_id}` publishes it"
     return f"# share: {status or 'unknown'}" + (f" ({share.get('reason') or share.get('hint')})" if share.get("reason") or share.get("hint") else "")
 
 
@@ -766,13 +786,24 @@ def cmd_prune(ns: argparse.Namespace) -> int:
 def cmd_apply(ns: argparse.Namespace) -> int:
     """Apply a pin or patch remedy in --cwd, then replay and record. Prints the plan without --yes."""
     from .apply import apply_claim, render_plan
+    from .impact import path_b_cta
 
     store = _store(ns)
     c = store.get(ns.id)
     if not c:
         print("missing", file=sys.stderr)
         return 1
-    out = apply_claim(store, c, cwd=ns.cwd or os.getcwd(), own=resolve_owner(ns.own), yes=bool(ns.yes), trust_eval=bool(ns.trust_eval))
+    out = apply_claim(
+        store,
+        c,
+        cwd=ns.cwd or os.getcwd(),
+        own=resolve_owner(ns.own),
+        yes=bool(ns.yes),
+        trust_eval=bool(getattr(ns, "trust_eval", False)),
+    )
+    held_ok = bool(out.get("applied") and (out.get("replay") or {}).get("recorded"))
+    if held_ok:
+        out["path_b"] = path_b_cta(store, resolve_owner(ns.own))
     if ns.fmt == "json":
         print(json.dumps(out, default=str))
     else:
@@ -792,11 +823,15 @@ def cmd_apply(ns: argparse.Namespace) -> int:
                 print(f"applied, not recorded: {rp.get('reason')}", file=sys.stderr)
                 if (rp.get("suggest") or {}).get("hint"):
                     print(f"suggest: {rp['suggest']['hint']}", file=sys.stderr)
+        path_b = out.get("path_b") or {}
+        if path_b and not path_b.get("countable"):
+            print(f"# path_b countable=false — {path_b.get('why')}; next: {path_b.get('next')}", file=sys.stderr)
     if out.get("manual"):
         return 3
     if not out["applied"]:
         return 2 if ns.yes else 0
     return 0 if (out.get("replay") or {}).get("recorded") else 2
+
 
 
 def shlex_join(argv: list[str]) -> str:
