@@ -89,6 +89,13 @@ def auto_identity(*, quiet: bool = False) -> dict | None:
         config.save(data)
         os.environ["CLAIMIDX_OWNER"] = own
         os.environ["CLAIMIDX_AGENT"] = agent
+        try:
+            from .impact import log_stage
+            from .store import DEFAULT_DB, Store
+
+            log_stage(Store(os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)), "init", own, detail={"auto": True})
+        except Exception:
+            pass
     except Exception:
         return None
     if not quiet:

@@ -163,6 +163,17 @@ def create_app(db: str | None = None) -> FastAPI:
     def api_events(limit: int = 50, actor: str | None = None):
         return store.events(limit=limit, actor=actor)
 
+    @app.get("/api/funnel")
+    def api_funnel(days: int = 30):
+        """DID lifecycle + commons publish funnel from the local event log (no PII beyond DID)."""
+        from .home import commons_enabled
+        from .impact import commons_funnel, lifecycle_funnel
+
+        out: dict = {"lifecycle": lifecycle_funnel(store, days=max(1, min(int(days or 30), 365)))}
+        if commons_enabled():
+            out["commons"] = commons_funnel(store, days=max(1, min(int(days or 30), 365)))
+        return out
+
     @app.get("/ledger.jsonl", response_class=PlainTextResponse)
     def ledger():
         lines = []

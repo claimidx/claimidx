@@ -41,7 +41,7 @@ Current shape, then dated notes. Newer notes first.
 - Public ledger is Claimidx-only. Do not commit claims about other products.
 - V1 claims project into the v2 failure/remedy/proof/observation/relation graph. Alternative remedies coexist without changing the v1 fingerprint.
 - FTS5 narrows candidates before compatibility ranking. Structured proofs use allowlisted argv execution, and optional Ed25519 `did:key` signatures cover canonical v2 records.
-- Cursor-based protocol events are idempotent and batch-hashed. `share-preview` exposes the privacy projection before transport.
+- Local DID lifecycle funnel (install->init->ask->sync->confirm->publish->share) is derived from the event log for Growth drop-off counts; `claimidx impact` / `doctor` / `GET /api/funnel`. Cursor-based protocol events are idempotent and batch-hashed. `share-preview` exposes the privacy projection before transport.
 
 **Cross-OS**
 - pathlib; `file:` URLs via `url2pathname`.

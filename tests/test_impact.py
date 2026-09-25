@@ -149,3 +149,80 @@ def test_impact_includes_funnel_when_commons_enabled(tmp_path: Path, monkeypatch
     assert out["funnel"]["skipped"] == 1
     assert out["funnel"]["first_share_actors"]["count"] == 1
     assert "funnel: push 1 refuse 0 skip 1 first-share 1" in out["line"]
+
+
+def test_lifecycle_funnel_stages_and_dropoff(tmp_path: Path):
+    from claimidx.impact import lifecycle_funnel, render_line
+    from claimidx.store import Store
+
+    store = Store(tmp_path / "ix.sqlite")
+    a = "did:claimidx:alice"
+    b = "did:claimidx:bob"
+    store.log("init", a, "", {"stage": "init"})
+    store.log("install", a, "", {"stage": "install", "surfaces": ["cursor"]})
+    store.log("ask", a, "c1", {"hit": False, "n": 0})
+    store.log("init", b, "", {"stage": "init"})  # bob stops at init
+    store.log("init", "did:claimidx:anon", "", {"stage": "init"})  # excluded from countable
+
+    life = lifecycle_funnel(store, days=30)
+    assert life["order"][0] == "install"
+    assert life["stages"]["init"]["actors"] == 2
+    assert life["stages"]["ask"]["actors"] == 1
+    assert life["stages"]["install"]["actors"] == 1
+    assert life["countable_actors"] == 2
+    assert life["dropoff"]["init_no_ask"] == 1  # bob
+    assert "did:claimidx:anon" not in life["countable_actor_ids"]
+
+    line = render_line({"days": 30, "asks": 0, "hits": 0, "retries_skipped": 0, "claims_published": 0, "replays_held": 0, "lifecycle": life})
+    assert "lifecycle:" in line and "countable 2" in line
+
+
+def test_init_emits_funnel_stages(tmp_path: Path, capsys, monkeypatch):
+    import json
+
+    from claimidx.cli import main
+    from claimidx.store import Store
+
+    monkeypatch.setenv("CLAIMIDX_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    db = str(tmp_path / "ix.sqlite")
+    assert main(["--db", db, "init", "--agent", "funnel-a", "--offline", "--no-hooks"]) == 0
+    capsys.readouterr()
+    kinds = {e["kind"] for e in Store(db).events(limit=20)}
+    assert "init" in kinds
+    assert "install" not in kinds  # --no-hooks
+
+    assert main(["--db", db, "init", "--agent", "funnel-a", "--offline"]) == 0
+    capsys.readouterr()
+    events = Store(db).events(limit=50)
+    kinds = {e["kind"] for e in events}
+    assert "install" in kinds
+    init_rows = [e for e in events if e["kind"] == "init"]
+    assert init_rows and init_rows[0]["actor"] == "did:claimidx:funnel-a"
+    assert init_rows[0]["detail"].get("stage") == "init"
+
+    assert main(["--db", db, "--fmt", "json", "impact", "--offline", "--days", "30"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["lifecycle"]["stages"]["init"]["actors"] >= 1
+    assert out["lifecycle"]["countable_actors"] >= 1
+
+    assert main(["--db", db, "doctor"]) in (0, 2)
+    doc = json.loads(capsys.readouterr().out)
+    assert "funnel" in doc and doc["funnel"]["stages"]["init"]["actors"] >= 1
+    assert any(c["name"] == "funnel" for c in doc["checks"])
+
+
+def test_api_funnel_endpoint(tmp_path: Path):
+    from fastapi.testclient import TestClient
+
+    from claimidx.api import create_app
+    from claimidx.store import Store
+
+    db = tmp_path / "ix.sqlite"
+    Store(db).log("init", "did:claimidx:growth", "", {"stage": "init"})
+    client = TestClient(create_app(str(db)))
+    res = client.get("/api/funnel?days=30")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["lifecycle"]["stages"]["init"]["actors"] == 1
+    assert body["lifecycle"]["countable_actors"] == 1
