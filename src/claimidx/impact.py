@@ -201,6 +201,132 @@ _LIFECYCLE_ORDER = ("install", "init", "ask", "sync", "confirm", "publish", "sha
 
 _FUNNEL_EXCLUDED = frozenset({"did:claimidx:seed", "did:claimidx:anon", "anon", ""})
 
+# Commons-derived proxy (production ledger). Not install->init drop-off.
+# Prefix patterns end in * (same shape as commons_excluded on the home worker).
+# Personal operator DIDs stay in CLAIMIDX_REWARDS_EXCLUDE / config — do not hardcode people.
+_PROXY_DEFAULT_EXCLUDE = frozenset(
+    {
+        "did:claimidx:seed",
+        "did:claimidx:anon",
+        "anon",
+        "",
+        "did:claimidx:grok",
+        "did:claimidx:codex",
+        "did:claimidx:claude*",
+    }
+)
+COUNTABLE_GOAL = 100
+
+
+def _proxy_excluded(extra: list[str] | None = None) -> list[str]:
+    """Exact DIDs and trailing-* prefixes: defaults + rewards_exclude + extras."""
+    from .rewards import excluded_owners
+
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in (*_PROXY_DEFAULT_EXCLUDE, *sorted(excluded_owners(extra))):
+        v = (raw or "").strip()
+        if v in seen:
+            continue
+        seen.add(v)
+        out.append(v)
+    return out
+
+
+def _proxy_is_excluded(did: str, patterns: list[str]) -> bool:
+    d = (did or "").strip()
+    if not d:
+        return True
+    for p in patterns:
+        if not p:
+            continue
+        if p.endswith("*"):
+            if d.startswith(p[:-1]):
+                return True
+        elif d == p:
+            return True
+    return False
+
+
+def commons_owner_proxy(
+    *,
+    days: int = 30,
+    exclude: list[str] | None = None,
+    url: str | None = None,
+    claims: list | None = None,
+    ledger: str | None = None,
+) -> dict[str, Any]:
+    """Distinct non-operator owners on the public commons with published/held claims.
+
+    Proxy only: the ledger has no install/init/sync stage events. Local-only DIDs that
+    never shared are invisible. `countable` is all-time published owners after exclude;
+    `recent_published` is owners with a claim.ts inside the lookback window.
+    """
+    from .models import Claim
+
+    patterns = _proxy_excluded(exclude)
+    target = ledger or ""
+    rows: list[Claim]
+    if claims is not None:
+        rows = list(claims)
+    else:
+        from .home import fetch_ledger
+
+        rows, _skipped, target = fetch_ledger(url)
+
+    since = datetime.now(UTC) - timedelta(days=max(1, min(int(days or 30), 365)))
+    published: set[str] = set()
+    held: set[str] = set()
+    confirmed: set[str] = set()
+    recent: set[str] = set()
+    excluded_owners_seen: set[str] = set()
+    for c in rows:
+        own = (getattr(c, "own", None) or "").strip()
+        if _proxy_is_excluded(own, patterns):
+            if own:
+                excluded_owners_seen.add(own)
+            continue
+        published.add(own)
+        if int(getattr(c, "nr", 0) or 0) > 0:
+            held.add(own)
+        if (getattr(c, "st", None) or "") == "confirmed":
+            confirmed.add(own)
+        ts = getattr(c, "ts", None)
+        if ts is None:
+            when = None
+        elif hasattr(ts, "isoformat"):
+            when = _ts(ts.isoformat())
+        else:
+            when = _ts(str(ts))
+        if when is not None and when >= since:
+            recent.add(own)
+
+    countable = sorted(published)
+    held_ids = sorted(held)
+    confirmed_ids = sorted(confirmed)
+    recent_ids = sorted(recent)
+    return {
+        "kind": "commons_proxy",
+        "ledger": target,
+        "claims": len(rows),
+        "days": max(1, min(int(days or 30), 365)),
+        "exclude": patterns,
+        "excluded_owners_seen": len(excluded_owners_seen),
+        "countable": len(countable),
+        "countable_goal": COUNTABLE_GOAL,
+        "countable_ids": countable[:20],
+        "held": len(held_ids),
+        "held_ids": held_ids[:20],
+        "confirmed": len(confirmed_ids),
+        "confirmed_ids": confirmed_ids[:20],
+        "recent_published": len(recent_ids),
+        "recent_published_ids": recent_ids[:20],
+        "limits": (
+            "commons-derived proxy only: distinct non-operator owners with a published claim on the public ledger; "
+            "held = nr>0 on at least one owned claim; not install->init drop-off; local-only DIDs never shared are invisible"
+        ),
+    }
+
 
 # Live py@3.13 first-hold on the commons (audioop-lts). Do not default spr_a11c… (py@3.12).
 FIRST_HOLD_ID = "cix_bdc82291f2fbb06a"
@@ -322,8 +448,8 @@ _SCOREBOARD_ALIAS = {
 }
 
 
-def render_funnel_scoreboard(life: dict[str, Any], *, commons: dict[str, Any] | None = None, db: str = "") -> str:
-    """Human daily scoreboard from lifecycle_funnel (local events only; no network)."""
+def render_funnel_scoreboard(life: dict[str, Any], *, commons: dict[str, Any] | None = None, proxy: dict[str, Any] | None = None, db: str = "") -> str:
+    """Human daily scoreboard from lifecycle_funnel; optional commons event funnel + ledger proxy."""
     if life.get("error"):
         return f"# funnel error: {life['error']}"
     days = life.get("days", 30)
@@ -368,6 +494,17 @@ def render_funnel_scoreboard(life: dict[str, Any], *, commons: dict[str, Any] | 
             f"skip {commons.get('skipped', 0)} hold {commons.get('holds', 0)} fail {commons.get('fails', 0)} "
             f"first-share {first_n}"
         )
+    if proxy and not proxy.get("error"):
+        goal = proxy.get("countable_goal", COUNTABLE_GOAL)
+        lines.append(
+            f"commons proxy (public ledger): countable {proxy.get('countable', 0)}/{goal} "
+            f"held {proxy.get('held', 0)} confirmed {proxy.get('confirmed', 0)} "
+            f"recent_published {proxy.get('recent_published', 0)} "
+            f"(claims {proxy.get('claims', 0)}; excl. owners seen {proxy.get('excluded_owners_seen', 0)})"
+        )
+        lines.append(f"# proxy limits: {proxy.get('limits', 'commons-derived; not install->init')}")
+    elif proxy and proxy.get("error"):
+        lines.append(f"commons proxy error: {proxy.get('error')}")
     return "\n".join(lines)
 
 

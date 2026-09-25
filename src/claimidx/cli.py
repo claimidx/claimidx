@@ -1304,9 +1304,13 @@ def cmd_impact(ns: argparse.Namespace) -> int:
 
 
 def cmd_funnel(ns: argparse.Namespace) -> int:
-    """Operator/Growth DID lifecycle scoreboard from the local event log (no serve)."""
+    """Operator/Growth DID lifecycle scoreboard from the local event log (no serve).
+
+    With `--commons`, also derive a production ledger proxy: distinct non-operator
+    owners with published/held claims (not install->init drop-off).
+    """
     from .home import commons_enabled
-    from .impact import commons_funnel, lifecycle_funnel, render_funnel_scoreboard
+    from .impact import commons_funnel, commons_owner_proxy, lifecycle_funnel, render_funnel_scoreboard
 
     store = _store(ns)
     days = max(1, min(int(ns.days or 30), 365))
@@ -1317,6 +1321,16 @@ def cmd_funnel(ns: argparse.Namespace) -> int:
             commons = commons_funnel(store, days=days)
         except Exception as e:
             commons = {"error": str(e)[:200]}
+    proxy = None
+    if getattr(ns, "commons", False):
+        try:
+            proxy = commons_owner_proxy(
+                days=days,
+                exclude=getattr(ns, "exclude", None),
+                url=getattr(ns, "ledger", None),
+            )
+        except Exception as e:
+            proxy = {"error": str(e)[:200]}
     if ns.fmt == "json":
         out: dict[str, Any] = {
             "lifecycle": life,
@@ -1325,9 +1339,12 @@ def cmd_funnel(ns: argparse.Namespace) -> int:
         }
         if commons is not None:
             out["commons"] = commons
+        if proxy is not None:
+            out["proxy"] = proxy
+            out["locality"] = "local lifecycle (+ optional local commons events); proxy is commons-derived from the public ledger (not install->init)"
         print(json.dumps(out, default=str, indent=2))
     else:
-        print(render_funnel_scoreboard(life, commons=commons, db=str(store.path)))
+        print(render_funnel_scoreboard(life, commons=commons, proxy=proxy, db=str(store.path)))
     return 0
 
 
@@ -1887,11 +1904,19 @@ def build_parser() -> argparse.ArgumentParser:
         "funnel",
         help="lifecycle scoreboard from the local event log (no serve): countable DIDs + install→…→share drop-off",
     )
-    fn.add_argument("--days", type=int, default=30, help="lookback window (default 30)")
+    fn.add_argument("--days", type=int, default=30, help="lookback window (default 30; also recent_published for --commons proxy)")
     fn.add_argument(
         "--commons",
         action="store_true",
-        help="also print commons push/refuse/skip/hold/fail even when commons is disabled",
+        help="production commons proxy: distinct non-operator owners with published/held claims on the public ledger",
+    )
+    fn.add_argument("--ledger", help="ledger URL or local jsonl for --commons proxy (default: live commons, then repo snapshot)")
+    fn.add_argument(
+        "--exclude",
+        action="append",
+        default=None,
+        metavar="DID",
+        help="extra DID or prefix* to exclude from the --commons proxy (also CLAIMIDX_REWARDS_EXCLUDE / config rewards_exclude)",
     )
     fn.set_defaults(func=cmd_funnel)
     rw = sub.add_parser(
