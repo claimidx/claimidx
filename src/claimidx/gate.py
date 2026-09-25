@@ -9,8 +9,9 @@ Checks live here, in order, and each returns the first refusal:
 
 1. env       claim.rt must match the observed executing runtime (python/node)
 2. target    the eval must observe the claimed target            [X1]
-3. binding   proof artifact digests must still match under --cwd [X2, pending]
-4. digest    observed dependency digests drift -> warn           [I1, pending]
+3. binding   proof artifact digests must still match under --cwd [X2]
+4. digest    observed dependency digests drift -> warn           [I1]
+             (warn by default; refuse with --strict-digest / CLAIMIDX_STRICT_DIGEST)
 
 Source of the contract: `Validated Results/` and tests/test_graduation_gate.py.
 """
