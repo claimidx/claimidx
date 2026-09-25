@@ -380,14 +380,21 @@ def test_mcp_registry_hides_invalid_pypi_versions():
 
 
 def test_mcp_registry_publish_only_on_tags():
-    """workflow_dispatch must hide leaked versions without re-publishing an existing tag."""
+    """Tags publish their package version; dispatch publishes only a bumped registry envelope."""
     from claimidx.discovery import ROOT
 
     text = (ROOT / ".github" / "workflows" / "mcp-registry.yml").read_text(encoding="utf-8")
     assert "  hide-leaked:" in text, "hide-leaked job must exist so dispatch can run it"
-    pub, rest = text.split("  hide-leaked:", 1)
-    assert "if: startsWith(github.ref, 'refs/tags/')" in pub
-    assert "if: startsWith(github.ref, 'refs/tags/')" not in rest
+    publish, rest = text.split("  publish-dispatch:", 1)
+    dispatch, hide = rest.split("  hide-leaked:", 1)
+    assert "if: startsWith(github.ref, 'refs/tags/')" in publish
+    assert "mcp-publisher publish" in publish
+    assert "if: startsWith(github.ref, 'refs/tags/')" not in dispatch
+    assert "if: github.event_name == 'workflow_dispatch'" in dispatch
+    assert "mcp-publisher publish" in dispatch
+    assert 'data["version"] = "0.7.8"' in dispatch
+    assert '"0.7.7"' in dispatch, "dispatch must leave the live PyPI package version unchanged"
+    assert "if: startsWith(github.ref, 'refs/tags/')" not in hide
 
 
 def test_security_md_covers_published_wheel():

@@ -21,6 +21,37 @@ jobs:
         run: ./mcp-publisher login github-oidc
       - name: Publish server.json
         run: ./mcp-publisher publish
+  publish-dispatch:
+    # Registry-only metadata refresh; do not re-publish an immutable tag version.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+      - name: Set registry-only version
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("server.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          # 0.7.7 is the live PyPI package; only the registry envelope advances.
+          data["version"] = "0.7.8"
+          assert all(p.get("version") == "0.7.7" for p in data.get("packages", []))
+          path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+      - name: Authenticate
+        run: ./mcp-publisher login github-oidc
+      - name: Publish registry-only server.json
+        run: ./mcp-publisher publish
   hide-leaked:
     # 0.5.6 contained unintended non-package files and is yanked on PyPI.
     runs-on: ubuntu-latest
