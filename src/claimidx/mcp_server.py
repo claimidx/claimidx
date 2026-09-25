@@ -1468,7 +1468,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             clean_room=not args.get("no_clean_room"),
             local=bool(args.get("local")),
         )
-        if out.get("ok"):
+        if isinstance(out, dict) and out.get("ok"):
             out["path_b"] = path_b_cta(store, resolve_owner(args.get("own")))
         return out
     if name == "claimidx_apply":
@@ -1486,7 +1486,8 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             yes=bool(args.get("yes")),
             trust_eval=bool(args.get("trust_eval")),
         )
-        if out.get("applied") and (out.get("replay") or {}).get("recorded"):
+        replay_info = out.get("replay")
+        if out.get("applied") and isinstance(replay_info, dict) and replay_info.get("recorded"):
             out["path_b"] = path_b_cta(store, resolve_owner(args.get("own")))
         return out
     if name == "claimidx_ingest_draft":
