@@ -634,6 +634,39 @@ def maybe_share(store, claim: Claim) -> dict[str, Any] | None:
     return out
 
 
+_SHARE_LANDED = frozenset({"commons", "pushed", "already", "outbox", "local"})
+
+
+def ensure_online_share(store, out: dict[str, Any]) -> dict[str, Any]:
+    """Path B one-shot: after claim --yes, continue into share when online and not keep-local.
+
+    No-op when sharing is off, commons/home unavailable (offline), the claim is keep-local,
+    or share already landed (including outbox). Never raises.
+    """
+    if not isinstance(out, dict) or not out.get("ok") or not out.get("id"):
+        return out
+    if not share_enabled():
+        return out
+    if not commons_enabled() and not api_url():
+        return out
+    raw_share = out.get("share")
+    share: dict[str, Any] = raw_share if isinstance(raw_share, dict) else {}
+    status = share.get("status")
+    raw_commons = share.get("commons")
+    commons: dict[str, Any] = raw_commons if isinstance(raw_commons, dict) else {}
+    if status in _SHARE_LANDED or commons.get("status") in _SHARE_LANDED:
+        return out
+    claim = store.get(out["id"])
+    if claim is None or keep_local(store, claim.id):
+        return out
+    shared = maybe_share(store, claim)
+    if not shared:
+        return out
+    updated = dict(out)
+    updated["share"] = shared
+    return updated
+
+
 HOOK_REQUEST_SECONDS = 4.0
 HOOK_BUDGET_SECONDS = 8.0
 

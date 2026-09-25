@@ -343,7 +343,8 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
     Ask may auto-mint a local DID; that is not a countable commons DID until a
     live share (commons-push / share-explicit / home-push). Local publish alone
     is publish_no_share — keep `next` pointed at `claimidx share`. When not
-    countable, `next` is staged: first-hold → claim --yes → share.
+    countable, `next` is staged: first-hold → claim --yes (one-shot: online
+    --yes continues into share; `claimidx share` is the offline/local safety net).
     """
     did = (actor or "").strip()
     minted = bool(did) and did.startswith("did:") and did not in _FUNNEL_EXCLUDED
@@ -372,12 +373,13 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
     }
     if not countable:
         share_step = "claimidx share"
-        claim_step = f"claimidx claim --yes && {share_step}"
+        # Path B one-shot: online claim --yes continues into share (no separate skippable step).
+        claim_step = "claimidx claim --yes"
         if published and not shared:
             out["why"] = "publish_no_share: local claim is not a countable commons DID until share"
             out["next"] = share_step
         elif held and not published:
-            out["why"] = "hold alone is not a countable commons DID — claim --yes then share"
+            out["why"] = "hold alone is not a countable commons DID — claim --yes (shares when online)"
             out["next"] = claim_step
         else:
             out["why"] = "ask alone does not create a countable commons DID"

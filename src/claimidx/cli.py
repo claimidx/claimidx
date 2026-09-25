@@ -637,6 +637,7 @@ def cmd_alternatives(ns: argparse.Namespace) -> int:
 def cmd_claim(ns: argparse.Namespace) -> int:
     """Draft a claim from the last failure + the tree; publish on --yes."""
     from .claim import draft_claim, publish_draft, render_draft
+    from .home import ensure_online_share
     from .impact import path_b_cta
 
     draft = draft_claim(
@@ -657,14 +658,20 @@ def cmd_claim(ns: argparse.Namespace) -> int:
     if not ns.yes:
         print(json.dumps(draft, default=str) if ns.fmt == "json" else render_draft(draft))
         return 0
+    local = bool(ns.local)
+    # Path B one-shot: online --yes continues into share by default (--share is the documented CTA alias).
+    # --local / keep-local never forces commons share.
+    want_share = not local
     out = publish_draft(
         draft,
         db=_db_path(ns),
         own=resolve_owner(ns.own),
         replay=not ns.no_replay,
         clean_room=not ns.no_clean_room,
-        local=bool(ns.local),
+        local=local,
     )
+    if out.get("ok") and want_share:
+        out = ensure_online_share(_store(ns), out)
     if out.get("ok"):
         out["path_b"] = path_b_cta(_store(ns), resolve_owner(ns.own))
     if ns.fmt == "json":
@@ -1727,7 +1734,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="emit typed delivered:false when no observation envelope (also CLAIMIDX_HOOK_ABSENCE=1; --fmt json enables it)",
     )
     hk.set_defaults(func=cmd_hook)
-    cl = sub.add_parser("claim", help="draft a claim from the last failure and this tree; --yes publishes and replays it")
+    cl = sub.add_parser("claim", help="draft a claim from the last failure and this tree; --yes publishes, replays, and shares when online")
     cl.add_argument("--err", help="failure text; defaults to the last failure the hook saw")
     cl.add_argument("--fix", help="what you changed, in one line or a diff; defaults to the working-tree diff or the install command")
     cl.add_argument("--fix-k", choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"], help="defaults from the fix text")
@@ -1739,6 +1746,11 @@ def build_parser() -> argparse.ArgumentParser:
     cl.add_argument("--note")
     cl.add_argument("--own")
     cl.add_argument("--yes", "-y", action="store_true", help="publish the draft and replay its eval")
+    cl.add_argument(
+        "--share",
+        action="store_true",
+        help="path B CTA with --yes: continue into commons share when online (default for --yes; --local skips)",
+    )
     cl.add_argument("--no-diff", action="store_true", help="never read git diff for fix.b")
     cl.add_argument("--no-replay", action="store_true", help="publish without replaying the eval")
     cl.add_argument("--no-clean-room", action="store_true", help="skip the fresh-clone proof of fix.b; nr then comes from the working tree only")
