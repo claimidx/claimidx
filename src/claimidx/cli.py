@@ -1303,6 +1303,34 @@ def cmd_impact(ns: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_funnel(ns: argparse.Namespace) -> int:
+    """Operator/Growth DID lifecycle scoreboard from the local event log (no serve)."""
+    from .home import commons_enabled
+    from .impact import commons_funnel, lifecycle_funnel, render_funnel_scoreboard
+
+    store = _store(ns)
+    days = max(1, min(int(ns.days or 30), 365))
+    life = lifecycle_funnel(store, days=days)
+    commons = None
+    if commons_enabled() or getattr(ns, "commons", False):
+        try:
+            commons = commons_funnel(store, days=days)
+        except Exception as e:
+            commons = {"error": str(e)[:200]}
+    if ns.fmt == "json":
+        out: dict[str, Any] = {
+            "lifecycle": life,
+            "locality": "local home event log only; stage events are not on commons / public ledger",
+            "db": str(store.path),
+        }
+        if commons is not None:
+            out["commons"] = commons
+        print(json.dumps(out, default=str, indent=2))
+    else:
+        print(render_funnel_scoreboard(life, commons=commons, db=str(store.path)))
+    return 0
+
+
 def cmd_doctor(ns: argparse.Namespace) -> int:
     from . import __version__, config
     from .home import DEFAULT_LEDGER, api_url, ledger_url
@@ -1527,7 +1555,7 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
     add(
         "funnel",
         True,
-        f"{funnel_detail}; countable={life.get('countable_actors', 0)} (claimidx impact --fmt json -> lifecycle)",
+        f"{funnel_detail}; countable={life.get('countable_actors', 0)} (claimidx funnel)",
     )
     ok = all(c["ok"] for c in checks)
     print(json.dumps({"ok": ok, "whoami": me, "checks": checks, "funnel": life}, indent=2))
@@ -1855,6 +1883,17 @@ def build_parser() -> argparse.ArgumentParser:
     imp.add_argument("--home", help="ledger URL (default CLAIMIDX_HOME or the public jsonl)")
     imp.add_argument("--offline", action="store_true", help="local event log only; skip the public ledger")
     imp.set_defaults(func=cmd_impact)
+    fn = sub.add_parser(
+        "funnel",
+        help="DID lifecycle scoreboard from the local event log (no serve): countable DIDs + install→…→share drop-off",
+    )
+    fn.add_argument("--days", type=int, default=30, help="lookback window (default 30)")
+    fn.add_argument(
+        "--commons",
+        action="store_true",
+        help="also print commons push/refuse/skip/hold/fail even when commons is disabled",
+    )
+    fn.set_defaults(func=cmd_funnel)
     rw = sub.add_parser(
         "rewards", help="monthly contributor standing from the public ledger: one row per owner with a confirmed, undisputed, non-duplicate claim"
     )

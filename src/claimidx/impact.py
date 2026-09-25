@@ -315,6 +315,62 @@ def lifecycle_funnel(store: Store, *, days: int = 30) -> dict[str, Any]:
     }
 
 
+# COO/Growth shorthand: confirm ≈ local hold; publish ≈ claim; share ≈ commons push.
+_SCOREBOARD_ALIAS = {
+    "confirm": "hold",
+    "publish": "claim",
+}
+
+
+def render_funnel_scoreboard(life: dict[str, Any], *, commons: dict[str, Any] | None = None, db: str = "") -> str:
+    """Human daily scoreboard from lifecycle_funnel (local events only; no network)."""
+    if life.get("error"):
+        return f"# funnel error: {life['error']}"
+    days = life.get("days", 30)
+    order = life.get("order") or list(_LIFECYCLE_ORDER)
+    stages = life.get("stages") or {}
+    lines = [
+        f"# funnel {days}d — local home event log only (not on commons / public ledger)",
+    ]
+    if db:
+        lines.append(f"# db {db}")
+    lines.append(f"countable DIDs (excl. seed/anon): {life.get('countable_actors', 0)}")
+    lines.append("stages (actors / events):")
+    for s in order:
+        st = stages.get(s) or {}
+        alias = _SCOREBOARD_ALIAS.get(s)
+        label = f"{s} (≈{alias})" if alias else s
+        lines.append(f"  {label:<18} actors={st.get('actors', 0):<5} events={st.get('events', 0)}")
+    drop = life.get("dropoff") or {}
+    if drop:
+        lines.append("drop-off (actors whose max stage is this one):")
+        for s in order[:-1]:
+            nxt = order[order.index(s) + 1]
+            key = f"{s}_no_{nxt}"
+            lines.append(f"  {key:<24} {drop.get(key, 0)}")
+    # COO path shorthand line: install→init→ask→hold→claim using aliases where present
+    path_bits = []
+    for s in ("install", "init", "ask", "confirm", "publish"):
+        if s not in order:
+            continue
+        name = _SCOREBOARD_ALIAS.get(s, s)
+        n = (stages.get(s) or {}).get("actors", 0)
+        path_bits.append(f"{name} {n}")
+    if path_bits:
+        lines.append("COO path actors: " + " → ".join(path_bits))
+    if commons and not commons.get("error"):
+        pushes = commons.get("pushes") or {}
+        push_n = pushes.get("count", 0) if isinstance(pushes, dict) else 0
+        first = commons.get("first_share_actors") or {}
+        first_n = first.get("count", 0) if isinstance(first, dict) else 0
+        lines.append(
+            f"commons funnel (same local log): push {push_n} refuse {commons.get('refused', 0)} "
+            f"skip {commons.get('skipped', 0)} hold {commons.get('holds', 0)} fail {commons.get('fails', 0)} "
+            f"first-share {first_n}"
+        )
+    return "\n".join(lines)
+
+
 def impact(store: Store, *, days: int = 7, own: str = "", offline: bool = False, url: str | None = None) -> dict[str, Any]:
     out: dict[str, Any] = {"own": own, **local_impact(store, days=days, own=own)}
     from .home import commons_enabled
