@@ -582,6 +582,15 @@ def test_mcp_confirm_schema_surfaces_digest_drift_trust_ux():
     assert "digest_drift" in spec["description"]
 
 
+def test_mcp_confirm_schema_surfaces_proof_artifact_drift_mutation_canary():
+    """Path B agents need integrity=proof-artifact-drift named on confirm (mutation canary)."""
+    spec = next(t for t in TOOLS if t["name"] == "claimidx_confirm")
+    assert "proof-artifact-drift" in spec["description"]
+    assert "mutation canary" in spec["description"]
+    out = spec["outputSchema"]["properties"]
+    assert "lights" in out and "reason" in out
+
+
 def test_mcp_fail_schema_includes_note():
     """CLI fail --note. MCP claimidx_fail must advertise note so the contradiction can record why."""
     spec = next(t for t in TOOLS if t["name"] == "claimidx_fail")

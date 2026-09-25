@@ -492,6 +492,7 @@ TOOLS: list[dict[str, Any]] = [
             "Evals from claims not published on this machine only run when they fit the portable proof grammar; otherwise "
             "recorded=false with reason eval-untrusted and suggest, and trust_eval=true runs them deliberately. "
             "On replay, returns the same three lights as CLI confirm (prior_art/integrity/recovery): integrity becomes "
+            "proof-artifact-drift when a tree-scoped recipe's bound files change under cwd (mutation canary; refuses nr), or "
             "digest_drift when a published observed_digest no longer matches local bytes under the same pin (warn by default; "
             "strict_digest=true refuses nr). Returns id, st, held, nc, nf, own when recorded; replay adds replay, lights, and "
             "optional warn, or recorded=false with reason and suggest."
