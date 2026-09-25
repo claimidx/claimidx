@@ -418,8 +418,7 @@ def cmd_publish(ns: argparse.Namespace) -> int:
         print(json.dumps(payload, default=str))
     else:
         print(_dumps(claim, ns.fmt))
-        if shared:
-            print(f"# share {shared.get('status')} {shared.get('id')}", file=sys.stderr)
+        print(_destination_line(shared or {}, claim.id), file=sys.stderr)
     return 0
 
 
@@ -681,7 +680,12 @@ def _destination_line(share: dict, claim_id: str) -> str:
     if status == "pushed" and "private home" not in parts:
         parts.append("private home")
     if cstatus == "outbox":
-        queued = "queued for the commons (unreachable now): the next claim or session start sends it (`claimidx sync` sends it now); approved for publication, not private"
+        path = share.get("path") or commons.get("path") or ""
+        where = f" at {path}" if path else ""
+        queued = (
+            f"queued for the commons{where} (unreachable now): the next claim or session start sends it "
+            "(`claimidx sync` sends it now); approved for publication, not private"
+        )
         return ("# shared: " + ", ".join(parts) + "; " if parts else "# ") + queued
     if parts:
         return "# shared: " + ", ".join(parts)
@@ -1552,7 +1556,7 @@ def _glue_dashed_opt(argv: list[str], opt: str) -> list[str]:
 
 def _claim_write_args(p: argparse.ArgumentParser) -> None:
     """The fields of a claim written by hand: `publish` and `ingest` take the same ones."""
-    p.add_argument("--local", action="store_true", help="keep this claim on this machine: no home, no commons")
+    p.add_argument("--local", action="store_true", help="keep this claim on this machine until claimidx share <id>: sync and bulk share skip it")
     p.add_argument("--err", required=True)
     p.add_argument("--fix-k", required=True, choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"])
     p.add_argument("--fix-b", required=True)
@@ -1627,7 +1631,7 @@ def build_parser() -> argparse.ArgumentParser:
     cl.add_argument("--no-diff", action="store_true", help="never read git diff for fix.b")
     cl.add_argument("--no-replay", action="store_true", help="publish without replaying the eval")
     cl.add_argument("--no-clean-room", action="store_true", help="skip the fresh-clone proof of fix.b; nr then comes from the working tree only")
-    cl.add_argument("--local", action="store_true", help="keep this claim on this machine: no home, no commons")
+    cl.add_argument("--local", action="store_true", help="keep this claim on this machine until claimidx share <id>: sync and bulk share skip it")
     cl.set_defaults(func=cmd_claim)
     rn = sub.add_parser("run", help="run a command through the sensor: failure → ask + remember; the fix → `claim --yes` nudge; exit status is the command's")
     rn.add_argument("--cwd")
@@ -1642,7 +1646,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--yes", "-y", action="store_true", help="execute the plan")
     ap.add_argument("--trust-eval", action="store_true", help="also run a non-portable eval from a claim not published here")
     ap.set_defaults(func=cmd_apply)
-    pub = sub.add_parser("publish", help="write a claim from every field you hold; shares it like claim --yes (--local keeps it here)")
+    pub = sub.add_parser("publish", help="write a claim from every field you hold; shares it like claim --yes (--local keeps it here until share <id>)")
     _claim_write_args(pub)
     pub.set_defaults(func=cmd_publish)
     c = sub.add_parser("confirm", help="record that a claim's fix held here; --replay runs its eval first")

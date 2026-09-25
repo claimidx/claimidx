@@ -259,6 +259,163 @@ def test_success_output_names_the_destination(tmp_path: Path, commons, capsys, m
     assert "queued" in err and "claimidx sync" in err and "not private" in err
 
 
+def test_publish_local_is_durable_across_sync(tmp_path: Path, commons, capsys, monkeypatch):
+    """Path B CLI (publish/ingest --local): sync must not auto-publish; share <id> is the decision."""
+    from claimidx.hook import unshared_claims
+
+    db = str(tmp_path / "ix.sqlite")
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "json",
+                "publish",
+                "--local",
+                "--err",
+                "ModuleNotFoundError: No module named 'localpriv'",
+                "--eco",
+                "py",
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "document local privacy",
+                "--eval",
+                'python -c "import json"',
+            ]
+        )
+        == 0
+    )
+    out = json.loads(capsys.readouterr().out)
+    cid = out["id"]
+    assert out["share"]["status"] == "local"
+    assert not commons
+    monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
+    store = Store(db)
+    assert home.keep_local(store, cid)
+    assert unshared_claims(store) == []
+    assert main(["--db", db, "--fmt", "json", "sync", "--no-pull"]) == 0
+    assert not commons
+    assert main(["--db", db, "--fmt", "json", "share"]) == 0
+    assert not commons
+    assert main(["--db", db, "--fmt", "json", "share", cid]) == 0
+    assert [u for u, _ in commons] == [home.COMMONS_API + "/api/publish"]
+    assert not home.keep_local(store, cid)
+
+
+def test_publish_success_output_names_the_destination(tmp_path: Path, commons, capsys, monkeypatch):
+    """Human publish/ingest success must name destination the same way claim --yes does (B2 Path B)."""
+    db = str(tmp_path / "ix.sqlite")
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'destpub'",
+                "--eco",
+                "py",
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "ok",
+                "--eval",
+                'python -c "import json"',
+            ]
+        )
+        == 0
+    )
+    err = capsys.readouterr().err
+    assert "shared: commons" in err
+
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "publish",
+                "--local",
+                "--err",
+                "ModuleNotFoundError: No module named 'destlocal'",
+                "--eco",
+                "py",
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "ok",
+                "--eval",
+                'python -c "import json"',
+            ]
+        )
+        == 0
+    )
+    err = capsys.readouterr().err
+    assert "kept on this machine" in err and "claimidx share cix_" in err
+
+    def down(url, payload, token="", timeout=20.0):
+        raise home.HomeError("connection refused")
+
+    monkeypatch.setattr(home, "_post", down)
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "publish",
+                "--err",
+                "ModuleNotFoundError: No module named 'destqueue'",
+                "--eco",
+                "py",
+                "--fix-k",
+                "constraint",
+                "--fix-b",
+                "ok",
+                "--eval",
+                'python -c "import json"',
+            ]
+        )
+        == 0
+    )
+    err = capsys.readouterr().err
+    assert "queued" in err and "claimidx sync" in err and "not private" in err
+    assert "outbox" in err.lower() or str(tmp_path) in err or ".jsonl" in err
+
+
+def test_mcp_local_is_durable_across_sync(tmp_path: Path, commons, monkeypatch):
+    """Path B MCP local=true must survive sync the same way CLI --local does."""
+    from claimidx.hook import unshared_claims
+    from claimidx.mcp_server import _call
+
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:path-b-local")
+    store = Store(tmp_path / "ix.sqlite")
+    pub = _call(
+        "claimidx_ingest",
+        {
+            "err": "ModuleNotFoundError: No module named 'mcplocal'",
+            "eco": "py",
+            "fix_k": "constraint",
+            "fix_b": "ok",
+            "eval": 'python -c "import json"',
+            "local": True,
+        },
+        store,
+    )
+    cid = pub["id"]
+    assert pub["share"]["status"] == "local"
+    assert not commons
+    assert home.keep_local(store, cid)
+    assert unshared_claims(store) == []
+    sync = _call("claimidx_sync", {"no_pull": True}, store)
+    assert not commons
+    assert sync.get("share", {}).get("n", 0) == 0
+    shared = _call("claimidx_share", {"id": cid}, store)
+    assert shared.get("status") in {"commons", "pushed"} or (shared.get("commons") or {}).get("status") == "commons"
+    assert [u for u, _ in commons] == [home.COMMONS_API + "/api/publish"]
+    assert not home.keep_local(store, cid)
+
+
 def test_a_projection_without_a_replayable_eval_stays_local_without_queueing(tmp_path: Path, monkeypatch):
     """A tree-specific recipe projects to an empty eval; the commons would refuse it, so it is skipped, not queued forever."""
     from claimidx.hook import unshared_claims
