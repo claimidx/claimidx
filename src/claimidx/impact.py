@@ -331,29 +331,57 @@ def commons_owner_proxy(
 # Live py@3.13 first-hold on the commons (audioop-lts). Do not default spr_a11c… (py@3.12).
 FIRST_HOLD_ID = "cix_bdc82291f2fbb06a"
 FIRST_HOLD_RT = "py@3.13"
-_SHARE_KINDS = frozenset({"commons-push", "share-explicit", "home-push", "publish"})
+# Real outward share only — local `publish` is claim-without-share (publish_no_share).
+_SHARE_KINDS = frozenset({"commons-push", "share-explicit", "home-push"})
+_HOLD_KINDS = frozenset({"confirm", "confirm-replay", "commons-hold"})
+_PUBLISH_KINDS = frozenset({"publish"})
 
 
 def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
-    """Path B conversion status for ask / home-ask envelopes.
+    """Path B conversion status for ask / home-ask / post-hold / claim envelopes.
 
-    Ask may auto-mint a local DID; that is not a countable commons DID until
-    first hold + claim/share. When not countable, next pushes the live
-    py@3.13 first-hold path so agents cannot treat ask-only as adoption.
+    Ask may auto-mint a local DID; that is not a countable commons DID until a
+    live share (commons-push / share-explicit / home-push). Local publish alone
+    is publish_no_share — keep `next` pointed at `claimidx share`. When not
+    countable, `next` is staged: first-hold → claim --yes → share.
     """
     did = (actor or "").strip()
     minted = bool(did) and did.startswith("did:") and did not in _FUNNEL_EXCLUDED
+    held = False
+    published = False
     shared = False
     if minted and store is not None:
         for ev in store.events(limit=500, actor=did):
-            if (ev.get("kind") or "") in _SHARE_KINDS:
+            kind = ev.get("kind") or ""
+            if kind in _SHARE_KINDS:
                 shared = True
+            elif kind in _HOLD_KINDS:
+                held = True
+            elif kind in _PUBLISH_KINDS:
+                published = True
+            if shared and held and published:
                 break
     countable = bool(minted and shared)
-    out: dict[str, Any] = {"countable": countable, "minted": minted, "did": did if minted else ""}
+    out: dict[str, Any] = {
+        "countable": countable,
+        "minted": minted,
+        "did": did if minted else "",
+        "held": bool(minted and held),
+        "published": bool(minted and published),
+        "shared": bool(minted and shared),
+    }
     if not countable:
-        out["why"] = "ask alone does not create a countable commons DID"
-        out["next"] = f"claimidx init --agent <you> && claimidx apply {FIRST_HOLD_ID} --cwd . --yes && claimidx claim --yes"
+        share_step = "claimidx share"
+        claim_step = f"claimidx claim --yes && {share_step}"
+        if published and not shared:
+            out["why"] = "publish_no_share: local claim is not a countable commons DID until share"
+            out["next"] = share_step
+        elif held and not published:
+            out["why"] = "hold alone is not a countable commons DID — claim --yes then share"
+            out["next"] = claim_step
+        else:
+            out["why"] = "ask alone does not create a countable commons DID"
+            out["next"] = f"claimidx init --agent <you> && claimidx apply {FIRST_HOLD_ID} --cwd . --yes && {claim_step}"
         out["first_hold"] = {"id": FIRST_HOLD_ID, "rt": FIRST_HOLD_RT}
     return out
 

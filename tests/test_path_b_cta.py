@@ -17,13 +17,34 @@ def test_path_b_cta_uncountable_until_share(tmp_path: Path):
     cta = path_b_cta(store, did)
     assert cta["minted"] is True
     assert cta["countable"] is False
+    assert cta["shared"] is False
     assert cta["first_hold"] == {"id": FIRST_HOLD_ID, "rt": FIRST_HOLD_RT}
     assert FIRST_HOLD_ID in cta["next"]
     assert "claim --yes" in cta["next"]
+    assert "share" in cta["next"]
+    # Local publish alone is publish_no_share — still not countable.
+    store.log("publish", did, "cix_localonly", {})
+    cta_pub = path_b_cta(store, did)
+    assert cta_pub["countable"] is False
+    assert cta_pub["published"] is True
+    assert cta_pub["next"] == "claimidx share"
+    assert "publish_no_share" in cta_pub["why"]
     store.log("commons-push", did, "cix_deadbeef", {"exists": False})
     cta2 = path_b_cta(store, did)
     assert cta2["countable"] is True
+    assert cta2["shared"] is True
     assert "next" not in cta2
+
+
+def test_path_b_cta_staged_after_hold(tmp_path: Path):
+    store = Store(tmp_path / "ix.sqlite")
+    did = "did:claimidx:agent-cta02"
+    store.log("confirm-replay", did, FIRST_HOLD_ID, {"held": True})
+    cta = path_b_cta(store, did)
+    assert cta["held"] is True
+    assert cta["countable"] is False
+    assert cta["next"] == "claimidx claim --yes && claimidx share"
+    assert "hold alone" in cta["why"]
 
 
 def test_ask_envelope_includes_path_b(tmp_path: Path, monkeypatch):
