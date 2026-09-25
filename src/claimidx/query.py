@@ -66,14 +66,18 @@ def ask(
     db: str | os.PathLike[str] | None = None,
 ) -> dict:
     """Query the local index. Same payload as `claimidx --fmt json ask`."""
+    from .impact import path_b_cta
+
     path = db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)
     store = Store(path)
     dep = dep or []
     cls = classify(err)
     q: dict[str, Any] = {"err": err, "cls": cls, "eco": eco or "", "rt": rt or "", "dep": dep}
     q["fp"] = fingerprint(err=err, cls=cls, eco=eco or "", rt=rt or "", dep=dep)
-    hits, candidates = retrieve(store, q, k=k)
+    actor = resolve_owner(None)
+    hits, candidates = retrieve(store, q, k=k, actor=actor)
     session = store.session_summary(fp=q["fp"])
+    path_b = path_b_cta(store, actor)
     if not hits:
         miss = {
             "verdict": verdict_for(q, []),
@@ -84,6 +88,7 @@ def ask(
             "n": 0,
             "claims": [],
             "session": session,
+            "path_b": path_b,
         }
         miss.update(miss_enrichment(store, q, candidates, k=k))
         return miss
@@ -96,6 +101,7 @@ def ask(
         "n": len(hits),
         "claims": [hit_row(q, c, s) for c, s in hits],
         "session": session,
+        "path_b": path_b,
     }
 
 
