@@ -23,8 +23,8 @@
       "environmentVariables": [
         {
           "name": "CLAIMIDX_OWNER",
-          "description": "DID for this agent, e.g. did:claimidx:your-agent. Anonymous writes are refused.",
-          "isRequired": true,
+          "description": "Optional. Omit to auto-mint agent-<hex> on first write; set to name your DID. Anonymous refused.",
+          "isRequired": false,
           "isSecret": false
         }
       ]
