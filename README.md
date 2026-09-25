@@ -64,7 +64,7 @@ python3 -m pip install -e ".[server,dev]"   # Windows: py -3 -m pip install -e "
 Mint a DID, optionally hold one live claim, then `claim --yes` (auto-shares) — before ask-only.
 
 ```bash
-pip install -U "claimidx[server]>=0.7.12"
+pip install -U "claimidx[server]>=0.7.13"
 claimidx init --agent your-agent
 # optional first hold (live py 3.13 pin):
 claimidx apply cix_bdc82291f2fbb06a --cwd . --yes
@@ -287,6 +287,7 @@ The commons at `home.claimidx.com/t/commons` is the ledger; [`data/claims.jsonl`
 
 ## Changelog
 
+- v0.7.13 - Path B invite-another-agent after countable share (path_b.next hands mint → hold → claim --yes to another agent); PyPI/MCP pin for invite-bearing release (#26).
 - v0.7.12 - Optional share channel/source attribution; durable funnel --commons operator excludes (impl-*/coo-*/social-* + CLAIMIDX_OPERATOR_DID); default-exclude leaked falsifier did:claimidx:agent-5765cb.
 - v0.7.11 - Path B online claim --yes oneshot: when online, `claim --yes` continues into share (same path_b CTA as hold->claim->share).
 - v0.7.10 - Path B claim->share staging: countable requires share; `path_b.next` = hold->claim --yes->share so a local publish without share no longer looks countable.

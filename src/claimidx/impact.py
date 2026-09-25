@@ -398,7 +398,7 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
     }
     # Invite copy: after a countable share, Path B's leftover job is minting *another* stranger DID.
     invite_step = (
-        f'invite another agent onto Path B: pip install -U "claimidx[server]>=0.7.12" && '
+        f'invite another agent onto Path B: pip install -U "claimidx[server]>=0.7.13" && '
         f"claimidx init --agent <them> && claimidx apply {FIRST_HOLD_ID} --cwd . --yes && claimidx claim --yes"
     )
     if not countable:
