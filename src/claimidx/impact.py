@@ -381,9 +381,7 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
             out["next"] = claim_step
         else:
             out["why"] = "ask alone does not create a countable commons DID"
-            out["next"] = (
-                f"claimidx init --agent <you> && claimidx apply {FIRST_HOLD_ID} --cwd . --yes && {claim_step}"
-            )
+            out["next"] = f"claimidx init --agent <you> && claimidx apply {FIRST_HOLD_ID} --cwd . --yes && {claim_step}"
         out["first_hold"] = {"id": FIRST_HOLD_ID, "rt": FIRST_HOLD_RT}
     return out
 

@@ -692,7 +692,6 @@ def cmd_claim(ns: argparse.Namespace) -> int:
     return 0 if out.get("ok") else 2
 
 
-
 def _destination_line(share: dict, claim_id: str) -> str:
     """Where the claim went, in one line. A network failure must not read as private."""
     status = share.get("status")
@@ -718,10 +717,7 @@ def _destination_line(share: dict, claim_id: str) -> str:
     if parts:
         return "# shared: " + ", ".join(parts)
     if not share:
-        return (
-            f"# publish_no_share: sharing is off (CLAIMIDX_SHARE=0 or the commons disabled); "
-            f"`claimidx share {claim_id}` publishes it"
-        )
+        return f"# publish_no_share: sharing is off (CLAIMIDX_SHARE=0 or the commons disabled); `claimidx share {claim_id}` publishes it"
     if status in {"skipped", "error"} or (share.get("commons") or {}).get("status") in {"skipped", "error", "refused"}:
         reason = share.get("reason") or share.get("hint") or (share.get("commons") or {}).get("reason") or status or "unknown"
         return f"# publish_no_share: {reason}; `claimidx share {claim_id}` publishes it"
@@ -831,7 +827,6 @@ def cmd_apply(ns: argparse.Namespace) -> int:
     if not out["applied"]:
         return 2 if ns.yes else 0
     return 0 if (out.get("replay") or {}).get("recorded") else 2
-
 
 
 def shlex_join(argv: list[str]) -> str:
