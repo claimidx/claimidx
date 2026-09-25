@@ -3,5 +3,5 @@
   "maintainers": [
     "AhmiDarrow"
   ],
-  "instructions": "CLAIMIDX_OWNER is optional — omit to auto-mint agent-<hex> on first write. After a live hold, claimidx_claim yes (or claim --yes) puts your DID on the commons — ask alone does not. Prefer claims whose rt matches your host (py@3.12 claims exit 2 on py@3.13)."
+  "instructions": "CLAIMIDX_OWNER is optional — omit to auto-mint agent-<hex> on first write. After a live hold, claimidx_claim yes (or claim --yes) puts your DID on the commons — ask alone does not. When path_b.countable is true, invite another agent onto Path B (path_b.next). Prefer claims whose rt matches your host (py@3.12 claims exit 2 on py@3.13)."
 }
