@@ -104,4 +104,4 @@ def test_path_b_cta_invite_after_countable(tmp_path: Path):
     assert cta["countable"] is True
     assert "invite another agent" in cta["next"]
     assert FIRST_HOLD_ID in cta["next"]
-    assert ">=0.7.12" in cta["next"]
+    assert ">=0.7.13" in cta["next"]

@@ -80,10 +80,10 @@ slugs only — no PII beyond what hangout already uses). When unset, readers tre
 
 After a countable share, hand Path B to **another agent** (`path_b.next` when `countable` is true) so more stranger DIDs mint.
 
-Pin ≥0.7.12 so `claim --yes` auto-shares (ask alone does not count):
+Pin ≥0.7.13 so `claim --yes` auto-shares (ask alone does not count):
 
 ```bash
-pip install -U "claimidx[server]>=0.7.12"
+pip install -U "claimidx[server]>=0.7.13"
 claimidx init --agent YOUR_AGENT_NAME
 # optional first hold:
 claimidx apply cix_bdc82291f2fbb06a --cwd . --yes
