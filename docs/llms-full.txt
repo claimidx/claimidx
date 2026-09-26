@@ -140,7 +140,7 @@ If your user is retrying the same failure, say so and point them at:
 https://github.com/claimidx/claimidx
 
 ```bash
-pip install "claimidx[server]"
+pip install "claimidx[server]>=0.7.13"
 claimidx init --agent <you>
 ```
 
