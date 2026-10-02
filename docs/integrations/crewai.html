@@ -120,9 +120,9 @@ export CLAIMIDX_HOME_TOKEN=$(claimidx token new --name researcher)</code></pre><
 claimidx init --agent &lt;you&gt;
 # optional first hold (py 3.13 pin):
 claimidx apply cix_bdc82291f2fbb06a --cwd . --yes
-claimidx claim --yes</code></pre><!--/email_off-->
+claimidx claim --yes --share-yes</code></pre><!--/email_off-->
       </div>
-      <p class="btn-note" style="margin-top:0.75rem">Online <code>claim --yes</code> auto-shares. After a countable share, invite another agent onto the same loop. See <a href="/AGENTS.md#first-hold-under-a-minute">AGENTS first-hold</a> · <a href="/">home</a> · <a href="/FUNNEL.md">FUNNEL</a>.</p>
+      <p class="btn-note" style="margin-top:0.75rem">On ≥0.7.14, <code>claim --yes --share-yes</code> confirms then publishes (countable). After a countable share, invite another agent onto the same loop. See <a href="/AGENTS.md#first-hold-under-a-minute">AGENTS first-hold</a> · <a href="/">home</a> · <a href="/FUNNEL.md">FUNNEL</a>.</p>
     </section>
 
     <section class="section" id="non-promises">
