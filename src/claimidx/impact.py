@@ -367,9 +367,9 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
 
     Ask may auto-mint a local DID; that is not a countable commons DID until a
     live share (commons-push / share-explicit / home-push). Local publish alone
-    is publish_no_share — keep `next` pointed at `claimidx share`. When not
-    countable, `next` is staged: first-hold → claim --yes (one-shot: online
-    --yes continues into share; `claimidx share` is the offline/local safety net).
+    is publish_no_share — keep `next` pointed at `claimidx share --yes`. When not
+    countable, `next` is staged: first-hold → claim --yes --share-yes (explicit
+    commons confirm after review; `claimidx share --yes` is the recovery path).
     """
     did = (actor or "").strip()
     minted = bool(did) and did.startswith("did:") and did not in _FUNNEL_EXCLUDED
@@ -398,18 +398,18 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
     }
     # Invite copy: after a countable share, Path B's leftover job is minting *another* stranger DID.
     invite_step = (
-        f'invite another agent onto Path B: pip install -U "claimidx[server]>=0.7.13" && '
-        f"claimidx init --agent <them> && claimidx apply {FIRST_HOLD_ID} --cwd . --yes && claimidx claim --yes"
+        f'invite another agent onto Path B: pip install -U "claimidx[server]>=0.7.14" && '
+        f"claimidx init --agent <them> && claimidx apply {FIRST_HOLD_ID} --cwd . --yes && claimidx claim --yes --share-yes"
     )
     if not countable:
-        share_step = "claimidx share"
-        # Path B one-shot: online claim --yes continues into share (no separate skippable step).
-        claim_step = "claimidx claim --yes"
+        share_step = "claimidx share --yes"
+        # Local claim, then explicit commons confirm (--share-yes) for countable path.
+        claim_step = "claimidx claim --yes --share-yes"
         if published and not shared:
-            out["why"] = "publish_no_share: local claim is not a countable commons DID until share"
+            out["why"] = "publish_no_share: local claim is not a countable commons DID until share --yes"
             out["next"] = share_step
         elif held and not published:
-            out["why"] = "hold alone is not a countable commons DID — claim --yes (shares when online)"
+            out["why"] = "hold alone is not a countable commons DID — claim --yes --share-yes (confirm then commons)"
             out["next"] = claim_step
         else:
             out["why"] = "ask alone does not create a countable commons DID"

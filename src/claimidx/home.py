@@ -334,11 +334,58 @@ def keep_local(store, claim_id: str) -> bool:
 
 
 def mark_local(store, claim_id: str, actor: str) -> None:
-    store.log("keep-local", actor, claim_id, {"hint": f"claimidx share {claim_id} publishes it"})
+    store.log("keep-local", actor, claim_id, {"hint": f"claimidx share {claim_id} --yes publishes it"})
 
 
 def local_status(claim_id: str) -> dict[str, Any]:
-    return {"status": "local", "id": claim_id, "hint": f"kept on this machine; `claimidx share {claim_id}` publishes it"}
+    return {"status": "local", "id": claim_id, "hint": f"kept on this machine; `claimidx share {claim_id} --yes` publishes it"}
+
+
+def commons_review(claim: Claim) -> dict[str, Any]:
+    """Short review of what a commons share would publish (for confirm-before-share UX)."""
+    err = (claim.err or "").strip().replace("\n", " ")
+    if len(err) > 160:
+        err = err[:157] + "..."
+    deps = list(claim.dep or [])[:8]
+    return {
+        "id": claim.id,
+        "err": err,
+        "eco": claim.eco or "",
+        "rt": claim.rt or "",
+        "dep": deps,
+        "fix_k": claim.fix.k if claim.fix else "",
+        "fix_b": ((claim.fix.b or "")[:120] if claim.fix else ""),
+        "destination": "commons",
+        "own": claim.own or "",
+    }
+
+
+def format_commons_review(claim: Claim) -> str:
+    """One stderr block: what will leave the machine if the agent confirms commons share."""
+    r = commons_review(claim)
+    deps = ", ".join(r["dep"]) if r["dep"] else "(none)"
+    return (
+        f"# commons review — destination=commons\n"
+        f"#   id={r['id']} eco={r['eco'] or '-'} rt={r['rt'] or '-'}\n"
+        f"#   err={r['err'] or '-'}\n"
+        f"#   dep={deps}\n"
+        f"#   fix={r['fix_k'] or '-'}: {r['fix_b'] or '-'}\n"
+        f"# confirm with --share-yes / share --yes (agents) or interactive y; decline keeps local/private (not countable)"
+    )
+
+
+def needs_commons_confirm(claim_id: str, review: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Decline / no-confirm result: claim stays local/private; not countable on the commons."""
+    out: dict[str, Any] = {
+        "status": "needs_confirm",
+        "id": claim_id,
+        "hint": (
+            f"commons share needs explicit yes (`claimidx share {claim_id} --yes` or `--share-yes`); decline keeps this claim local/private (not countable)"
+        ),
+    }
+    if review is not None:
+        out["review"] = review
+    return out
 
 
 def commons_settled(store, claim_id: str) -> bool:
@@ -557,13 +604,16 @@ def share_claim(
     token: str | None = None,
     force: bool = False,
     explicit: bool = False,
+    commons_yes: bool = False,
     timeout: float = 20.0,
     channel: str | None = None,
     source: str | None = None,
 ) -> dict[str, Any]:
     """Push a local claim: the full record to a private home when one is configured, and the public
-    projection to the commons unless it is switched off. With neither, the projection is queued.
+    projection to the commons only after an explicit commons confirm (`commons_yes`).
 
+    Private-home share may still run without commons confirm (configured private destination).
+    Commons always needs yes: decline / no confirm keeps the claim local/private and not countable.
     A claim recorded with --local is skipped unless `explicit` (the agent named it): that is the
     separate publication decision, and it clears the keep-local mark.
     Optional channel/source stamp hangout attribution onto share events (and outbox metadata).
@@ -589,9 +639,19 @@ def share_claim(
             store.log("home-push", claim.own, claim.id, merge_attribution(None, attrib))
             out.update({"status": "pushed", "home": result})
     if commons_enabled():
+        review = commons_review(claim)
+        if not commons_yes:
+            # Default: local/private. Countable commons path only after explicit yes.
+            skipped = needs_commons_confirm(claim.id, review)
+            out["commons"] = skipped
+            out["review"] = review
+            if out["status"] == "already":
+                out["status"] = "needs_confirm"
+                out["hint"] = skipped["hint"]
+            return out
         commons = push_commons(store, claim, force=force, timeout=timeout, channel=channel, source=source)
         out["commons"] = commons
-        if commons.get("status") in {"commons", "outbox"} and out["status"] == "already":
+        if commons.get("status") in {"commons", "outbox"} and out["status"] in {"already", "needs_confirm"}:
             out["status"] = commons["status"]
         if commons.get("status") == "outbox":
             out["path"] = commons.get("path")
@@ -640,10 +700,14 @@ def share_pending(
     api: str | None = None,
     token: str | None = None,
     force: bool = False,
+    commons_yes: bool = False,
     channel: str | None = None,
     source: str | None = None,
 ) -> dict[str, Any]:
-    """Share every local (non-seed, non-home) claim that has not been submitted yet."""
+    """Share every local (non-seed, non-home) claim that has not been submitted yet.
+
+    Commons rows require `commons_yes` (same confirm gate as share_claim). Private home may still update.
+    """
     results: list[dict[str, Any]] = []
     skipped = 0
     flushed = flush_outbox(store)
@@ -658,12 +722,13 @@ def share_pending(
             skipped += 1
             continue
         done_private = already_shared(store, c.id) or not (api if api is not None else api_url())
-        done_commons = commons_settled(store, c.id) or not commons_enabled()
+        # Without commons_yes, bulk share does not owe the commons (confirm gate).
+        done_commons = (not commons_yes) or commons_settled(store, c.id) or not commons_enabled()
         if done_private and done_commons and not force:
             skipped += 1
             continue
         try:
-            r = share_claim(store, c, api=api, token=token, force=force, channel=channel, source=source)
+            r = share_claim(store, c, api=api, token=token, force=force, commons_yes=commons_yes, channel=channel, source=source)
         except HomeError as e:
             results.append({"status": "error", "id": c.id, "error": str(e)[:300]})  # one refusal never stops the run
             continue
@@ -678,13 +743,14 @@ def maybe_share(
     store,
     claim: Claim,
     *,
+    commons_yes: bool = False,
     channel: str | None = None,
     source: str | None = None,
 ) -> dict[str, Any] | None:
-    """Auto-submit after ingest/confirm: the private home when one is configured, the commons unless it is off.
+    """Auto-submit after ingest/confirm: private home when configured; commons only with commons_yes.
 
-    Anything queued from an earlier outage goes first, so a new publish drains the outbox
-    without anyone asking for a sync.
+    Default keeps the claim local/private (not countable). Explicit `--share-yes` / share --yes /
+    MCP share_yes=true is the countable commons path. Outbox from a prior confirmed share still drains.
     Channel/source come from CLI/MCP args or CLAIMIDX_CHANNEL / CLAIMIDX_SOURCE for hangout attribution.
     """
     if not share_enabled():
@@ -695,9 +761,14 @@ def maybe_share(
         return {**local_status(claim.id), **resolve_attribution(channel=channel, source=source)}
     if not api_url() and not commons_enabled():
         return None
-    flushed = flush_outbox(store, timeout=HOOK_REQUEST_SECONDS, stop_on_unreachable=True) if outbox_path().exists() else None
+    # Only drain a prior confirmed commons outbox when this call is itself a commons confirm,
+    # or when a private home is configured (home path may still run). Never silently flush
+    # commons rows on a local-only ingest.
+    flushed = None
+    if outbox_path().exists() and (commons_yes or api_url()):
+        flushed = flush_outbox(store, timeout=HOOK_REQUEST_SECONDS, stop_on_unreachable=True)
     try:
-        out = share_claim(store, claim, channel=channel, source=source)
+        out = share_claim(store, claim, commons_yes=commons_yes, channel=channel, source=source)
     except HomeError as e:
         out = {"status": "error", "id": claim.id, "error": str(e)}
     if flushed and flushed.get("sent"):
@@ -712,13 +783,14 @@ def ensure_online_share(
     store,
     out: dict[str, Any],
     *,
+    commons_yes: bool = False,
     channel: str | None = None,
     source: str | None = None,
 ) -> dict[str, Any]:
-    """Path B one-shot: after claim --yes, continue into share when online and not keep-local.
+    """After claim --yes: private home may auto; commons only when commons_yes (explicit confirm).
 
-    No-op when sharing is off, commons/home unavailable (offline), the claim is keep-local,
-    or share already landed (including outbox). Never raises.
+    `claim --yes` alone stays local/private (not countable). `--share-yes` / MCP share_yes is the
+    countable commons path after a short review. Never raises.
     Channel/source (or CLAIMIDX_CHANNEL / CLAIMIDX_SOURCE) stamp hangout attribution on the share.
     """
     if not isinstance(out, dict) or not out.get("ok") or not out.get("id"):
@@ -737,11 +809,13 @@ def ensure_online_share(
     claim = store.get(out["id"])
     if claim is None or keep_local(store, claim.id):
         return out
-    shared = maybe_share(store, claim, channel=channel, source=source)
+    shared = maybe_share(store, claim, commons_yes=commons_yes, channel=channel, source=source)
     if not shared:
         return out
     updated = dict(out)
     updated["share"] = shared
+    if shared.get("review") and "review" not in updated:
+        updated["review"] = shared["review"]
     return updated
 
 
@@ -767,7 +841,8 @@ def unshared_claims(store, limit: int = 500) -> list[str]:
     for c in rows:
         if getattr(c, "src", "local") != "local" or c.st == "rejected" or not eval_is_proof(c.eval.cmd) or keep_local(store, c.id):
             continue
-        commons_due = want_commons and not commons_settled(store, c.id) and commons_travels(c)[0]
+        # Commons is never auto-due: confirm-before-commons-share. Hooks only clear private-home debt.
+        commons_due = False
         if (want_private and not already_shared(store, c.id)) or commons_due:
             out.append(c.id)
             if len(out) >= limit:
@@ -798,7 +873,7 @@ def auto_share(store, *, budget: float = HOOK_BUDGET_SECONDS, timeout: float = H
             if claim is None:
                 continue
             try:
-                r = share_claim(store, claim, timeout=timeout)
+                r = share_claim(store, claim, timeout=timeout, commons_yes=False)
             except HomeError:
                 out["unreachable"] = True
                 break
@@ -810,7 +885,15 @@ def auto_share(store, *, budget: float = HOOK_BUDGET_SECONDS, timeout: float = H
             if status == "outbox" or commons.get("status") == "outbox" or home_res.get("status") == "error":
                 out["unreachable"] = True
                 break
-    out["queued"] = len(unshared_claims(store))
+    # Private-home debt + any still-queued confirmed commons projections.
+    queued = len(unshared_claims(store))
+    path = outbox_path()
+    if path.exists():
+        try:
+            queued += sum(1 for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip())
+        except OSError:
+            queued += 1
+    out["queued"] = queued
     return out
 
 

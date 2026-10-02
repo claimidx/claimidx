@@ -663,9 +663,10 @@ def cmd_claim(ns: argparse.Namespace) -> int:
         print(json.dumps(draft, default=str) if ns.fmt == "json" else render_draft(draft))
         return 0
     local = bool(ns.local)
-    # Path B one-shot: online --yes continues into share by default (--share is the documented CTA alias).
+    # --yes = local claim (+ private home may auto). Commons needs explicit --share-yes / --share.
     # --local / keep-local never forces commons share.
-    want_share = not local
+    want_home = not local
+    want_commons = (not local) and bool(getattr(ns, "share_yes", False) or getattr(ns, "share", False))
     out = publish_draft(
         draft,
         db=_db_path(ns),
@@ -674,10 +675,17 @@ def cmd_claim(ns: argparse.Namespace) -> int:
         clean_room=not ns.no_clean_room,
         local=local,
     )
-    if out.get("ok") and want_share:
+    if out.get("ok") and want_home:
+        store = _store(ns)
+        claim = store.get(out["id"]) if out.get("id") else None
+        if want_commons and claim is not None:
+            from .home import format_commons_review
+
+            print(format_commons_review(claim), file=sys.stderr)
         out = ensure_online_share(
-            _store(ns),
+            store,
             out,
+            commons_yes=want_commons,
             channel=getattr(ns, "channel", None),
             source=getattr(ns, "source", None),
         )
@@ -723,7 +731,13 @@ def _destination_line(share: dict, claim_id: str) -> str:
     """Where the claim went, in one line. A network failure must not read as private."""
     status = share.get("status")
     if status == "local":
-        return f"# kept on this machine (--local): not shared; `claimidx share {claim_id}` publishes it"
+        return f"# kept on this machine (--local): not shared; `claimidx share {claim_id} --yes` publishes it"
+    if status == "needs_confirm" or (share.get("commons") or {}).get("status") == "needs_confirm":
+        return (
+            f"# publish_no_share: commons needs explicit yes "
+            f"(`claimidx claim --yes --share-yes` or `claimidx share {claim_id} --yes`); "
+            "claim stays local/private (not countable)"
+        )
     parts = []
     if share.get("home") and (share.get("home") or {}).get("status") != "error" and status in {"pushed", "commons", "already"}:
         parts.append("private home")
@@ -1194,20 +1208,58 @@ def cmd_home_propose(ns: argparse.Namespace) -> int:
 
 
 def cmd_share(ns: argparse.Namespace) -> int:
-    from .home import HomeError, share_claim, share_pending
+    from .home import HomeError, format_commons_review, share_claim, share_pending
 
     store = _store(ns)
     channel = getattr(ns, "channel", None)
     source = getattr(ns, "source", None)
+    flag_yes = bool(getattr(ns, "yes", False) or getattr(ns, "share_yes", False))
     try:
         if ns.id:
             c = store.get(ns.id)
             if not c:
                 print("missing", file=sys.stderr)
                 return 1
-            result = share_claim(store, c, api=ns.api, token=ns.token, force=ns.force, explicit=True, channel=channel, source=source)
+            print(format_commons_review(c), file=sys.stderr)
+            commons_yes = flag_yes
+            if not commons_yes and sys.stdin.isatty() and sys.stderr.isatty():
+                try:
+                    ans = input("Publish this projection to the commons? [y/N] ").strip().lower()
+                except EOFError:
+                    ans = ""
+                commons_yes = ans in ("y", "yes")
+            if not commons_yes:
+                from .home import commons_review, needs_commons_confirm
+
+                result = needs_commons_confirm(c.id, commons_review(c))
+            else:
+                result = share_claim(
+                    store,
+                    c,
+                    api=ns.api,
+                    token=ns.token,
+                    force=ns.force,
+                    explicit=True,
+                    commons_yes=True,
+                    channel=channel,
+                    source=source,
+                )
         else:
-            result = share_pending(store, api=ns.api, token=ns.token, force=ns.force, channel=channel, source=source)
+            if not flag_yes:
+                print(
+                    "error: bulk commons share needs --yes (agents: noninteractive confirm); omit id and pass --yes to share every unshared local claim",
+                    file=sys.stderr,
+                )
+                return 2
+            result = share_pending(
+                store,
+                api=ns.api,
+                token=ns.token,
+                force=ns.force,
+                commons_yes=True,
+                channel=channel,
+                source=source,
+            )
     except HomeError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -1775,7 +1827,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="emit typed delivered:false when no observation envelope (also CLAIMIDX_HOOK_ABSENCE=1; --fmt json enables it)",
     )
     hk.set_defaults(func=cmd_hook)
-    cl = sub.add_parser("claim", help="draft a claim from the last failure and this tree; --yes publishes, replays, and shares when online")
+    cl = sub.add_parser("claim", help="draft a claim from the last failure and this tree; --yes publishes locally; --share-yes confirms commons")
     cl.add_argument("--err", help="failure text; defaults to the last failure the hook saw")
     cl.add_argument("--fix", help="what you changed, in one line or a diff; defaults to the working-tree diff or the install command")
     cl.add_argument("--fix-k", choices=["pin", "patch", "config", "constraint", "cmd", "wontfix"], help="defaults from the fix text")
@@ -1788,9 +1840,14 @@ def build_parser() -> argparse.ArgumentParser:
     cl.add_argument("--own")
     cl.add_argument("--yes", "-y", action="store_true", help="publish the draft and replay its eval")
     cl.add_argument(
+        "--share-yes",
+        action="store_true",
+        help="explicit confirm: after --yes, show commons review and publish the public projection (countable path); default without this keeps local/private",
+    )
+    cl.add_argument(
         "--share",
         action="store_true",
-        help="path B CTA with --yes: continue into commons share when online (default for --yes; --local skips)",
+        help="alias of --share-yes (explicit commons confirm; --yes alone no longer auto-shares to commons)",
     )
     cl.add_argument("--no-diff", action="store_true", help="never read git diff for fix.b")
     cl.add_argument("--no-replay", action="store_true", help="publish without replaying the eval")
@@ -1973,11 +2030,22 @@ def build_parser() -> argparse.ArgumentParser:
     hprop = sub.add_parser("home-propose", help="print the propose line for one claim")
     hprop.add_argument("id")
     hprop.set_defaults(func=cmd_home_propose)
-    sh = sub.add_parser("share", help="submit local claims to the commons (live home, else outbox)")
-    sh.add_argument("id", nargs="?", help="claim id; omit to share every unshared local claim")
+    sh = sub.add_parser("share", help="submit local claims to the commons after explicit confirm (--yes)")
+    sh.add_argument("id", nargs="?", help="claim id; omit to share every unshared local claim (requires --yes)")
     sh.add_argument("--api")
     sh.add_argument("--token")
     sh.add_argument("--force", action="store_true")
+    sh.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="explicit confirm after commons review (required for noninteractive/agents; TTY prompts without it)",
+    )
+    sh.add_argument(
+        "--share-yes",
+        action="store_true",
+        help="alias of --yes for commons confirm",
+    )
     sh.add_argument(
         "--channel",
         help="optional hangout/channel label for share events (also CLAIMIDX_CHANNEL); Social/Growth attribution",

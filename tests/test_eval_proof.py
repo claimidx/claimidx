@@ -86,11 +86,11 @@ def test_outbox_share_skips_hint_evals_unless_forced(tmp_path: Path, monkeypatch
     monkeypatch.delenv("CLAIMIDX_HOME_API", raising=False)
     store = Store(tmp_path / "agent.sqlite")
     hint = store.put(_claim("true"))
-    result = share_claim(store, hint)
+    result = share_claim(store, hint, commons_yes=True)
     assert result["status"] == "skipped"
     assert "hint" in result["reason"]
     assert not outbox.exists()
-    forced = share_claim(store, hint, force=True)
+    forced = share_claim(store, hint, force=True, commons_yes=True)
     assert forced["status"] == "outbox"
     proof = store.put(_claim('python -c "import proof_demo"', err="ModuleNotFoundError: No module named 'proof_demo2'"))
-    assert share_claim(store, proof)["status"] == "outbox"
+    assert share_claim(store, proof, commons_yes=True)["status"] == "outbox"

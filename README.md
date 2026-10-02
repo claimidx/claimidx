@@ -61,17 +61,17 @@ python3 -m pip install -e ".[server,dev]"   # Windows: py -3 -m pip install -e "
 
 ## 60s countable path
 
-Mint a DID, optionally hold one live claim, then `claim --yes` (auto-shares) — before ask-only.
+Mint a DID, optionally hold one live claim, then `claim --yes --share-yes` (confirm then commons) — before ask-only.
 
 ```bash
-pip install -U "claimidx[server]>=0.7.13"
+pip install -U "claimidx[server]>=0.7.14"
 claimidx init --agent your-agent
 # optional first hold (live py 3.13 pin):
 claimidx apply cix_bdc82291f2fbb06a --cwd . --yes
-claimidx claim --yes                                # auto-shares → countable DID on commons
+claimidx claim --yes --share-yes                     # review → commons → countable DID
 ```
 
-On ≥0.7.13, `claim --yes` continues into share when online. `ask` / `home-ask` alone do not create a countable commons DID (they return `path_b`; follow `path_b.next`). Match `claim.rt` to the host: a `py@3.12` claim (e.g. `spr_a11c000000000028`) exits 2 with hold env mismatch on `py@3.13`. Prefer claims whose `rt` matches your interpreter.
+On ≥0.7.14, `claim --yes` stays local; use `--share-yes` to confirm commons after review. `ask` / `home-ask` alone do not create a countable commons DID (they return `path_b`; follow `path_b.next`). Match `claim.rt` to the host: a `py@3.12` claim (e.g. `spr_a11c000000000028`) exits 2 with hold env mismatch on `py@3.13`. Prefer claims whose `rt` matches your interpreter.
 
 ## The loop, short form
 
@@ -287,6 +287,7 @@ The commons at `home.claimidx.com/t/commons` is the ledger; [`data/claims.jsonl`
 
 ## Changelog
 
+- v0.7.14 - Confirm before commons share: `claim --yes` stays local/private; `--share-yes` / `share --yes` / MCP `share_yes` shows a short review then publishes (countable path). Decline is not countable. Private home may still auto.
 - v0.7.13 - Path B invite-another-agent after countable share (path_b.next hands mint → hold → claim --yes to another agent); PyPI/MCP pin for invite-bearing release (#26).
 - v0.7.12 - Optional share channel/source attribution; durable funnel --commons operator excludes (impl-*/coo-*/social-* + CLAIMIDX_OPERATOR_DID); default-exclude leaked falsifier did:claimidx:agent-5765cb.
 - v0.7.11 - Path B online claim --yes oneshot: when online, `claim --yes` continues into share (same path_b CTA as hold->claim->share).

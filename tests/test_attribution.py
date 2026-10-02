@@ -51,7 +51,7 @@ def test_share_stamps_channel_on_commons_push_event(tmp_path: Path, monkeypatch)
     monkeypatch.setenv("CLAIMIDX_SOURCE", "hangout")
     store = Store(tmp_path / "ix.sqlite")
     c = store.put(_claim())
-    result = share_claim(store, c, channel=None, source=None)  # env wins
+    result = share_claim(store, c, channel=None, source=None, commons_yes=True)  # env wins
     assert result["status"] == "outbox"
     assert result.get("channel") == "discord"
     assert result.get("source") == "hangout"
@@ -74,7 +74,7 @@ def test_cli_share_channel_flag(tmp_path: Path, monkeypatch, capsys):
     db = str(tmp_path / "ix.sqlite")
     store = Store(db)
     c = store.put(_claim("did:claimidx:social-bot"))
-    assert main(["--db", db, "--fmt", "json", "share", c.id, "--channel", "hn", "--source", "path-b"]) == 0
+    assert main(["--db", db, "--fmt", "json", "share", c.id, "--yes", "--channel", "hn", "--source", "path-b"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out.get("channel") == "hn"
     assert out.get("source") == "path-b"
