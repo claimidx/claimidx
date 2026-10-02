@@ -1,4 +1,4 @@
-"""Path B one-shot: online claim --yes continues into share (CLI + MCP)."""
+"""Path B: claim --yes is local; commons needs --share-yes / share_yes (CLI + MCP)."""
 
 from __future__ import annotations
 
@@ -33,16 +33,16 @@ def commons(monkeypatch):
     return calls
 
 
-def test_path_b_cta_oneshot_after_hold(tmp_path: Path):
+def test_path_b_cta_after_hold_requires_share_yes(tmp_path: Path):
     store = Store(tmp_path / "ix.sqlite")
     did = "did:claimidx:agent-oneshot"
     store.log("confirm-replay", did, FIRST_HOLD_ID, {"held": True})
     cta = path_b_cta(store, did)
     assert cta["held"] is True
     assert cta["countable"] is False
-    assert cta["next"] == "claimidx claim --yes"
+    assert cta["next"] == "claimidx claim --yes --share-yes"
     assert "&&" not in cta["next"]
-    assert "shares when online" in cta["why"]
+    assert "share-yes" in cta["why"] or "confirm then commons" in cta["why"]
 
 
 def test_claim_without_failure_still_loud(tmp_path: Path, capsys):
@@ -52,7 +52,8 @@ def test_claim_without_failure_still_loud(tmp_path: Path, capsys):
     assert "pass --err" in err or "no failure" in err
 
 
-def test_claim_yes_online_reaches_share(tmp_path: Path, commons, capsys, monkeypatch):
+def test_claim_yes_alone_stays_local_not_countable(tmp_path: Path, commons, capsys, monkeypatch):
+    """Decline / no confirm: claim --yes must NOT silently mean commons."""
     monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
     db = str(tmp_path / "ix.sqlite")
     tree = tmp_path / "tree"
@@ -61,17 +62,37 @@ def test_claim_yes_online_reaches_share(tmp_path: Path, commons, capsys, monkeyp
     assert main(["--db", db, "--fmt", "json", "claim", "--yes", "--no-diff", "--fix", "pip install json"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["ok"] is True and out["id"]
-    assert out.get("share", {}).get("status") == "commons"
+    share = out.get("share") or {}
+    assert share.get("status") in {"needs_confirm", "local"} or (share.get("commons") or {}).get("status") == "needs_confirm"
+    assert not any(u.endswith("/api/publish") for u, _ in commons)
+    store = Store(db)
+    assert not home.commons_shared(store, out["id"])
+    kinds = {e["kind"] for e in store.events(limit=50)}
+    assert "commons-push" not in kinds
+    assert "publish" in kinds
+    assert out.get("path_b", {}).get("countable") is False
+
+
+def test_claim_yes_share_yes_reaches_commons(tmp_path: Path, commons, capsys, monkeypatch):
+    """Countable path: explicit --share-yes after review."""
+    monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
+    db = str(tmp_path / "ix.sqlite")
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    remember_failure("ModuleNotFoundError: No module named 'json'", cwd=str(tree), eco="py", rt=_py_rt())
+    assert main(["--db", db, "--fmt", "json", "claim", "--yes", "--share-yes", "--no-diff", "--fix", "pip install json"]) == 0
+    captured = capsys.readouterr()
+    out = json.loads(captured.out)
+    assert out["ok"] and out.get("share", {}).get("status") == "commons"
+    assert "commons review" in captured.err
     assert any(u.endswith("/api/publish") for u, _ in commons)
     store = Store(db)
     assert home.commons_shared(store, out["id"])
-    kinds = {e["kind"] for e in store.events(limit=50)}
-    assert "commons-push" in kinds
-    assert "publish" in kinds
+    assert "commons-push" in {e["kind"] for e in store.events(limit=50)}
 
 
-def test_claim_yes_share_flag_online(tmp_path: Path, commons, capsys, monkeypatch):
-    """Documented CTA `claim --yes --share` same as --yes when online."""
+def test_claim_yes_share_alias_online(tmp_path: Path, commons, capsys, monkeypatch):
+    """`--share` remains an alias of `--share-yes`."""
     monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
     db = str(tmp_path / "ix.sqlite")
     tree = tmp_path / "tree"
@@ -98,7 +119,7 @@ def test_claim_yes_local_does_not_force_share(tmp_path: Path, commons, capsys, m
     assert not home.commons_shared(store, out["id"])
 
 
-def test_mcp_claim_yes_online_reaches_share(tmp_path: Path, commons, monkeypatch):
+def test_mcp_claim_yes_alone_stays_local(tmp_path: Path, commons, monkeypatch):
     monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
     store = Store(tmp_path / "ix.sqlite")
     tree = tmp_path / "tree"
@@ -116,8 +137,34 @@ def test_mcp_claim_yes_online_reaches_share(tmp_path: Path, commons, monkeypatch
         store,
     )
     assert out["ok"] and out["id"]
-    assert out.get("share", {}).get("status") == "commons"
+    share = out.get("share") or {}
+    assert share.get("status") in {"needs_confirm", "local"} or (share.get("commons") or {}).get("status") == "needs_confirm"
+    assert not home.commons_shared(store, out["id"])
+    assert not commons
+    assert out.get("path_b", {}).get("countable") is False
+
+
+def test_mcp_claim_share_yes_reaches_commons(tmp_path: Path, commons, monkeypatch):
+    monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
+    store = Store(tmp_path / "ix.sqlite")
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    out = _call(
+        "claimidx_claim",
+        {
+            "err": "ModuleNotFoundError: No module named 'json'",
+            "cwd": str(tree),
+            "no_diff": True,
+            "rt": _py_rt(),
+            "fix": "pip install json",
+            "yes": True,
+            "share_yes": True,
+        },
+        store,
+    )
+    assert out["ok"] and out.get("share", {}).get("status") == "commons"
     assert home.commons_shared(store, out["id"])
+    assert "review" in out or "review" in (out.get("share") or {})
     assert "path_b" in out
 
 
@@ -144,31 +191,27 @@ def test_mcp_claim_local_does_not_force_share(tmp_path: Path, commons, monkeypat
     assert home.keep_local(store, out["id"])
 
 
-def test_mcp_claim_share_false_skips_ensure(tmp_path: Path, commons, monkeypatch):
-    """share=false skips the Path B ensure; ingest may still share unless local — force local semantics via share=false after publish is soft.
-
-    When share=false without local, ingest still auto-shares today; ensure is skipped.
-    Keep this as MCP parity for the flag: local remains the durable opt-out.
-    """
+def test_share_decline_stays_local(tmp_path: Path, commons, monkeypatch):
+    """claimidx_share without share_yes returns needs_confirm; not countable."""
     monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
     store = Store(tmp_path / "ix.sqlite")
-    tree = tmp_path / "tree"
-    tree.mkdir()
-    # Durable opt-out is local=true (tested above). share=false only skips ensure_online_share.
-    out = _call(
-        "claimidx_claim",
-        {
-            "err": "ModuleNotFoundError: No module named 'json'",
-            "cwd": str(tree),
-            "no_diff": True,
-            "rt": _py_rt(),
-            "fix": "pip install json",
-            "yes": True,
-            "share": False,
-            "local": True,
-        },
-        store,
+    from claimidx.query import ingest
+
+    row = ingest(
+        "ModuleNotFoundError: No module named 'json'",
+        fix_k="pin",
+        fix_b="json==1",
+        eval='python -c "import json"',
+        eco="py",
+        own="did:claimidx:agent-decline",
+        db=store.path,
     )
-    assert out["ok"]
-    assert out.get("share", {}).get("status") == "local"
+    cid = row["id"]
+    out = _call("claimidx_share", {"id": cid}, store)
+    assert out["status"] == "needs_confirm"
+    assert out.get("review", {}).get("destination") == "commons"
     assert not commons
+    assert not home.commons_shared(store, cid)
+    yes = _call("claimidx_share", {"id": cid, "share_yes": True}, store)
+    assert yes.get("status") == "commons" or (yes.get("commons") or {}).get("status") == "commons"
+    assert home.commons_shared(store, cid)

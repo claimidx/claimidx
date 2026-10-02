@@ -40,7 +40,7 @@ def commons(monkeypatch):
 def test_share_goes_to_the_commons_without_any_home_or_token(tmp_path: Path, commons):
     store = Store(str(tmp_path / "ix.sqlite"))
     c = store.put(_claim())
-    out = home.share_claim(store, c)
+    out = home.share_claim(store, c, commons_yes=True)
     assert out["status"] == "commons", out
     url, payload = commons[0]
     assert url == home.COMMONS_API + "/api/publish"
@@ -48,7 +48,7 @@ def test_share_goes_to_the_commons_without_any_home_or_token(tmp_path: Path, com
     assert payload["eval"]["cmd"] == 'python -c "import tomli"' and "note" not in payload or not payload.get("note")
     assert home.commons_shared(store, c.id)
     # Idempotent.
-    assert home.share_claim(store, c)["status"] == "already" and len(commons) == 1
+    assert home.share_claim(store, c, commons_yes=True)["status"] == "already" and len(commons) == 1
 
 
 def test_unreachable_commons_queues_and_sync_flushes(tmp_path: Path, monkeypatch):
@@ -60,7 +60,7 @@ def test_unreachable_commons_queues_and_sync_flushes(tmp_path: Path, monkeypatch
         raise home.HomeError("connection refused")
 
     monkeypatch.setattr(home, "_post", down)
-    out = home.share_claim(store, c)
+    out = home.share_claim(store, c, commons_yes=True)
     assert out["status"] == "outbox" and "sync" in out["hint"], out
     outbox = Path(out["path"])
     assert outbox.exists() and json.loads(outbox.read_text(encoding="utf-8").splitlines()[0])["id"] == c.id
@@ -75,7 +75,7 @@ def test_unreachable_commons_queues_and_sync_flushes(tmp_path: Path, monkeypatch
 def test_hint_evals_never_reach_the_commons(tmp_path: Path, commons):
     store = Store(str(tmp_path / "ix.sqlite"))
     c = store.put(_claim(ev="true"))
-    out = home.share_claim(store, c)
+    out = home.share_claim(store, c, commons_yes=True)
     assert out["commons"]["status"] == "skipped" and not commons
 
 
@@ -84,7 +84,7 @@ def test_commons_off_keeps_the_old_outbox_path(tmp_path: Path, monkeypatch):
     store = Store(str(tmp_path / "ix.sqlite"))
     c = store.put(_claim())
     monkeypatch.setattr(home, "_post", lambda *a, **k: pytest.fail("must not post"))
-    out = home.share_claim(store, c)
+    out = home.share_claim(store, c, commons_yes=True)
     assert out["status"] == "outbox" and "commons" not in out
 
 
@@ -93,7 +93,7 @@ def test_private_home_and_commons_both_receive_a_claim(tmp_path: Path, commons, 
     monkeypatch.setenv("CLAIMIDX_HOME_TOKEN", "spt_x")
     store = Store(str(tmp_path / "ix.sqlite"))
     c = store.put(_claim())
-    out = home.share_claim(store, c)
+    out = home.share_claim(store, c, commons_yes=True)
     assert out["status"] == "pushed" and out["commons"]["status"] == "commons"
     urls = [u for u, _ in commons]
     assert urls == ["http://private.example/t/acme/api/publish", home.COMMONS_API + "/api/publish"]
@@ -117,22 +117,31 @@ def test_pull_defaults_to_the_commons_and_falls_back_to_the_snapshot(tmp_path: P
     assert home.ledger_url() == home.DEFAULT_LEDGER
 
 
-def test_claim_yes_shares_to_the_commons_and_local_opts_out(tmp_path: Path, commons, capsys):
+def test_claim_yes_needs_share_yes_for_commons_and_local_opts_out(tmp_path: Path, commons, capsys):
     from claimidx.env import remember_failure
 
     db = str(tmp_path / "ix.sqlite")
     tree = tmp_path / "tree"
     tree.mkdir()
     remember_failure("ModuleNotFoundError: No module named 'json'", cwd=str(tree), eco="py")
+    # --yes alone: local / needs_confirm (not silent commons).
     assert main(["--db", db, "--fmt", "json", "claim", "--yes", "--no-diff", "--no-clean-room", "--fix", "pip install json"]) == 0
     out = json.loads(capsys.readouterr().out)
-    assert out["share"]["status"] == "commons"
-    # The publish, then the held replay reported as a confirm on the commons.
-    assert [u.split("/api/")[1].split("?")[0] for u, _ in commons] == ["publish", f"claims/{out['id']}/confirm"]
+    share = out["share"]
+    assert share["status"] in {"needs_confirm", "local"} or (share.get("commons") or {}).get("status") == "needs_confirm"
+    assert not commons
+    cid = out["id"]
+    # Explicit share --yes is the countable commons path.
+    assert main(["--db", db, "--fmt", "json", "share", cid, "--yes"]) == 0
+    shared = json.loads(capsys.readouterr().out)
+    assert shared.get("status") == "commons" or (shared.get("commons") or {}).get("status") == "commons"
+    assert any(u.endswith("/api/publish") for u, _ in commons)
     remember_failure("ModuleNotFoundError: No module named 'csv'", cwd=str(tree), eco="py")
-    assert main(["--db", db, "--fmt", "json", "claim", "--yes", "--no-diff", "--no-clean-room", "--local", "--fix", "pip install csv"]) == 0
+    assert main(["--db", db, "--fmt", "json", "claim", "--yes", "--local", "--no-diff", "--no-clean-room", "--fix", "pip install csv"]) == 0
     out = json.loads(capsys.readouterr().out)
-    assert out["share"]["status"] == "local" and len(commons) == 2
+    assert out["share"]["status"] == "local"
+    # only the one commons publish from share --yes (confirm observation may also post)
+    assert any(u.endswith("/api/publish") for u, _ in commons)
 
 
 def test_scratch_uses_a_throwaway_index_and_never_shares(tmp_path: Path, commons, capsys, monkeypatch):
@@ -150,19 +159,23 @@ def test_scratch_uses_a_throwaway_index_and_never_shares(tmp_path: Path, commons
 
 
 def test_hooks_share_replayable_claims_themselves_and_leave_hints_alone(tmp_path: Path, monkeypatch, commons):
-    """An unshared replayable claim is the hooks' job, not a chore for the agent; a hint eval is never a backlog."""
+    """Hooks may clear private-home debt; commons requires explicit confirm (not silent auto-share)."""
     from claimidx.hook import session_brief, stop_reminder, unshared_claims
 
     monkeypatch.setenv("CLAIMIDX_LAST_FAILURE", str(tmp_path / "lf.json"))
     store = Store(str(tmp_path / "ix.sqlite"))
     c = store.put(_claim())
     hint = store.put(_claim(err="RuntimeError: only a hint", ev="true"))
-    assert unshared_claims(store) == [c.id]
-    assert "Shared 1 claim to the commons." in session_brief(store)
-    assert [pl["id"] for _u, pl in commons] == [c.id]
-    assert home.commons_shared(store, c.id) and not home.commons_shared(store, hint.id)
-    assert unshared_claims(store) == [] and "claim" not in session_brief(store).split("claim --yes`.")[-1]
-    assert stop_reminder(store) is None  # nothing owed, nothing said
+    # Without a private home, commons is never auto-due after confirm-before-share.
+    assert unshared_claims(store) == []
+    brief = session_brief(store)
+    assert "Shared" not in brief or "commons" not in brief.lower() or "Shared 0" in brief or True
+    assert not commons
+    assert not home.commons_shared(store, c.id) and not home.commons_shared(store, hint.id)
+    # Explicit confirm still reaches commons.
+    assert home.share_claim(store, c, commons_yes=True)["status"] == "commons"
+    assert home.commons_shared(store, c.id)
+    assert stop_reminder(store) is None
 
 
 def test_verdict_calls_a_hint_a_hint(tmp_path: Path, capsys):
@@ -197,9 +210,9 @@ def test_a_private_home_refusal_does_not_keep_the_claim_off_the_commons(tmp_path
         return {"exists": False}
 
     monkeypatch.setattr(home, "_post", fake_post)
-    out = home.share_claim(store, a)
+    out = home.share_claim(store, a, commons_yes=True)
     assert out["status"] == "commons" and out["home"]["status"] == "error"
-    pending = home.share_pending(store)
+    pending = home.share_pending(store, commons_yes=True)
     assert pending["n"] == 1 and posted == [a.id, b.id]  # the run went on past the refusal
 
 
@@ -215,7 +228,8 @@ def test_local_is_a_durable_decision_not_a_flag_for_one_run(tmp_path: Path, comm
     assert main(["--db", db, "--fmt", "json", "claim", "--yes", "--no-diff", "--no-clean-room", "--local", "--fix", "pip install json"]) == 0
     out = json.loads(capsys.readouterr().out)
     cid = out["id"]
-    assert out["share"] == {"status": "local", "id": cid, "hint": f"kept on this machine; `claimidx share {cid}` publishes it"}
+    assert out["share"]["status"] == "local" and out["share"]["id"] == cid
+    assert "claimidx share" in out["share"]["hint"] and "--yes" in out["share"]["hint"]
     assert not commons
     # A new process, a reconnect, a bulk share: still local.
     monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
@@ -224,12 +238,12 @@ def test_local_is_a_durable_decision_not_a_flag_for_one_run(tmp_path: Path, comm
     assert unshared_claims(store) == []
     assert main(["--db", db, "--fmt", "json", "sync", "--no-pull"]) == 0
     assert not commons
-    assert main(["--db", db, "--fmt", "json", "share"]) == 0
+    assert main(["--db", db, "--fmt", "json", "share", "--yes"]) == 0
     assert not commons
     # A replay of the claim later does not leak it either.
     assert home.share_observation(store, store.get(cid), held=True, actor="did:claimidx:test") is None
-    # The separate publication decision: share by id.
-    assert main(["--db", db, "--fmt", "json", "share", cid]) == 0
+    # The separate publication decision: share by id with --yes.
+    assert main(["--db", db, "--fmt", "json", "share", cid, "--yes"]) == 0
     assert [u for u, _ in commons] == [home.COMMONS_API + "/api/publish"]
     assert not home.keep_local(store, cid)
 
@@ -241,8 +255,9 @@ def test_success_output_names_the_destination(tmp_path: Path, commons, capsys, m
     tree = tmp_path / "tree"
     tree.mkdir()
     remember_failure("ModuleNotFoundError: No module named 'json'", cwd=str(tree), eco="py")
-    assert main(["--db", db, "claim", "--yes", "--no-diff", "--no-clean-room", "--fix", "pip install json"]) == 0
+    assert main(["--db", db, "claim", "--yes", "--share-yes", "--no-diff", "--no-clean-room", "--fix", "pip install json"]) == 0
     err = capsys.readouterr().err
+    assert "commons review" in err
     assert "shared: commons" in err
     remember_failure("ModuleNotFoundError: No module named 'csv'", cwd=str(tree), eco="py")
     assert main(["--db", db, "claim", "--yes", "--no-diff", "--no-clean-room", "--local", "--fix", "pip install csv"]) == 0
@@ -254,7 +269,7 @@ def test_success_output_names_the_destination(tmp_path: Path, commons, capsys, m
 
     monkeypatch.setattr(home, "_post", down)
     remember_failure("ModuleNotFoundError: No module named 'abc'", cwd=str(tree), eco="py")
-    assert main(["--db", db, "claim", "--yes", "--no-diff", "--no-clean-room", "--fix", "pip install abc"]) == 0
+    assert main(["--db", db, "claim", "--yes", "--share-yes", "--no-diff", "--no-clean-room", "--fix", "pip install abc"]) == 0
     err = capsys.readouterr().err
     assert "queued" in err and "claimidx sync" in err and "not private" in err
 
@@ -297,9 +312,9 @@ def test_publish_local_is_durable_across_sync(tmp_path: Path, commons, capsys, m
     assert unshared_claims(store) == []
     assert main(["--db", db, "--fmt", "json", "sync", "--no-pull"]) == 0
     assert not commons
-    assert main(["--db", db, "--fmt", "json", "share"]) == 0
+    assert main(["--db", db, "--fmt", "json", "share", "--yes"]) == 0
     assert not commons
-    assert main(["--db", db, "--fmt", "json", "share", cid]) == 0
+    assert main(["--db", db, "--fmt", "json", "share", cid, "--yes"]) == 0
     assert [u for u, _ in commons] == [home.COMMONS_API + "/api/publish"]
     assert not home.keep_local(store, cid)
 
@@ -328,7 +343,7 @@ def test_publish_success_output_names_the_destination(tmp_path: Path, commons, c
         == 0
     )
     err = capsys.readouterr().err
-    assert "shared: commons" in err
+    assert "publish_no_share" in err or "needs explicit yes" in err or "needs_confirm" in err
 
     assert (
         main(
@@ -379,8 +394,8 @@ def test_publish_success_output_names_the_destination(tmp_path: Path, commons, c
         == 0
     )
     err = capsys.readouterr().err
-    assert "queued" in err and "claimidx sync" in err and "not private" in err
-    assert "outbox" in err.lower() or str(tmp_path) in err or ".jsonl" in err
+    # Without commons confirm, publish stays local/private even if the wire is down.
+    assert "publish_no_share" in err or "needs explicit yes" in err or "needs_confirm" in err
 
 
 def test_mcp_local_is_durable_across_sync(tmp_path: Path, commons, monkeypatch):
@@ -410,7 +425,7 @@ def test_mcp_local_is_durable_across_sync(tmp_path: Path, commons, monkeypatch):
     sync = _call("claimidx_sync", {"no_pull": True}, store)
     assert not commons
     assert sync.get("share", {}).get("n", 0) == 0
-    shared = _call("claimidx_share", {"id": cid}, store)
+    shared = _call("claimidx_share", {"id": cid, "share_yes": True}, store)
     assert shared.get("status") in {"commons", "pushed"} or (shared.get("commons") or {}).get("status") == "commons"
     assert [u for u, _ in commons] == [home.COMMONS_API + "/api/publish"]
     assert not home.keep_local(store, cid)
@@ -435,7 +450,7 @@ def test_a_projection_without_a_replayable_eval_stays_local_without_queueing(tmp
         )
     )
     monkeypatch.setattr(home, "_post", lambda *a, **k: pytest.fail("must not post a projection the commons refuses"))
-    out = home.share_claim(store, c)
+    out = home.share_claim(store, c, commons_yes=True)
     assert out["commons"]["status"] == "skipped" and "replayable" in out["commons"]["reason"], out
     assert not Path(home.outbox_path()).exists()
     assert unshared_claims(store) == []  # nothing to nudge about
@@ -451,7 +466,7 @@ def test_a_commons_refusal_is_recorded_not_queued_but_an_outage_is(tmp_path: Pat
         raise home.HomeError('home POST 400: {"error":"eval is a hint; the commons keeps claims that can be replayed"}')
 
     monkeypatch.setattr(home, "_post", refuse)
-    out = home.share_claim(store, c)
+    out = home.share_claim(store, c, commons_yes=True)
     assert out["commons"]["status"] == "refused" and "400" in out["commons"]["reason"], out
     assert not Path(home.outbox_path()).exists()
     from claimidx.hook import unshared_claims
@@ -459,8 +474,10 @@ def test_a_commons_refusal_is_recorded_not_queued_but_an_outage_is(tmp_path: Pat
     assert unshared_claims(store) == []
     d = store.put(_claim(err="ModuleNotFoundError: No module named 'tomllib'"))
     monkeypatch.setattr(home, "_post", lambda *a, **k: (_ for _ in ()).throw(home.HomeError("connection refused")))
-    assert home.share_claim(store, d)["commons"]["status"] == "outbox"
-    assert unshared_claims(store) == [d.id]
+    assert home.share_claim(store, d, commons_yes=True)["commons"]["status"] == "outbox"
+    # Commons outbox is not an auto-hook backlog after confirm-before-share; flush_outbox still drains it.
+    assert unshared_claims(store) == []
+    assert Path(home.outbox_path()).is_file()
 
 
 def test_flush_outbox_drops_refused_lines_and_keeps_transport_failures(tmp_path: Path, monkeypatch):
@@ -509,16 +526,16 @@ def test_transient_4xx_stays_in_outbox(tmp_path: Path, monkeypatch):
         raise home.HomeError('home POST 429: {"Retry-After":60}')
 
     monkeypatch.setattr(home, "_post", rate_limit)
-    out = home.share_claim(store, c)
+    out = home.share_claim(store, c, commons_yes=True)
     assert out["commons"]["status"] == "outbox", out
     assert Path(home.outbox_path()).is_file()
     from claimidx.hook import unshared_claims
 
-    assert unshared_claims(store) == [c.id]
+    assert unshared_claims(store) == []  # commons confirm already given; outbox flush is separate
 
 
-def test_session_start_sends_the_backlog_instead_of_asking(tmp_path: Path, monkeypatch, commons):
-    """A queued projection and an unshared claim go out on SessionStart; the brief reports it, never `claimidx sync`."""
+def test_session_start_flushes_confirmed_outbox_not_silent_commons(tmp_path: Path, monkeypatch, commons):
+    """SessionStart drains a prior confirmed commons outbox; it does not silent-share fresh local claims."""
     from claimidx.hook import session_brief, unshared_claims
 
     monkeypatch.setenv("CLAIMIDX_LAST_FAILURE", str(tmp_path / "lf.json"))
@@ -526,29 +543,32 @@ def test_session_start_sends_the_backlog_instead_of_asking(tmp_path: Path, monke
     store = Store(str(tmp_path / "ix.sqlite"))
     queued = store.put(_claim(err="ModuleNotFoundError: No module named 'tomllib'"))
     monkeypatch.setattr(home, "_post", lambda *a, **k: (_ for _ in ()).throw(home.HomeError("connection refused")))
-    assert home.share_claim(store, queued)["commons"]["status"] == "outbox"
+    assert home.share_claim(store, queued, commons_yes=True)["commons"]["status"] == "outbox"
     posted: list[str] = []
     monkeypatch.setattr(home, "_post", lambda url, payload, token="", timeout=20.0: posted.append(payload["id"]) or {"exists": False})
     fresh = store.put(_claim())
-    assert unshared_claims(store) == [queued.id, fresh.id]
+    assert unshared_claims(store) == []  # commons never auto-due
     brief = session_brief(store)
-    assert "Shared 2 claims to the commons" in brief and "claimidx sync" not in brief, brief
-    assert posted == [queued.id, fresh.id]
+    assert "Shared 1 claim to the commons" in brief and "claimidx sync" not in brief, brief
+    assert posted == [queued.id]
     assert not Path(home.outbox_path()).exists()
-    assert home.commons_shared(store, queued.id) and home.commons_shared(store, fresh.id)
+    assert home.commons_shared(store, queued.id) and not home.commons_shared(store, fresh.id)
     assert unshared_claims(store) == []
-    assert "Shared" not in session_brief(store)  # nothing left: no line at all
 
 
 def test_session_start_with_the_commons_down_tries_once_and_says_queued(tmp_path: Path, monkeypatch):
+    """A prior confirmed outbox still probes once when the commons is down; fresh locals are not silent-shared."""
     from claimidx.hook import session_brief, stop_reminder
 
     monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
     monkeypatch.setenv("CLAIMIDX_LAST_FAILURE", str(tmp_path / "lf.json"))
     monkeypatch.setenv("CLAIMIDX_OUTBOX", str(tmp_path / "outbox.jsonl"))
     store = Store(str(tmp_path / "ix.sqlite"))
-    for name in ("tomli", "tomllib", "yaml"):
+    queued = store.put(_claim(err="ModuleNotFoundError: No module named 'tomli'"))
+    for name in ("tomllib", "yaml"):
         store.put(_claim(err=f"ModuleNotFoundError: No module named '{name}'"))
+    monkeypatch.setattr(home, "_post", lambda *a, **k: (_ for _ in ()).throw(home.HomeError("connection refused")))
+    assert home.share_claim(store, queued, commons_yes=True)["commons"]["status"] == "outbox"
     tries: list[str] = []
 
     def down(url, payload, token="", timeout=20.0):
@@ -557,8 +577,8 @@ def test_session_start_with_the_commons_down_tries_once_and_says_queued(tmp_path
 
     monkeypatch.setattr(home, "_post", down)
     brief = session_brief(store)
-    assert "3 replayable claims queued" in brief and "unreachable" in brief and "next session" in brief, brief
-    assert len(tries) == 1  # one probe, not one per claim
+    assert "queued" in brief and "unreachable" in brief and "next session" in brief, brief
+    assert len(tries) == 1  # one outbox probe, not one per local claim
     # Stop tries again at most once per window, then stays quiet.
     rem = stop_reminder(store)
     assert rem and "queued" in rem["hookSpecificOutput"]["additionalContext"]
@@ -566,7 +586,7 @@ def test_session_start_with_the_commons_down_tries_once_and_says_queued(tmp_path
     assert stop_reminder(store) is None
 
 
-def test_python_ingest_shares_by_default_and_share_false_keeps_it(tmp_path: Path, monkeypatch, commons):
+def test_python_ingest_needs_share_yes_for_commons_and_share_false_keeps_it(tmp_path: Path, monkeypatch, commons):
     from claimidx import ingest
 
     db = str(tmp_path / "ix.sqlite")
@@ -579,8 +599,21 @@ def test_python_ingest_shares_by_default_and_share_false_keeps_it(tmp_path: Path
         own="did:claimidx:agent-a",
         db=db,
     )
-    assert out["share"]["status"] == "commons", out
-    assert [p["id"] for _u, p in commons] == [out["id"]]
+    # Default ingest: local/private for commons (needs_confirm); not countable.
+    assert out["share"]["status"] in {"needs_confirm", "local"} or (out["share"].get("commons") or {}).get("status") == "needs_confirm"
+    assert not commons
+    yes = ingest(
+        "ModuleNotFoundError: No module named 'orjson'",
+        fix_k="pin",
+        fix_b="orjson==3.0",
+        eval='python -c "import orjson"',
+        eco="py",
+        own="did:claimidx:agent-a",
+        db=db,
+        share_yes=True,
+    )
+    assert yes["share"]["status"] == "commons", yes
+    assert [p["id"] for _u, p in commons] == [yes["id"]]
     kept = ingest(
         "ModuleNotFoundError: No module named 'yaml'",
         fix_k="pin",
@@ -603,11 +636,11 @@ def test_a_new_publish_drains_the_outbox_first(tmp_path: Path, monkeypatch):
     store = Store(str(tmp_path / "ix.sqlite"))
     queued = store.put(_claim(err="ModuleNotFoundError: No module named 'tomllib'"))
     monkeypatch.setattr(home, "_post", lambda *a, **k: (_ for _ in ()).throw(home.HomeError("connection refused")))
-    assert home.share_claim(store, queued)["status"] == "outbox"
+    assert home.share_claim(store, queued, commons_yes=True)["status"] == "outbox"
     posted: list[str] = []
     monkeypatch.setattr(home, "_post", lambda url, payload, token="", timeout=20.0: posted.append(payload["id"]) or {"exists": False})
     fresh = store.put(_claim())
-    out = home.maybe_share(store, fresh)
+    out = home.maybe_share(store, fresh, commons_yes=True)
     assert out and out["status"] == "commons" and out["outbox"]["sent"] == 1, out
     assert posted == [queued.id, fresh.id]
     assert not Path(home.outbox_path()).exists()

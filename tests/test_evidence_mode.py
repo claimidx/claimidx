@@ -90,6 +90,6 @@ def test_mode_travels_in_the_signed_record(tmp_path: Path, monkeypatch):
     )
     posts: list[dict] = []
     monkeypatch.setattr(home, "_post", lambda url, payload, token="", timeout=20.0: posts.append(payload) or {"claim": {}})
-    home.share_claim(store, c)
+    home.share_claim(store, c, commons_yes=True)
     home.share_observation(store, c, held=True, actor="did:claimidx:agent-b", mode="applied")
     assert posts[-1]["mode"] == "applied" and posts[-1]["kind"] == "hold"

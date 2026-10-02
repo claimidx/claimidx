@@ -204,7 +204,7 @@ def test_outbox_line_has_no_home_paths(tmp_path: Path, monkeypatch):
             fix_b="const x = await params",
         )
     )
-    result = share_claim(store, c)
+    result = share_claim(store, c, commons_yes=True)
     assert result["status"] == "outbox"
     line = outbox.read_text(encoding="utf-8")
     assert "secret project" not in line

@@ -120,6 +120,7 @@ def ingest(
     force: bool = False,
     alternative: bool = False,
     share: bool | None = None,
+    share_yes: bool = False,
     expect: int = 0,
     db: str | os.PathLike[str] | None = None,
     cwd: str | None = None,
@@ -127,9 +128,9 @@ def ingest(
 ) -> dict[str, Any]:
     """Write a claim to the local index and share it the way the CLI does.
 
-    Sharing is the default: the public projection goes to the commons and the full record to a
-    private home when one is configured. `share=False` is `--local`: the claim stays on this
-    machine until `claimidx share <id>`. `CLAIMIDX_SHARE=0` / `CLAIMIDX_COMMONS=0` keep everything
+    Private home may still receive the full record when configured. The public commons needs
+    `share_yes=True` (explicit confirm). `share=False` is `--local`: the claim stays on this
+    machine until `claimidx share <id> --yes`. `CLAIMIDX_SHARE=0` / `CLAIMIDX_COMMONS=0` keep everything
     local. A hint eval never leaves the machine anyway.
     """
     path = db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)
@@ -218,7 +219,7 @@ def ingest(
     else:
         from .home import maybe_share
 
-        shared = maybe_share(store, claim)
+        shared = maybe_share(store, claim, commons_yes=bool(share_yes or share is True))
         if shared:
             out["share"] = shared
     return out

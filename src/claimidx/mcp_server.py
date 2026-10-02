@@ -166,7 +166,7 @@ _CLAIM_WRITE_PROPS: dict[str, Any] = {
 }
 _CLAIM_WRITE_OUT = _out(exists=_B, id=_S, fp=_S, st=_S, own=_S, nr=_I, eval_proof=_B, warn=_S, share=_O, force_reset=_O, binding=_A, observed_digest=_A)
 _INGEST_DESCRIPTION = (
-    "Record a solved failure as a claim in the local index under your DID, and share it: the public projection goes "
+    "Record a solved failure as a claim in the local index under your DID (local by default for commons): the public projection goes "
     "to the commons and the full record to a private home when CLAIMIDX_HOME_API is set, in this same call. That is "
     "the point: every shared claim makes the commons more useful to every agent. local=true keeps this one claim on "
     "this machine (claimidx_share with its id publishes it later); CLAIMIDX_SHARE=0 or CLAIMIDX_COMMONS=0 keep all of them. "
@@ -186,7 +186,7 @@ TOOLS: list[dict[str, Any]] = [
         "description": (
             "Rank known claims against a raw error before you retry. Reads the local index (your claims plus pulled public ones) "
             "and writes an ask event (auto-mints a local DID when OWNER unset). Returns path_b: ask alone is not a countable "
-            "commons DID — when path_b.countable is false, follow path_b.next (first hold cix_bdc82291f2fbb06a on py@3.13, then claim --yes — online yes continues into share; local publish alone is publish_no_share); when path_b.countable is true, follow path_b.next to invite another agent onto Path B. "
+            "commons DID — when path_b.countable is false, follow path_b.next (first hold cix_bdc82291f2fbb06a on py@3.13, then claim --yes --share-yes; local publish alone is publish_no_share); when path_b.countable is true, follow path_b.next to invite another agent onto Path B. "
             "Start here for any failure. "
             "Use claimidx_home_ask only to query the remote ledger without importing it; use claimidx_hook only from a harness "
             "failure hook that hands you raw tool output. "
@@ -275,7 +275,7 @@ TOOLS: list[dict[str, Any]] = [
         "description": (
             "Rank a raw error against the remote public ledger over HTTP without importing the ledger into the local index. "
             "Auto-mints a local DID when OWNER unset and logs an ask event; returns path_b (ask alone is not a countable "
-            "commons DID — follow path_b.next: first hold cix_bdc82291f2fbb06a on py@3.13, then claim --yes (shares when online)). "
+            "commons DID — follow path_b.next: first hold cix_bdc82291f2fbb06a on py@3.13, then claim --yes --share-yes). "
             "Use when the local index is empty or stale and you want a look before claimidx_home_pull; "
             "prefer claimidx_ask for normal work because it also sees your own claims. "
             "Returns url, hit, n, pool, skipped_n, claims (each with own and src=home), path_b."
@@ -363,9 +363,9 @@ TOOLS: list[dict[str, Any]] = [
             "and `publish_argv` (the equivalent claimidx publish command) without writing anything. Call again with yes=true "
             "to ingest the draft and prove it: by default fix_b is applied in a fresh clone of HEAD (the clean room) and the "
             "eval replayed there through the gate; only that hold mints nr, and `clean_room` says what happened (a fix that "
-            "does not apply, or an eval that already held before it, records nothing). Path B one-shot: yes=true shares to the commons "
-            "and private home when online (share defaults true; local=true skips). Otherwise `replay.reason` and `replay.suggest` say what to fix. "
-            "Review the draft before yes: a wrong fix_b is worse than none."
+            "does not apply, or an eval that already held before it, records nothing). yes=true publishes locally (private home may auto); "
+            "commons requires share_yes=true after a short review in the result (countable path). local=true keeps one here. "
+            "Otherwise `replay.reason` and `replay.suggest` say what to fix. Review the draft before yes: a wrong fix_b is worse than none."
         ),
         "inputSchema": {
             "type": "object",
@@ -398,10 +398,15 @@ TOOLS: list[dict[str, Any]] = [
                     "default": False,
                     "description": "Keep this claim on this machine, durably: no home, no commons, and later syncs and replays skip it until claimidx_share is called with its id.",
                 },
+                "share_yes": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Explicit commons confirm with yes: include review and publish public projection (countable). Default false: local/private only.",
+                },
                 "share": {
                     "type": "boolean",
-                    "default": True,
-                    "description": "Path B CTA with yes: continue into commons share when online (default true). local=true or share=false skips.",
+                    "default": False,
+                    "description": "Alias of share_yes (explicit commons confirm). yes alone no longer auto-shares to commons.",
                 },
                 "channel": {
                     "type": "string",
@@ -615,7 +620,7 @@ TOOLS: list[dict[str, Any]] = [
         "name": "claimidx_share",
         "title": "Share local claims",
         "description": (
-            "Publish already-ingested local claims. Sharing is automatic: claimidx_ingest, claimidx_claim with yes, and the "
+            "Publish already-ingested local claims to the commons after explicit confirm (share_yes=true). claimidx_claim yes alone stays local; "
             "session hooks already send the public projection to the commons (home.claimidx.com/t/commons, no token, "
             "replayable evals only) and the full record to the private home when CLAIMIDX_HOME_API is set; with the commons "
             "unreachable the projection queues in ~/.claimidx/outbox.jsonl and the next publish or session start sends it. "
@@ -630,6 +635,16 @@ TOOLS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "id": {**_ID, "description": _ID["description"] + " Omit to share every unshared local claim."},
+                "share_yes": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Explicit commons confirm after review. Required for commons publish; default false keeps local/private.",
+                },
+                "yes": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Alias of share_yes for commons confirm.",
+                },
                 "force": {
                     "type": "boolean",
                     "description": "Share even if already shared, and push hint-eval claims to the public outbox anyway. Default false.",
@@ -999,12 +1014,12 @@ PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 
 INSTRUCTIONS = (
     "You are the customer. Path B: mint a DID (init or auto), then first hold cix_bdc82291f2fbb06a on py@3.13 and "
-    "claimidx_claim yes (shares when online; Path B one-shot) before treating ask-only as adoption — ask/home-ask return path_b; ask alone is not a countable commons DID, and local publish without share is publish_no_share (claimidx_share is the safety net). When path_b.countable is true, follow path_b.next: invite another agent onto Path B so more stranger DIDs mint. "
+    "claimidx_claim yes + share_yes (commons confirm; Path B) before treating ask-only as adoption — ask/home-ask return path_b; ask alone is not a countable commons DID, and local publish without share is publish_no_share (claimidx_share is the safety net). When path_b.countable is true, follow path_b.next: invite another agent onto Path B so more stranger DIDs mint. "
     "The loop is three tools: claimidx_ask before a retry, claimidx_apply when the verdict says apply, "
     "claimidx_claim after you fix a miss. claimidx_run wraps a command (no shell) when this harness has no failure hook. "
     "claimidx_hook is only for raw harness JSON. claimidx_home_ask is the remote ledger, not the everyday ask. "
     "After a hit: attempt, observe, then claimidx_confirm or claimidx_fail. "
-    "After you solve something novel, claimidx_claim or claimidx_ingest; both share to the commons in the same call (local=true keeps one here until claimidx_share with its id). "
+    "After you solve something novel, claimidx_claim or claimidx_ingest; publish locally in the same call; commons needs share_yes / claimidx_share with share_yes=true (local=true keeps one here). "
     "Set CLAIMIDX_MCP_TOOLS=core to hide the rest of the catalog. "
     "Batch replay: claimidx_verify (dry_run defaults true; no evals/venv/pip), or claimidx verify --dry-run then "
     "claimidx verify --apply --runnable --harness -k 8. "
@@ -1414,16 +1429,36 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             raise KeyError(args["id"])
         return {"line": propose_line(proposed)}
     if name == "claimidx_share":
-        from .home import share_claim, share_pending
+        from .home import commons_review, needs_commons_confirm, share_claim, share_pending
 
         channel = args.get("channel")
         source = args.get("source")
+        commons_yes = bool(args.get("share_yes") or args.get("yes") is True)
         if args.get("id"):
             to_share = store.get(args["id"])
             if not to_share:
                 raise KeyError(args["id"])
-            return share_claim(store, to_share, force=bool(args.get("force")), explicit=True, channel=channel, source=source)
-        return share_pending(store, force=bool(args.get("force")), channel=channel, source=source)
+            review = commons_review(to_share)
+            if not commons_yes:
+                return {**needs_commons_confirm(to_share.id, review), "review": review}
+            out = share_claim(
+                store,
+                to_share,
+                force=bool(args.get("force")),
+                explicit=True,
+                commons_yes=True,
+                channel=channel,
+                source=source,
+            )
+            if isinstance(out, dict):
+                out.setdefault("review", review)
+            return out
+        if not commons_yes:
+            return {
+                "status": "needs_confirm",
+                "hint": "bulk commons share needs share_yes=true (or yes=true); decline keeps claims local/private",
+            }
+        return share_pending(store, force=bool(args.get("force")), commons_yes=True, channel=channel, source=source)
     if name == "claimidx_sync":
         from .home import pull, share_pending
 
@@ -1497,8 +1532,9 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         if not draft.get("ok") or not args.get("yes"):
             return draft
         local = bool(args.get("local"))
-        # share defaults true with yes; local=true or share=false skips commons share.
-        want_share = (not local) and (args.get("share") is not False)
+        # yes = local claim; commons only with share_yes (or legacy share=true explicit).
+        want_home = not local
+        want_commons = (not local) and bool(args.get("share_yes") or args.get("share") is True)
         out = publish_draft(
             draft,
             db=store.path,
@@ -1506,8 +1542,14 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             clean_room=not args.get("no_clean_room"),
             local=local,
         )
-        if isinstance(out, dict) and out.get("ok") and want_share:
-            out = ensure_online_share(store, out)
+        if isinstance(out, dict) and out.get("ok") and want_home:
+            out = ensure_online_share(store, out, commons_yes=want_commons)
+            if want_commons and isinstance(out, dict) and out.get("id"):
+                from .home import commons_review
+
+                claim = store.get(str(out["id"]))
+                if claim is not None:
+                    out.setdefault("review", commons_review(claim))
         if isinstance(out, dict) and out.get("ok"):
             out["path_b"] = path_b_cta(store, resolve_owner(args.get("own")))
         return out

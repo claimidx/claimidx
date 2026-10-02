@@ -27,7 +27,7 @@ def test_path_b_cta_uncountable_until_share(tmp_path: Path):
     cta_pub = path_b_cta(store, did)
     assert cta_pub["countable"] is False
     assert cta_pub["published"] is True
-    assert cta_pub["next"] == "claimidx share"
+    assert cta_pub["next"] == "claimidx share --yes"
     assert "publish_no_share" in cta_pub["why"]
     store.log("commons-push", did, "cix_deadbeef", {"exists": False})
     cta2 = path_b_cta(store, did)
@@ -46,7 +46,7 @@ def test_path_b_cta_staged_after_hold(tmp_path: Path):
     cta = path_b_cta(store, did)
     assert cta["held"] is True
     assert cta["countable"] is False
-    assert cta["next"] == "claimidx claim --yes"
+    assert cta["next"] == "claimidx claim --yes --share-yes"
     assert "&&" not in cta["next"]
     assert "hold alone" in cta["why"]
 
@@ -104,4 +104,4 @@ def test_path_b_cta_invite_after_countable(tmp_path: Path):
     assert cta["countable"] is True
     assert "invite another agent" in cta["next"]
     assert FIRST_HOLD_ID in cta["next"]
-    assert ">=0.7.13" in cta["next"]
+    assert ">=0.7.14" in cta["next"]

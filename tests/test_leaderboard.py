@@ -51,7 +51,7 @@ def test_a_replayed_hold_is_reported_to_the_private_home_and_signed_to_the_commo
     monkeypatch.setattr(
         home, "_post", lambda url, payload, token="", timeout=20.0: posts.append((url, payload)) or {"claim": {"nc": 1, "nr": 1, "st": "confirmed"}}
     )
-    home.share_claim(store, c)
+    home.share_claim(store, c, commons_yes=True)
     posts.clear()
     out = home.share_observation(store, c, held=True, actor="did:claimidx:agent-b")
     assert out and out["status"] == "confirm" and out["home"]["nr"] == 1 and out["commons"]["nr"] == 1
@@ -70,7 +70,7 @@ def test_without_a_private_home_the_commons_still_gets_the_hold(tmp_path: Path, 
     c = store.put(_claim())
     posts: list[str] = []
     monkeypatch.setattr(home, "_post", lambda url, payload, token="", timeout=20.0: posts.append(url) or {"claim": {}})
-    home.share_claim(store, c)
+    home.share_claim(store, c, commons_yes=True)
     out = home.share_observation(store, c, held=False, actor="did:claimidx:agent-b")
     assert out["status"] == "fail" and "home" not in out and "commons" in out
     assert posts[-1].endswith(f"/api/claims/{c.id}/fail")

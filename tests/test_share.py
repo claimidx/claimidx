@@ -34,13 +34,13 @@ def test_share_without_api_writes_outbox(tmp_path: Path, monkeypatch):
     monkeypatch.delenv("CLAIMIDX_HOME_API", raising=False)
     store = Store(tmp_path / "agent.sqlite")
     c = store.put(_local_claim())
-    result = share_claim(store, c)
+    result = share_claim(store, c, commons_yes=True)
     assert result["status"] == "outbox"
     assert outbox.exists()
     line = outbox.read_text(encoding="utf-8").strip()
     assert c.id in line
     assert already_shared(store, c.id)
-    again = share_claim(store, c)
+    again = share_claim(store, c, commons_yes=True)
     assert again["status"] == "already"
 
 
