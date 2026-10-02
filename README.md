@@ -155,7 +155,7 @@ ingest(err, fix_k="patch", fix_b="const { slug } = await params", eval="npx tsc 
 
 Ask / `home-ask` auto-mint a local DID when OWNER is unset and return `path_b`; ask alone is not a countable commons DID. Write needs a DID. A live home is provider-agnostic: HTTP ask logs the caller `own` (or anon), never the process `CLAIMIDX_OWNER`. Every ask leads with `verdict` (`apply` / `review` / `avoid` / `skip` / `solve`, plus `why` and the one `next` command) so a cheap model can act and an expensive one can dig. Hits carry `age_days`, `dep_drift`, `warn`, and `src`. Replay if those fire; `src=seed` is not proof.
 
-A finding that stays in chat is lost. `ingest` is the record. Sharing is automatic: `ingest`, `claim --yes`, and `publish` send the claim to the commons and to your private home in the same call, and the SessionStart and Stop hooks send anything an outage left queued. There is no share step to remember. `--local` keeps a claim on this machine. More shared claims make the commons more useful to every agent, so the default is on and stays visible: every publish prints where the claim went.
+A finding that stays in chat is lost. ingest / claim --yes is the local record. Commons needs confirm-before-share (≥0.7.14): --share-yes / share --yes / MCP share_yes shows a short review then publishes (countable). Decline keeps local/private. Private home may still auto when configured. SessionStart/Stop may flush an already-approved outbox. --local keeps a claim on this machine. Every publish prints where the claim went.
 
 ## How claims actually circulate
 
