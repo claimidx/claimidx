@@ -117,6 +117,8 @@ class ReplayResult:
     stderr: str = ""
     env: str = ""  # observed executing runtime, e.g. py@3.12 / node@20
     ms: int = 0
+    net: str = ""  # offline | open | unenforced
+    net_how: str = ""  # bwrap | interpreter | docker | python-flags | cargo-net-offline | head
 
     def as_dict(self) -> dict:
         return {
@@ -130,6 +132,8 @@ class ReplayResult:
             "stderr": self.stderr[-400:],
             "env": self.env,
             "ms": int(self.ms or 0),
+            "net": self.net,
+            "net_how": self.net_how,
         }
 
     def is_hint(self) -> bool:
@@ -289,8 +293,332 @@ def _precondition(head: str, cwd: str | None, cmd: str = "") -> str | None:
     return f"eval-precondition: no {'/'.join(markers)} in cwd"
 
 
-def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = None, *, trust: str = "local") -> ReplayResult:
-    """Run eval.cmd. `trust="untrusted"` (a pulled or seed claim) only runs the portable proof grammar."""
+_BLOCK_SIGNALS = (
+    "URLError",
+    "ENETUNREACH",
+    "getaddrinfo",
+    "claimidx-replay-offline",
+    "Network is unreachable",
+    "WSAENETUNREACH",
+    "WinError 10051",
+    "nodename nor servname",
+)
+
+_SITECUSTOMIZE = """\
+try:
+    import errno
+    import socket
+
+    _orig_connect = socket.socket.connect
+    _orig_create = socket.create_connection
+
+    def _loopback(host):
+        if isinstance(host, (bytes, bytearray)):
+            try:
+                host = host.decode("utf-8", "replace")
+            except Exception:
+                return False
+        if not isinstance(host, str):
+            return False
+        h = host.strip().lower()
+        if h.startswith("[") and h.endswith("]"):
+            h = h[1:-1]
+        return h in {"127.0.0.1", "::1", "localhost"}
+
+    def _blocked():
+        raise OSError(errno.ENETUNREACH, "claimidx-replay-offline")
+
+    def _connect(self, address):
+        if isinstance(address, (str, bytes, bytearray)):
+            return _orig_connect(self, address)
+        if isinstance(address, tuple) and address and _loopback(address[0]):
+            return _orig_connect(self, address)
+        _blocked()
+
+    def _create_connection(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None, *, all_errors=False):
+        if isinstance(address, (str, bytes, bytearray)):
+            return _orig_create(address, timeout, source_address, all_errors=all_errors)
+        host = address[0] if isinstance(address, tuple) and address else None
+        if _loopback(host):
+            return _orig_create(address, timeout, source_address, all_errors=all_errors)
+        _blocked()
+
+    socket.socket.connect = _connect
+    socket.create_connection = _create_connection
+except Exception:
+    pass
+"""
+
+_BLOCK_NET_JS = """\
+try {
+  var net = require("net");
+  var orig = net.Socket.prototype.connect;
+  function loopback(h) {
+    if (h === "") return true;
+    var s = String(h).toLowerCase();
+    return s === "127.0.0.1" || s === "::1" || s === "localhost";
+  }
+  function blocked() {
+    var err = new Error("claimidx-replay-offline");
+    err.code = "ENETUNREACH";
+    err.errno = process.platform === "win32" ? 10051 : 101;
+    throw err;
+  }
+  net.Socket.prototype.connect = function () {
+    var args = Array.prototype.slice.call(arguments);
+    var a0 = args[0];
+    if (typeof a0 === "string" || (typeof Buffer !== "undefined" && Buffer.isBuffer(a0))) {
+      return orig.apply(this, args);
+    }
+    if (typeof a0 === "number" || typeof a0 === "function" || a0 == null) {
+      return orig.apply(this, args);
+    }
+    if (typeof a0 === "object") {
+      if (a0.path) return orig.apply(this, args);
+      var has = false;
+      var host;
+      if (Object.prototype.hasOwnProperty.call(a0, "host")) { host = a0.host; has = true; }
+      else if (Object.prototype.hasOwnProperty.call(a0, "hostname")) { host = a0.hostname; has = true; }
+      if (has && loopback(host)) return orig.apply(this, args);
+      blocked();
+    }
+    blocked();
+  };
+} catch (e) {}
+"""
+
+_OFFLINE_DIR: str | None = None
+
+
+def _py_isolation(parts: list[str]) -> bool:
+    """True when python/python3 is started with -S, -I, or -P (sitecustomize will not load)."""
+    if not parts or _norm_head(parts[0]) not in {"python", "python3"}:
+        return False
+    for tok in parts[1:]:
+        if tok.startswith("--"):
+            continue
+        if not tok.startswith("-") or tok == "-":
+            continue
+        body = tok[1:]
+        if body.startswith("c"):
+            return False
+        cut = body.split("c", 1)[0].replace("X", "")
+        if any(ch in cut for ch in "SIP"):
+            return True
+        if "c" in body:
+            return False
+    return False
+
+
+def _offline_dir() -> str:
+    """Temp dir holding sitecustomize.py and block_net.js. Cached for the process."""
+    global _OFFLINE_DIR
+    if _OFFLINE_DIR and os.path.isdir(_OFFLINE_DIR):
+        return _OFFLINE_DIR
+    import tempfile
+
+    root = tempfile.mkdtemp(prefix="claimidx-offline-")
+    Path(root, "sitecustomize.py").write_text(_SITECUSTOMIZE, encoding="utf-8")
+    Path(root, "block_net.js").write_text(_BLOCK_NET_JS, encoding="utf-8")
+    _OFFLINE_DIR = root
+    return root
+
+
+def _bwrap_argv(argv: list[str], cwd: str | None) -> list[str]:
+    work = os.path.abspath(cwd or os.getcwd())
+    return [
+        "bwrap",
+        "--unshare-net",
+        "--unshare-pid",
+        "--die-with-parent",
+        "--new-session",
+        "--ro-bind",
+        "/",
+        "/",
+        "--bind",
+        work,
+        work,
+        "--tmpfs",
+        "/tmp",
+        "--chdir",
+        work,
+        "--",
+        *argv,
+    ]
+
+
+def _apply_offline(env: dict[str, str], parts: list[str], argv: list[str], *, net_open: bool, cwd: str | None) -> tuple[list[str], str, str]:
+    """Overlay the child env. Returns (argv, net, net_how). Does not touch os.environ."""
+    if net_open:
+        return argv, "open", ""
+    if not parts:
+        return argv, "unenforced", ""
+    head = _norm_head(parts[0])
+    if head == "docker":
+        return argv, "unenforced", "docker"
+    if os.name != "nt" and shutil.which("bwrap"):
+        return _bwrap_argv(argv, cwd), "offline", "bwrap"
+    if head in {"python", "python3", "pytest"} and not _py_isolation(parts):
+        root = _offline_dir()
+        prev = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = root + (os.pathsep + prev if prev else "")
+        return argv, "offline", "interpreter"
+    if head in {"python", "python3"} and _py_isolation(parts):
+        return argv, "unenforced", "python-flags"
+    if head in {"node", "npm", "npx"}:
+        js = str(Path(_offline_dir(), "block_net.js"))
+        flag = "--require " + (f'"{js}"' if " " in js else js)
+        existing = env.get("NODE_OPTIONS", "")
+        if "block_net.js" not in existing:
+            env["NODE_OPTIONS"] = (flag + " " + existing).strip()
+        return argv, "offline", "interpreter"
+    if head == "cargo":
+        env["CARGO_NET_OFFLINE"] = "true"
+        return argv, "unenforced", "cargo-net-offline"
+    if head == "go":
+        env["GOPROXY"] = "off"
+        return argv, "unenforced", "go"
+    if head == "uv":
+        return argv, "unenforced", "uv"
+    return argv, "unenforced", head
+
+
+def _close_job(job: object) -> None:
+    try:
+        import ctypes
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.CloseHandle.argtypes = [ctypes.c_void_p]
+        k32.CloseHandle.restype = ctypes.c_int
+        k32.CloseHandle(job)
+    except Exception:
+        return
+
+
+def _job_kill_on_close(proc: subprocess.Popen) -> object | None:
+    """Windows Job Object with KILL_ON_JOB_CLOSE. Not a network control. Failure is ignored."""
+    if os.name != "nt":
+        return None
+    job = None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.CreateJobObjectW.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        k32.CreateJobObjectW.restype = ctypes.c_void_p
+        k32.SetInformationJobObject.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+        k32.SetInformationJobObject.restype = wintypes.BOOL
+        k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        k32.OpenProcess.restype = ctypes.c_void_p
+        k32.AssignProcessToJobObject.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        k32.AssignProcessToJobObject.restype = wintypes.BOOL
+        k32.CloseHandle.argtypes = [ctypes.c_void_p]
+        k32.CloseHandle.restype = wintypes.BOOL
+
+        class JOBOBJECT_BASIC_LIMIT_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ("PerProcessUserTimeLimit", ctypes.c_int64),
+                ("PerJobUserTimeLimit", ctypes.c_int64),
+                ("LimitFlags", wintypes.DWORD),
+                ("MinimumWorkingSetSize", ctypes.c_size_t),
+                ("MaximumWorkingSetSize", ctypes.c_size_t),
+                ("ActiveProcessLimit", wintypes.DWORD),
+                ("Affinity", ctypes.c_size_t),
+                ("PriorityClass", wintypes.DWORD),
+                ("SchedulingClass", wintypes.DWORD),
+            ]
+
+        class IO_COUNTERS(ctypes.Structure):
+            _fields_ = [
+                ("ReadOperationCount", ctypes.c_ulonglong),
+                ("WriteOperationCount", ctypes.c_ulonglong),
+                ("OtherOperationCount", ctypes.c_ulonglong),
+                ("ReadTransferCount", ctypes.c_ulonglong),
+                ("WriteTransferCount", ctypes.c_ulonglong),
+                ("OtherTransferCount", ctypes.c_ulonglong),
+            ]
+
+        class JOBOBJECT_EXTENDED_LIMIT_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ("BasicLimitInformation", JOBOBJECT_BASIC_LIMIT_INFORMATION),
+                ("IoInfo", IO_COUNTERS),
+                ("ProcessMemoryLimit", ctypes.c_size_t),
+                ("JobMemoryLimit", ctypes.c_size_t),
+                ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                ("PeakJobMemoryUsed", ctypes.c_size_t),
+            ]
+
+        job = k32.CreateJobObjectW(None, None)
+        if not job:
+            return None
+        info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
+        info.BasicLimitInformation.LimitFlags = 0x2000
+        if not k32.SetInformationJobObject(job, 9, ctypes.byref(info), ctypes.sizeof(info)):
+            k32.CloseHandle(job)
+            return None
+        handle = k32.OpenProcess(0x0100 | 0x0001, False, int(proc.pid))
+        if not handle:
+            k32.CloseHandle(job)
+            return None
+        ok = k32.AssignProcessToJobObject(job, handle)
+        k32.CloseHandle(handle)
+        if not ok:
+            k32.CloseHandle(job)
+            return None
+        return job
+    except Exception:
+        if job:
+            _close_job(job)
+        return None
+
+
+def _run_captured(argv: list[str], timeout: float, cwd: str | None, env: dict[str, str]) -> subprocess.CompletedProcess:
+    """Popen + communicate. On Windows the child is in a kill-on-close job until communicate returns."""
+    proc = subprocess.Popen(
+        argv,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        cwd=cwd or None,
+        env=env,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    job = _job_kill_on_close(proc)
+    try:
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+            try:
+                proc.communicate(timeout=5)
+            except Exception:
+                pass
+            raise
+        return subprocess.CompletedProcess(argv, proc.returncode, out or "", err or "")
+    finally:
+        if job is not None:
+            _close_job(job)
+
+
+def network_blocked(result: ReplayResult) -> bool:
+    """True when an offline replay actually blocked a network attempt. A hold is never a block."""
+    if result.held or (result.net or "") != "offline":
+        return False
+    blob = "\n".join([result.stdout or "", result.stderr or "", result.reason or ""])
+    return any(sig in blob for sig in _BLOCK_SIGNALS)
+
+
+def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = None, *, trust: str = "local", net: bool = False) -> ReplayResult:
+    """Run eval.cmd. `trust="untrusted"` (a pulled or seed claim) only runs the portable proof grammar.
+
+    Default is offline. `net=True` leaves the network open and records net=open; it does not mint nr.
+    """
     if not (cmd or "").strip():
         return ReplayResult(True, False, None, expect, False, "builtin")
     ok, reason = eval_allowed(cmd)
@@ -321,28 +649,18 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
     observed = observe_env(argv)
     env = os.environ.copy()
     env.update(extra_env)
+    argv, net_state, net_how = _apply_offline(env, parts, argv, net_open=bool(net), cwd=cwd)
     t0 = time.monotonic()
     try:
         # Decode as UTF-8, not locale.getpreferredencoding() (cp1252 on Windows): stderr feeds fingerprints,
         # and a mis-decoded `café` would give an OS-dependent fp.
-        proc = subprocess.run(
-            argv,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            check=False,
-            stdin=subprocess.DEVNULL,
-            cwd=cwd or None,
-            env=env,
-        )
+        proc = _run_captured(argv, timeout, cwd, env)
     except subprocess.TimeoutExpired:
         ms = int((time.monotonic() - t0) * 1000)
-        return ReplayResult(True, True, 124, expect, False, "timeout", env=observed, ms=ms)
+        return ReplayResult(True, True, 124, expect, False, "timeout", env=observed, ms=ms, net=net_state, net_how=net_how)
     except OSError as e:
         ms = int((time.monotonic() - t0) * 1000)
-        return ReplayResult(True, False, None, expect, False, f"exec-error:{e}", env=observed, ms=ms)
+        return ReplayResult(True, False, None, expect, False, f"exec-error:{e}", env=observed, ms=ms, net=net_state, net_how=net_how)
     held = proc.returncode == expect
     ms = int((time.monotonic() - t0) * 1000)
     return ReplayResult(
@@ -356,4 +674,6 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
         proc.stderr or "",
         observed,
         ms,
+        net_state,
+        net_how,
     )

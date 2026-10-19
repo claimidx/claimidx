@@ -75,6 +75,11 @@ def encode_miss(out: dict) -> str:
     why = out.get("near_why") or []
     if why:
         lines.append("near_why " + ",".join(why))
+    gate = out.get("gate") or []
+    if gate:
+        from .query import format_gate_line
+
+        lines.append("gate " + format_gate_line(gate[0]))
     return "\n".join(lines) + "\n"
 
 
@@ -95,7 +100,7 @@ def _ask_hits(store: Store, ns: argparse.Namespace, err: str):
     return q, hits, candidates
 
 
-def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidates: list | None = None) -> int:
+def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidates: list | None = None, cwd: str | None = None) -> int:
     from .impact import path_b_cta
 
     path_b = path_b_cta(store, resolve_owner(None)) if store is not None else None
@@ -114,7 +119,7 @@ def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidate
         if store is not None:
             from .query import miss_enrichment
 
-            out.update(miss_enrichment(store, q, list(candidates or []), k=5))
+            out.update(miss_enrichment(store, q, list(candidates or []), k=5, cwd=cwd))
         if fmt == "json":
             print(json.dumps(out, default=str))
         else:
@@ -162,7 +167,7 @@ def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidate
 def cmd_ask(ns: argparse.Namespace) -> int:
     store = _store(ns)
     q, hits, candidates = _ask_hits(store, ns, ns.err)
-    return _print_ask(q, hits, ns.fmt, store=store, candidates=candidates)
+    return _print_ask(q, hits, ns.fmt, store=store, candidates=candidates, cwd=getattr(ns, "cwd", None))
 
 
 def cmd_hook(ns: argparse.Namespace) -> int:
@@ -264,7 +269,7 @@ def cmd_hook(ns: argparse.Namespace) -> int:
     if not hits:
         from .query import miss_enrichment
 
-        enrich = miss_enrichment(store, q, candidates, k=5)
+        enrich = miss_enrichment(store, q, candidates, k=5, cwd=ctx.get("cwd") or None)
         near_ids = ",".join(str(r.get("id") or "") for r in (enrich.get("near") or [])[:3])
         end_ids = ",".join(str(r.get("id") or "") for r in (enrich.get("dead_ends") or [])[:3])
         extra = ""
@@ -272,6 +277,14 @@ def cmd_hook(ns: argparse.Namespace) -> int:
             extra += f"\nnear {near_ids}"
         if end_ids:
             extra += f"\ndead_ends {end_ids}"
+        why = enrich.get("near_why") or []
+        if why:
+            extra += "\nnear_why " + ",".join(str(x) for x in why)
+        gate = enrich.get("gate") or []
+        if gate:
+            from .query import format_gate_line
+
+            extra += "\ngate " + format_gate_line(gate[0])
         v = verdict_for(q, [])
         miss = (
             f"CLAIMIDX verdict {v['action']} — {v['why']}; next: {v['next']}\n"
@@ -317,7 +330,7 @@ def cmd_hook(ns: argparse.Namespace) -> int:
             body = brief + "\n" + body
         print(claude_context(event, body))
         return 0
-    return _print_ask(q, hits, ns.fmt, store=store, candidates=candidates)
+    return _print_ask(q, hits, ns.fmt, store=store, candidates=candidates, cwd=ctx.get("cwd") or None)
 
 
 def cmd_publish(ns: argparse.Namespace) -> int:
@@ -453,20 +466,29 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
     gate_warns: list[str] = []
     if getattr(ns, "replay", False):
         from .evaltrust import eval_trust
-        from .gate import graduation_gate
-        from .sandbox import replay
+        from .gate import confirm_replay, flag_refusal, graduation_gate
 
         trust = eval_trust(store, c, override=bool(getattr(ns, "trust_eval", False)))
         if getattr(ns, "trust_eval", False):
             print(f"# --trust-eval: running eval from {c.own} ({c.src}): {c.eval.cmd}", file=sys.stderr)
-        result = replay(c.eval.cmd, c.eval.expect, cwd=getattr(ns, "cwd", None), trust=trust)
+        result, second, flag = confirm_replay(
+            c,
+            getattr(ns, "cwd", None),
+            trust,
+            net=bool(getattr(ns, "net", False)),
+            rerun=bool(getattr(ns, "rerun", False)),
+        )
         replay_info = result.as_dict()
+        if second is not None:
+            replay_info["rerun"] = second.as_dict()
         eval_detail = {
             "ms": int(replay_info.get("ms") or 0),
             "held": bool(result.held),
             "env": {"rt": result.env} if result.env else {},
             "trust_domain": ns.trust_domain or "",
             "sensor_plane": ns.sensor_plane or "",
+            "net": result.net or "",
+            "net_how": result.net_how or "",
         }
         if result.is_hint():
             from .gate import hint_refusal
@@ -482,6 +504,20 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
                 print(f"not recorded: {refusal['reason']}", file=sys.stderr)
                 if refusal["suggest"].get("hint"):
                     print(f"suggest: {refusal['suggest']['hint']}", file=sys.stderr)
+            return 2
+        refused = flag_refusal(flag)
+        if refused:
+            from .match import confirm_lights
+
+            lights = confirm_lights(held=False, recorded=False, reason=str(refused.get("reason") or ""), contested=c.st == "contested")
+            if ns.fmt == "json":
+                print(json.dumps({"held": False, "replay": replay_info, "recorded": False, "lights": lights, **refused}, default=str))
+            else:
+                print(json.dumps(replay_info), file=sys.stderr)
+                print(f"# lights prior_art={lights['prior_art']} integrity={lights['integrity']} recovery={lights['recovery']}", file=sys.stderr)
+                print(f"not recorded: {refused['reason']}", file=sys.stderr)
+                if refused.get("suggest", {}).get("hint"):
+                    print(f"suggest: {refused['suggest']['hint']}", file=sys.stderr)
             return 2
         if not result.held:
             from .gate import unapplied_refusal
@@ -549,6 +585,8 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
             "env": {"rt": replay_info.get("env")} if replay_info and replay_info.get("env") else {},
             "trust_domain": ns.trust_domain or "",
             "sensor_plane": ns.sensor_plane or "",
+            "net": (result.net or "") if replay_info else "",
+            "net_how": (result.net_how or "") if replay_info else "",
         }
     confirmed = store.confirm(
         ns.id,
@@ -1812,6 +1850,7 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--rt", help="runtime and version, for example py@3.13")
     a.add_argument("--dep", action=_AppendCsv, default=None, help="dependency name@version; repeatable or comma-separated")
     a.add_argument("-k", type=int, default=5, help="maximum hits")
+    a.add_argument("--cwd", help="tree for a miss digest mismatch; does not change rank")
     a.set_defaults(func=cmd_ask)
     hk = sub.add_parser("hook", help="harness sensor: stdin failed-tool JSON or stderr -> ask; never applies fix.b")
     hk.add_argument("--err")
@@ -1885,6 +1924,8 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--cwd")
     c.add_argument("--trust-eval", action="store_true", help="run this claim's eval even though it was not published here (prints it first)")
     c.add_argument("--strict-digest", action="store_true", help="refuse nr on digest_drift instead of warning (also CLAIMIDX_STRICT_DIGEST=1)")
+    c.add_argument("--net", action="store_true", help="allow the network during --replay; the run is stored and does not mint nr")
+    c.add_argument("--rerun", action="store_true", help="replay twice; disagreement is flaky and does not mint nr or fail the claim")
     c.add_argument("--trust-domain", help="declared observation trust domain (provenance, not quorum)")
     c.add_argument("--sensor-plane", help="declared observation sensor plane (provenance, not quorum)")
     c.set_defaults(func=cmd_confirm)

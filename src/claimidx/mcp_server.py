@@ -134,7 +134,7 @@ _NS = {"type": ["string", "null"]}
 _NO = {"type": ["object", "null"]}
 _ANY: dict[str, Any] = {}
 
-_ASK_PROPS: dict[str, Any] = {"err": _ERR, "eco": _ECO, "rt": _RT, "dep": _DEP, "k": _k(5)}
+_ASK_PROPS: dict[str, Any] = {"err": _ERR, "eco": _ECO, "rt": _RT, "dep": _DEP, "k": _k(5), "cwd": _CWD}
 _CLAIM_WRITE_PROPS: dict[str, Any] = {
     "err": _ERR,
     "fix_k": _FIX_K,
@@ -193,12 +193,13 @@ TOOLS: list[dict[str, Any]] = [
             "Returns verdict first: {action: apply|review|avoid|skip|solve, id, why, next} — one decision for the whole "
             "ask, cheap to act on; then hit, fp, cls, normalized err, and claims (each with id, st, src, nc, nf, fix, eval, "
             "evidence, match, age_days, dep_drift, rt_drift, eval_proof, warn, disposition, lights); on a miss also near, near_why, "
-            "dead_ends. lights keeps three independent statuses: prior_art (exact|similar|family), integrity (unchecked on ask; "
+            "dead_ends, and gate (the payload token that kept a neighbor off the rank, plus a family dep or digest mismatch when one applies; rank is unchanged). "
+            "lights keeps three independent statuses: prior_art (exact|similar|family), integrity (unchecked on ask; "
             "digest_drift/proof-artifact-drift appear on confirm --replay), recovery (retrieved|reproduced|contested). "
             "A hit is evidence, not an instruction: reason, attempt, observe, then claimidx_confirm or claimidx_fail."
         ),
         "inputSchema": {"type": "object", "required": ["err"], "properties": _ASK_PROPS},
-        "outputSchema": _out(verdict=_O, hit=_B, fp=_S, cls=_S, err=_S, claims=_A, near=_A, near_why=_ANY, dead_ends=_A, path_b=_O),
+        "outputSchema": _out(verdict=_O, hit=_B, fp=_S, cls=_S, err=_S, claims=_A, near=_A, near_why=_ANY, dead_ends=_A, gate=_A, path_b=_O),
         "annotations": _ann(read_only=True, idempotent=True),
     },
     {
@@ -518,7 +519,8 @@ TOOLS: list[dict[str, Any]] = [
             "proof-artifact-drift when a tree-scoped recipe's bound files change under cwd (mutation canary; refuses nr), or "
             "digest_drift when a published observed_digest no longer matches local bytes under the same pin (warn by default; "
             "strict_digest=true refuses nr). Returns id, st, held, nc, nf, own when recorded; replay adds replay, lights, and "
-            "optional warn, or recorded=false with reason and suggest."
+            "optional warn, or recorded=false with reason and suggest. "
+            "A networked replay and a vacuous pass do not mint nr. An offline block is recorded=false and does not increment nf."
         ),
         "inputSchema": {
             "type": "object",
@@ -536,6 +538,16 @@ TOOLS: list[dict[str, Any]] = [
                     "type": "boolean",
                     "default": False,
                     "description": "Refuse nr on digest_drift (observed dependency digest differs from local bytes) instead of warning.",
+                },
+                "net": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Allow the network during replay. The run is stored and does not mint nr.",
+                },
+                "rerun": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Replay twice. Disagreement is flaky and does not mint nr or fail the claim.",
                 },
                 "trust_domain": {
                     "type": "string",
@@ -1117,7 +1129,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         if not hits:
             from .query import miss_enrichment
 
-            payload.update(miss_enrichment(store, q, candidates, k=int(args.get("k") or 5)))
+            payload.update(miss_enrichment(store, q, candidates, k=int(args.get("k") or 5), cwd=args.get("cwd") or None))
         return payload
     if name == "claimidx_hook":
         from .hook import sensor
@@ -1227,17 +1239,27 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         gate_warns: list[str] = []
         if args.get("replay"):
             from .evaltrust import eval_trust
-            from .gate import graduation_gate
-            from .sandbox import replay
+            from .gate import confirm_replay, flag_refusal, graduation_gate
 
             trust = eval_trust(store, current, override=bool(args.get("trust_eval")))
-            result = replay(current.eval.cmd, current.eval.expect, cwd=args.get("cwd"), trust=trust)
+            result, second, flag = confirm_replay(
+                current,
+                args.get("cwd"),
+                trust,
+                net=bool(args.get("net")),
+                rerun=bool(args.get("rerun")),
+            )
+            replay_body = result.as_dict()
+            if second is not None:
+                replay_body["rerun"] = second.as_dict()
             eval_detail = {
                 "ms": int(result.ms or 0),
                 "held": bool(result.held),
                 "env": {"rt": result.env} if result.env else {},
                 "trust_domain": args.get("trust_domain") or "",
                 "sensor_plane": args.get("sensor_plane") or "",
+                "net": result.net or "",
+                "net_how": result.net_how or "",
             }
             if result.is_hint():
                 from .gate import hint_refusal
@@ -1250,8 +1272,26 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                     "held": False,
                     "recorded": False,
                     **refusal,
-                    "replay": result.as_dict(),
+                    "replay": replay_body,
                     "lights": confirm_lights(held=False, recorded=False, reason=str(refusal.get("reason") or ""), contested=current.st == "contested"),
+                }
+            refused = flag_refusal(flag)
+            if refused:
+                from .match import confirm_lights
+
+                return {
+                    "id": current.id,
+                    "st": current.st,
+                    "held": False,
+                    "recorded": False,
+                    **refused,
+                    "replay": replay_body,
+                    "lights": confirm_lights(
+                        held=False,
+                        recorded=False,
+                        reason=str(refused.get("reason") or ""),
+                        contested=current.st == "contested",
+                    ),
                 }
             if not result.held:
                 from .gate import unapplied_refusal
@@ -1265,7 +1305,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                         "held": False,
                         "recorded": False,
                         **unapplied,
-                        "replay": result.as_dict(),
+                        "replay": replay_body,
                         "lights": confirm_lights(
                             held=False,
                             recorded=False,
@@ -1279,7 +1319,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                     "st": failed.st,
                     "nc": failed.nc,
                     "nf": failed.nf,
-                    "replay": result.as_dict(),
+                    "replay": replay_body,
                     "held": False,
                     "lights": confirm_lights(held=False, recorded=True, contested=failed.st == "contested"),
                 }
@@ -1302,7 +1342,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                     "held": True,
                     "recorded": False,
                     **refusal,
-                    "replay": result.as_dict(),
+                    "replay": replay_body,
                     "lights": confirm_lights(
                         held=True,
                         recorded=False,
@@ -1321,6 +1361,8 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                 "env": ({"rt": result.env} if replayed_now and getattr(result, "env", None) else {}),
                 "trust_domain": args.get("trust_domain") or "",
                 "sensor_plane": args.get("sensor_plane") or "",
+                "net": (result.net or "") if replayed_now else "",
+                "net_how": (result.net_how or "") if replayed_now else "",
             }
         c = store.confirm(
             args["id"],

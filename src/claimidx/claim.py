@@ -471,8 +471,7 @@ def _replay_now(
     mode: str = "replayed",
 ) -> dict[str, Any]:
     from .evaltrust import eval_trust
-    from .gate import graduation_gate
-    from .sandbox import replay
+    from .gate import confirm_replay, flag_refusal, graduation_gate, hint_refusal, unapplied_refusal
     from .store import DEFAULT_DB, Store
     from .team import resolve_owner
 
@@ -480,15 +479,16 @@ def _replay_now(
     c = store.get(claim_id)
     if not c:
         return {"held": False, "recorded": False, "reason": "missing"}
-    result = replay(c.eval.cmd, c.eval.expect, cwd=cwd or None, trust=eval_trust(store, c, override=trust_eval))
+    result, second, flag = confirm_replay(c, cwd or None, eval_trust(store, c, override=trust_eval))
     info = result.as_dict()
+    if second is not None:
+        info["rerun"] = second.as_dict()
     if result.is_hint() or not result.ran:
-        from .gate import hint_refusal
-
         return {"held": False, "recorded": False, **hint_refusal(c, result, cwd=cwd), "replay": info}
+    refused = flag_refusal(flag)
+    if refused:
+        return {"held": False, "recorded": False, **refused, "replay": info}
     if not result.held:
-        from .gate import unapplied_refusal
-
         unapplied = unapplied_refusal(c, result, cwd=cwd or None)
         if unapplied:
             return {"held": False, "recorded": False, **unapplied, "replay": info}
@@ -497,7 +497,14 @@ def _replay_now(
     decision = graduation_gate(c, result, cwd=cwd or None, store=store, actor=resolve_owner(own))
     if not decision.mint_nr:
         return {"held": True, "recorded": False, **decision.refusal(), "replay": info}
-    detail = {"ms": int(result.ms or 0), "held": True, "env": {"rt": result.env} if result.env else {}, "mode": mode}
+    detail = {
+        "ms": int(result.ms or 0),
+        "held": True,
+        "env": {"rt": result.env} if result.env else {},
+        "mode": mode,
+        "net": result.net or "",
+        "net_how": result.net_how or "",
+    }
     if detail_extra:
         detail.update(detail_extra)
     confirmed = store.confirm(claim_id, resolve_owner(own), replayed=True, detail=detail)

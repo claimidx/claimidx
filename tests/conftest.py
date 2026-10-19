@@ -29,6 +29,8 @@ def isolate_claimidx(tmp_path, monkeypatch):
     monkeypatch.delenv("CLAIMIDX_CLINE_MCP", raising=False)
     monkeypatch.delenv("CLAIMIDX_CONTINUE_MCP", raising=False)
     monkeypatch.delenv("CLAIMIDX_WINDSURF_MCP", raising=False)
+    monkeypatch.delenv("CLAIMIDX_COPILOT_HOOKS", raising=False)
+    monkeypatch.delenv("COPILOT_HOME", raising=False)
 
     def _cursor():
         override = os.environ.get("CLAIMIDX_CURSOR_MCP")
@@ -70,6 +72,16 @@ def isolate_claimidx(tmp_path, monkeypatch):
         override = os.environ.get("CLAIMIDX_WINDSURF_MCP")
         return Path(override) if override else tmp_path / "absent-windsurf" / "mcp_config.json"
 
+    def _copilot_home():
+        override = os.environ.get("COPILOT_HOME")
+        return Path(override) if override else tmp_path / "absent-copilot"
+
+    def _copilot():
+        override = os.environ.get("CLAIMIDX_COPILOT_HOOKS")
+        if override:
+            return Path(override)
+        return _copilot_home() / "hooks" / "claimidx.json"
+
     monkeypatch.setattr("claimidx.hook.cursor_mcp_path", _cursor)
     monkeypatch.setattr("claimidx.hook.grok_config_path", _grok)
     monkeypatch.setattr("claimidx.hook.opencode_config_path", _opencode)
@@ -80,3 +92,5 @@ def isolate_claimidx(tmp_path, monkeypatch):
     monkeypatch.setattr("claimidx.hook.cline_mcp_path", _cline)
     monkeypatch.setattr("claimidx.hook.continue_mcp_path", _continue)
     monkeypatch.setattr("claimidx.hook.windsurf_mcp_path", _windsurf)
+    monkeypatch.setattr("claimidx.hook._copilot_home", _copilot_home)
+    monkeypatch.setattr("claimidx.hook.copilot_hooks_path", _copilot)

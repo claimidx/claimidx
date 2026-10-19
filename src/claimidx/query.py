@@ -31,7 +31,69 @@ def retrieve(store: Store, q: dict[str, Any], *, k: int = 5, actor: str | None =
     return hits, candidates
 
 
-def miss_enrichment(store: Store, q: dict[str, Any], candidates: list[Claim], *, k: int = 5) -> dict[str, Any]:
+def gate_explain(
+    store: Store | None,
+    q: dict[str, Any],
+    candidates: list[Claim],
+    *,
+    cwd: str | None = None,
+) -> list[dict[str, Any]]:
+    """Say which payload token kept a neighbor off the rank. Does not change rank or similarity."""
+    from .binding import digest_drift
+    from .match import _ERR_BOILER, _err_tokens
+
+    qerr = str(q.get("err") or "")
+    qcls = str(q.get("cls") or classify(qerr))
+    qdep = list(q.get("dep") or [])
+    qrt = str(q.get("rt") or "")
+    qeco = str(q.get("eco") or "")
+    q_payload = _err_tokens(qerr) - _ERR_BOILER
+    rows: list[dict[str, Any]] = []
+    for claim in candidates:
+        sim = float(similarity(q, claim) or 0.0)
+        if sim <= 0 and (claim.cls or "") != qcls:
+            continue
+        c_payload = _err_tokens(claim.err or "") - _ERR_BOILER
+        row: dict[str, Any] = {
+            "id": claim.id,
+            "sim": sim,
+            "query_only": sorted(q_payload - c_payload)[:12],
+            "claim_only": sorted(c_payload - q_payload)[:12],
+        }
+        if not qdep and claim.dep:
+            if fingerprint(err=qerr, cls=qcls or classify(qerr), eco=qeco, rt=qrt, dep=list(claim.dep)) == claim.fp:
+                row["family_dep"] = list(claim.dep)
+        if cwd and store is not None:
+            proof = store.proof_for(claim.id)
+            if proof is not None and getattr(proof, "observed_digest", None):
+                drift = digest_drift(proof.observed_digest, cwd, claim.eco or qeco)
+                if drift:
+                    row["digest_mismatch"] = drift
+        rows.append(row)
+    rows.sort(key=lambda r: (-float(r["sim"]), str(r["id"])))
+    return rows[:8]
+
+
+def format_gate_line(row: dict[str, Any]) -> str:
+    """One miss line: id, the tokens on each side, then family_dep and digest_mismatch when set."""
+    query_only = ",".join(row.get("query_only") or [])
+    claim_only = ",".join(row.get("claim_only") or [])
+    line = f"{row.get('id') or ''} query {query_only} claim {claim_only}"
+    if row.get("family_dep"):
+        line += " family_dep " + ",".join(str(d) for d in row["family_dep"])
+    if row.get("digest_mismatch"):
+        line += " digest_mismatch " + ",".join(str(d) for d in row["digest_mismatch"])
+    return line
+
+
+def miss_enrichment(
+    store: Store,
+    q: dict[str, Any],
+    candidates: list[Claim],
+    *,
+    k: int = 5,
+    cwd: str | None = None,
+) -> dict[str, Any]:
     """Near neighbors + contested/wontfix family rows. Never promoted into claims[]."""
     near_hits = rank_near(q, candidates, k=min(3, k))
     pool: list[Claim] = []
@@ -49,11 +111,15 @@ def miss_enrichment(store: Store, q: dict[str, Any], candidates: list[Claim], *,
         near_why.append("no_near_neighbors")
     if ends:
         near_why.append("dead_end")
-    return {
+    out: dict[str, Any] = {
         "near": [hit_compact(q, c, s) for c, s in near_hits],
         "near_why": near_why,
         "dead_ends": [hit_compact(q, c, float(similarity(q, c) or 0.0)) for c in ends],
     }
+    gate = gate_explain(store, q, pool, cwd=cwd)
+    if gate:
+        out["gate"] = gate
+    return out
 
 
 def ask(
@@ -64,6 +130,7 @@ def ask(
     dep: list[str] | None = None,
     k: int = 5,
     db: str | os.PathLike[str] | None = None,
+    cwd: str | None = None,
 ) -> dict:
     """Query the local index. Same payload as `claimidx --fmt json ask`."""
     from .impact import path_b_cta
@@ -90,7 +157,7 @@ def ask(
             "session": session,
             "path_b": path_b,
         }
-        miss.update(miss_enrichment(store, q, candidates, k=k))
+        miss.update(miss_enrichment(store, q, candidates, k=k, cwd=cwd))
         return miss
     return {
         "verdict": verdict_for(q, hits),

@@ -367,6 +367,8 @@ def test_codex_hooks_update_stale_matcher(tmp_path):
     assert rec["status"] in {"installed", "updated"}
     data = json.loads(hooks.read_text(encoding="utf-8"))
     assert "shell" in (data["hooks"]["PostToolUse"][0].get("matcher") or "")
+    failure = data["hooks"].get("PostToolUseFailure") or []
+    assert not any("claimidx hook" in json.dumps(g) for g in failure)
 
 
 def test_subagent_stop_does_not_block(tmp_path, capsys):

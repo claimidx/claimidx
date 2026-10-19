@@ -88,13 +88,16 @@ def clean_room(claim: Claim, cwd: str, *, db, own: str | None, trust_eval: bool 
                 out["reason"] = err
                 return out
         from .evaltrust import eval_trust
-        from .sandbox import replay
+        from .sandbox import network_blocked, replay
         from .store import DEFAULT_DB, Store
 
         store = Store(db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB))
         trust = eval_trust(store, claim, override=trust_eval)
         before = replay(claim.eval.cmd, claim.eval.expect, cwd=room, trust=trust)
         out["before"] = before.as_dict()
+        if network_blocked(before):
+            out["reason"] = "the clean-clone replay was blocked offline; fix.b was not applied and nr was not minted"
+            return out
         if before.held:
             out["reason"] = "eval already holds in a clean clone of HEAD before fix.b: not discriminating (is the fix already committed?)"
             return out

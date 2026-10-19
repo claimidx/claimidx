@@ -8,9 +8,12 @@ asserted replay, and it has nothing on disk to bind or hash.
 Checks live here, in order, and each returns the first refusal:
 
 1. env       claim.rt must match the observed executing runtime (python/node)
-2. target    the eval must observe the claimed target            [X1]
-3. binding   proof artifact digests must still match under --cwd [X2]
-4. digest    observed dependency digests drift -> warn           [I1]
+2. vacuous   a held 0-passed / skipped / empty collection does not mint nr
+   reruns    --reruns / --rerun-except never confirms
+   net       --net is stored and does not mint nr; an unenforced fetch does not either
+3. target    the eval must observe the claimed target            [X1]
+4. binding   proof artifact digests must still match under --cwd [X2]
+5. digest    observed dependency digests drift -> warn           [I1]
              (warn by default; refuse with --strict-digest / CLAIMIDX_STRICT_DIGEST)
 
 Source of the contract: `Validated Results/` and tests/test_graduation_gate.py.
@@ -79,6 +82,51 @@ def _env_suggestion(claim: Claim, result: ReplayResult, why: str) -> dict[str, s
 
 
 _MISSING_MOD = re.compile(r"(?:no module named|cannot find module)\s*['\"]?([@A-Za-z0-9_./-]+)", re.I)
+_ZERO_PASSED = re.compile(r"\b0 passed\b")
+_POSITIVE_PASSED = re.compile(r"\b[1-9]\d* passed\b")
+_COLLECTED_ZERO = re.compile(r"collected 0 items")
+_NO_TESTS = re.compile(r"no tests ran", re.I)
+_EXECUTED_ZERO = re.compile(r"Executed 0 of 0")
+_SKIPPED = re.compile(r"\d+ skipped|\bSKIPPED\b")
+_RERUNS = re.compile(r"(?:^|[\s=])--reruns(?:\s|=|$)|(?:^|[\s=])--rerun-except(?:\s|=|$)")
+_FETCH_HEADS = {"npm", "npx", "uv", "go", "cargo", "pip"}
+_FETCH_VERBS = {"install", "fetch", "get", "ci", "add", "sync"}
+_INTERPRETER_WARN = "interpreter hook is not process-tree offline; a child process can still open the network"
+
+
+def vacuous_reason(text: str) -> str:
+    """A held replay that ran nothing. Empty when the output shows a real pass."""
+    blob = text or ""
+    if _ZERO_PASSED.search(blob):
+        return "vacuous-pass: 0 passed"
+    if _COLLECTED_ZERO.search(blob):
+        return "vacuous-pass: collected 0 items"
+    if _NO_TESTS.search(blob):
+        return "vacuous-pass: no tests ran"
+    if _EXECUTED_ZERO.search(blob):
+        return "vacuous-pass: Executed 0 of 0"
+    if _SKIPPED.search(blob) and not _POSITIVE_PASSED.search(blob):
+        return "vacuous-pass: skipped target"
+    return ""
+
+
+def _unenforced_network_recipe(cmd: str) -> bool:
+    if "http://" in (cmd or "") or "https://" in (cmd or ""):
+        return True
+    from .policy import _norm_head, split_eval
+
+    try:
+        _env, parts = split_eval(cmd)
+    except ValueError:
+        return False
+    if not parts:
+        return False
+    head = _norm_head(parts[0])
+    if head == "go" and "get" in parts[1:]:
+        return True
+    if head in _FETCH_HEADS and any(p in _FETCH_VERBS for p in parts[1:]):
+        return True
+    return False
 
 
 def _patch_unapplied(fix_b: str, cwd: str | None) -> str:
@@ -220,6 +268,15 @@ def graduation_gate(
     ok, why = replay_records_hold(claim.rt, result, claim.eval.cmd)
     if not ok:
         return GateDecision(False, why, suggest=_env_suggestion(claim, result, why))
+    why_v = vacuous_reason((result.stdout or "") + "\n" + (result.stderr or ""))
+    if why_v:
+        return GateDecision(False, why_v)
+    if _RERUNS.search(claim.eval.cmd or ""):
+        return GateDecision(False, "reruns: a recipe with --reruns or --rerun-except never confirms")
+    if (result.net or "") == "open":
+        return GateDecision(False, "net-open: a networked replay does not mint nr")
+    if (result.net or "") == "unenforced" and result.rc == 0 and result.held and _unenforced_network_recipe(claim.eval.cmd):
+        return GateDecision(False, "replay-net-unenforced: the offline sandbox could not cover this recipe")
     target = claim_target(cls=claim.cls, err=claim.err, dep=claim.dep)
     if target and not eval_observes_target(claim.eval.cmd, target) and not proof_observes_target(_proof_steps(store, claim.id), target):
         suggest = suggest_eval(target, claim.eco)
@@ -271,4 +328,60 @@ def graduation_gate(
                     False, msg, suggest={"hint": "re-install the pinned artifact, or re-publish --force --observe-digest if the new bytes are the fix"}
                 )
             warns.append(msg)
+    if (result.net_how or "") == "interpreter":
+        warns.append(_INTERPRETER_WARN)
     return GateDecision(True, "held", warns=warns)
+
+
+def confirm_replay(
+    claim: Claim,
+    cwd: str | None,
+    trust: str,
+    *,
+    net: bool = False,
+    rerun: bool = False,
+) -> tuple[ReplayResult, ReplayResult | None, str]:
+    """Replay once, or twice when rerun. Flag is '', 'offline-block', or 'flaky'.
+
+    Imports replay inside so a monkeypatch of claimidx.sandbox.replay is the one that runs.
+    """
+    from .sandbox import network_blocked, replay
+
+    result = replay(claim.eval.cmd, claim.eval.expect, cwd=cwd, trust=trust, net=net)
+    if not (rerun and result.ran and not result.is_hint() and not network_blocked(result)):
+        return result, None, "offline-block" if network_blocked(result) else ""
+    cmd2 = claim.eval.cmd
+    if re.search(r"\bpytest\b", cmd2 or "") and "--cache-clear" not in (cmd2 or ""):
+        cmd2 = cmd2 + " --cache-clear"
+    second = replay(cmd2, claim.eval.expect, cwd=cwd, trust=trust, net=net)
+    if network_blocked(second):
+        return result, second, "flaky" if result.held else "offline-block"
+    if bool(result.held) != bool(second.held):
+        return result, second, "flaky"
+    return result, second, ""
+
+
+def flag_refusal(flag: str) -> dict | None:
+    """Not-recorded payload for an offline block or a flaky pair. Neither mints nor fails."""
+    if flag == "offline-block":
+        return {
+            "reason": "replay-offline: the eval tried to use the network and the offline replay blocked it",
+            "suggest": {
+                "hint": "confirm --replay --net records the run and does not mint nr; it does not fail the claim",
+            },
+        }
+    if flag == "flaky":
+        return {
+            "reason": "flaky: a second replay disagreed with the first",
+            "suggest": {"hint": "a flaky replay does not mint nr and does not fail the claim"},
+        }
+    return None
+
+
+def offline_refusal(result: ReplayResult) -> dict | None:
+    """Skip (do not fail) when the offline sandbox blocked the eval's network attempt."""
+    from .sandbox import network_blocked
+
+    if not network_blocked(result):
+        return None
+    return flag_refusal("offline-block")

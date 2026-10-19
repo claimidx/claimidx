@@ -1,9 +1,12 @@
 """Harness sensor: pull an error out of stdin (Claude Code hook JSON or raw stderr).
 
 Does not apply fix.b. Fail-open: no error / secrets / parse issues → empty.
-`claimidx init` writes Claude PostToolUseFailure, Grok `~/.grok/hooks/claimidx.json`
-(Grok fires PostToolUse for a failed shell, not PostToolUseFailure), and, when
-those configs exist, Cursor/Grok MCP (`claimidx-mcp`). Never writes home URLs or tokens.
+`claimidx init` writes Claude PostToolUseFailure (matcher Bash|PowerShell), Grok
+`~/.grok/hooks/claimidx.json` (Grok fires PostToolUse for a failed shell, not
+PostToolUseFailure), Codex PostToolUse (structured tool_response; Codex does not
+emit PostToolUseFailure), and, when those configs exist, Cursor/Grok MCP
+(`claimidx-mcp`) and a Copilot `postToolUseFailure` user hook. Never writes home
+URLs or tokens.
 """
 
 from __future__ import annotations
@@ -55,6 +58,8 @@ _BLOB_KEYS = (
     "tool_result",
     "toolResult",
     "error",
+    "error_message",
+    "errorMessage",
     "stderr",
     "output",
     "message",
@@ -66,6 +71,8 @@ _INNER_KEYS = (
     "stdout",
     "output",
     "error",
+    "error_message",
+    "errorMessage",
     "content",
     "message",
     "output_for_prompt",
@@ -75,6 +82,9 @@ _INNER_KEYS = (
     "returnDisplay",
     "return_display",
 )
+_TOOL_EVENTS = frozenset({"PostToolUse", "PostToolUseFailure"})
+_FAILURE_KINDS = frozenset({"error", "timeout", "permission_denied"})
+_NESTED_TOOL_KEYS = ("tool_response", "toolResponse", "tool_result", "toolResult")
 _EXIT_KEYS = ("exit_code", "exitCode", "returncode")
 
 
@@ -234,6 +244,46 @@ def extract_hook_exit(raw: str) -> int | None:
     return _payload_exit(obj) if obj else None
 
 
+def _tool_layers(obj: dict) -> list[dict]:
+    """Top-level payload, then one level of tool response objects."""
+    layers = [obj]
+    for key in _NESTED_TOOL_KEYS:
+        val = obj.get(key)
+        if isinstance(val, dict):
+            layers.append(val)
+    return layers
+
+
+def _failure_kind(obj: dict, event: str | None) -> str | None:
+    """Cursor failure_type on a tool event. Unknown kinds (cancelled) are not failures."""
+    if event not in _TOOL_EVENTS:
+        return None
+    for layer in _tool_layers(obj):
+        for key in ("failure_type", "failureType"):
+            raw = layer.get(key)
+            if isinstance(raw, str) and raw.strip().lower() in _FAILURE_KINDS:
+                return raw.strip().lower()
+    return None
+
+
+def _structured_tool_failed(obj: dict, event: str | None) -> bool:
+    """Dict tool_response only. A string body is not a structured failure."""
+    if event not in _TOOL_EVENTS:
+        return False
+    for key in _NESTED_TOOL_KEYS:
+        val = obj.get(key)
+        if not isinstance(val, dict):
+            continue
+        if val.get("success") is False or val.get("is_error") is True or val.get("isError") is True:
+            return True
+        err = val.get("error")
+        if isinstance(err, str) and err.strip():
+            return True
+        if isinstance(err, dict) and _error_text(err):
+            return True
+    return False
+
+
 def posttooluse_is_failure(raw: str) -> bool:
     """Grok fires PostToolUse for a failed shell. Only trust an explicit non-zero exit."""
     obj = _parse_hook_obj(raw)
@@ -250,6 +300,10 @@ def hook_is_failure(raw: str, event: str | None, err: str | None) -> bool:
     """True when this hook event is a failed command that should ask, not a success nudge."""
     if event == "PostToolUseFailure":
         return True
+    obj = _parse_hook_obj(raw)
+    if obj is not None and event in _TOOL_EVENTS:
+        if _failure_kind(obj, event) or _structured_tool_failed(obj, event):
+            return True
     code = extract_hook_exit(raw)
     if code is not None:
         return code != 0
@@ -257,7 +311,6 @@ def hook_is_failure(raw: str, event: str | None, err: str | None) -> bool:
         return True
     if not err:
         return False
-    obj = _parse_hook_obj(raw)
     if not obj:
         return False
     orig = _hook_event_raw(obj)
@@ -275,19 +328,31 @@ def extract_hook_err(raw: str) -> tuple[str | None, str | None]:
         return None, None
     event: str | None = None
     body = text
+    kind: str | None = None
+    structured = False
     obj = _parse_hook_obj(text)
     if obj is not None:
         event = canon_hook_event(_hook_event_raw(obj) or None)
         blobs = _payload_blobs(obj)
         body = "\n".join(blobs) if blobs else ""
-        if event in _SUCCESS_EVENTS and not body:
-            return None, event
-        if not body:
+        if event in _TOOL_EVENTS:
+            kind = _failure_kind(obj, event)
+            structured = _structured_tool_failed(obj, event)
+        if not body and kind:
+            body = f"hook failure: {kind}"
+        if not body and not structured:
             return None, event
     elif _looks_like_incomplete_json(text):
         # Harness-killed mid-flight JSON must not become a raw-text fingerprint miss.
         return None, None
-    err = _first_err_line(body)
+    err = _first_err_line(body) if body else None
+    if not err and event == "PostToolUseFailure" and body.strip():
+        err = " ".join(body.split())[:280]
+    if not err and kind:
+        err = f"hook failure: {kind}"
+    if not err and structured:
+        cleaned = " ".join(body.split()) if body else ""
+        err = cleaned[:280] if cleaned else "hook failure: tool_response"
     if not err:
         return None, event
     try:
@@ -413,7 +478,15 @@ def sensor(
             "claims": [],
             "note": note,
         }
-        miss.update(miss_enrichment(store, q, candidates, k=int(k or 5)))
+        miss.update(
+            miss_enrichment(
+                store,
+                q,
+                candidates,
+                k=int(k or 5),
+                cwd=extract_hook_context(raw or "").get("cwd") or None,
+            )
+        )
         return miss
     chosen = hits
     if event:
@@ -650,14 +723,14 @@ def claude_settings_path() -> Path:
 #   SessionStart        a new session             -> one-line brief (impact, what to do)
 #   Stop                the turn is ending        -> once: a fixed-but-unclaimed failure
 CLAUDE_EVENTS: tuple[tuple[str, str | None], ...] = (
-    ("PostToolUseFailure", "Bash"),
-    ("PostToolUse", "Bash"),
+    ("PostToolUseFailure", "Bash|PowerShell"),
+    ("PostToolUse", "Bash|PowerShell"),
     ("SessionStart", None),
     ("Stop", None),
 )
 
 
-def claude_hook_block(matcher: str | None = "Bash") -> dict:
+def claude_hook_block(matcher: str | None = "Bash|PowerShell") -> dict:
     h: dict = {"type": "command", "command": hook_command()}
     if os.name == "nt":
         h["shell"] = "powershell"
@@ -698,6 +771,10 @@ def merge_claude_hooks(data: dict) -> dict:
                         h["shell"] = "powershell"
                     else:
                         h.pop("shell", None)
+                    if matcher:
+                        group["matcher"] = matcher
+                    else:
+                        group.pop("matcher", None)
                     found = True
         if not found:
             groups.append(claude_hook_block(matcher))
@@ -737,7 +814,7 @@ def install_claude_hook(path: Path | None = None) -> dict:
         "command": hook_command(),
         "event": "PostToolUseFailure",
         "events": [e for e, _m in CLAUDE_EVENTS],
-        "matcher": "Bash",
+        "matcher": CLAUDE_EVENTS[0][1],
     }
     # Already current (command, matcher, shell): leave the user's file untouched.
     if target.exists() and merged == data:
@@ -837,6 +914,20 @@ def continue_mcp_path() -> Path:
     if override:
         return Path(override)
     return Path.home() / ".continue" / "mcpServers" / "claimidx.json"
+
+
+def _copilot_home() -> Path:
+    override = os.environ.get("COPILOT_HOME")
+    if override:
+        return Path(override)
+    return Path.home() / ".copilot"
+
+
+def copilot_hooks_path() -> Path:
+    override = os.environ.get("CLAIMIDX_COPILOT_HOOKS")
+    if override:
+        return Path(override)
+    return _copilot_home() / "hooks" / "claimidx.json"
 
 
 def windsurf_mcp_path() -> Path:
@@ -1152,7 +1243,6 @@ def install_codex_mcp(path: Path | None = None, *, own: str, agent: str = "") ->
 
 
 CODEX_EVENTS: tuple[tuple[str, str | None], ...] = (
-    ("PostToolUseFailure", "Bash|shell"),
     ("PostToolUse", "Bash|shell"),
     ("SessionStart", None),
     ("Stop", None),
@@ -1253,8 +1343,49 @@ def grouped_hooks_current(data: dict, events: tuple[tuple[str, str | None], ...]
     return True
 
 
+def _drop_our_hook_event(data: dict, event: str) -> bool:
+    """Remove our marker from one event. Pop the event when only our hooks remain.
+
+    Foreign hooks and non-dict groups stay. Mutates data in place. Returns True
+    when a claimidx hook was removed.
+    """
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict) or event not in hooks:
+        return False
+    groups = hooks.get(event)
+    if not isinstance(groups, list):
+        return False
+    stripped = False
+    kept: list = []
+    for group in groups:
+        if not isinstance(group, dict):
+            kept.append(group)
+            continue
+        raw = group.get("hooks")
+        if not isinstance(raw, list):
+            kept.append(group)
+            continue
+        remain = []
+        for h in raw:
+            if isinstance(h, dict) and _MARKER in str(h.get("command") or ""):
+                stripped = True
+                continue
+            remain.append(h)
+        if remain:
+            nxt = dict(group)
+            nxt["hooks"] = remain
+            kept.append(nxt)
+    if not stripped:
+        return False
+    if kept:
+        hooks[event] = kept
+    else:
+        hooks.pop(event, None)
+    return True
+
+
 def install_codex_hooks(path: Path | None = None) -> dict:
-    """Merge the sensor into ~/.codex/hooks.json when Codex is present."""
+    """Merge PostToolUse into ~/.codex/hooks.json. Codex does not emit PostToolUseFailure."""
     target = path or codex_hooks_path()
     forced = bool(os.environ.get("CLAIMIDX_CODEX_HOOKS")) or bool(os.environ.get("CLAIMIDX_CODEX_CONFIG")) or path is not None
     cfg = codex_config_path()
@@ -1265,11 +1396,13 @@ def install_codex_hooks(path: Path | None = None) -> dict:
     if err:
         return err
     assert data is not None
+    stripped = _drop_our_hook_event(data, "PostToolUseFailure")
     cmd = hook_command()
-    if grouped_hooks_current(data, CODEX_EVENTS, cmd):
+    current = grouped_hooks_current(data, CODEX_EVENTS, cmd)
+    if current and not stripped:
         return {"path": str(target), "status": "present", "command": cmd}
     try:
-        merged = merge_grouped_hooks(data, CODEX_EVENTS, extra={"timeout": 15})
+        merged = data if current else merge_grouped_hooks(data, CODEX_EVENTS, extra={"timeout": 15})
     except ValueError as e:
         return {"path": str(target), "status": "error", "error": str(e)}
     target.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
@@ -1509,6 +1642,62 @@ def install_user_skills() -> dict:
     return out
 
 
+_COPILOT_WANTED = {
+    "type": "command",
+    "bash": "claimidx hook",
+    "powershell": "claimidx hook",
+    "timeoutSec": 10,
+}
+
+
+def _copilot_ours(entry: Any) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    for key in ("bash", "powershell", "command"):
+        if "claimidx hook" in str(entry.get(key) or ""):
+            return True
+    return False
+
+
+def install_copilot_hooks(path: Path | None = None) -> dict:
+    """User-level postToolUseFailure only. Skip when no Copilot config is present.
+
+    Flat command entries, not grouped matcher blocks. Does not register preToolUse.
+    The sensor command is the literal `claimidx hook` (exit 0, no modifiedResult).
+    """
+    target = path or copilot_hooks_path()
+    forced = path is not None or bool(os.environ.get("CLAIMIDX_COPILOT_HOOKS")) or bool(os.environ.get("COPILOT_HOME"))
+    home = _copilot_home()
+    if not forced and not home.exists():
+        return {"path": str(target), "status": "skip", "reason": "no copilot config"}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    data, err = _load_json_object(target, "claimidx.json")
+    if err:
+        return err
+    assert data is not None
+    version = data.get("version")
+    if version not in (None, 1):
+        return {"path": str(target), "status": "error", "error": "hooks version is not 1"}
+    raw_hooks = data.get("hooks")
+    if raw_hooks is None:
+        raw_hooks = {}
+    if not isinstance(raw_hooks, dict):
+        return {"path": str(target), "status": "error", "error": "hooks is not an object"}
+    entries = raw_hooks.get("postToolUseFailure") or []
+    if not isinstance(entries, list):
+        return {"path": str(target), "status": "error", "error": "postToolUseFailure is not a list"}
+    foreign = [e for e in entries if not _copilot_ours(e)]
+    wanted = [dict(_COPILOT_WANTED), *foreign]
+    if version == 1 and entries == wanted:
+        return {"path": str(target), "status": "present", "command": "claimidx hook"}
+    hooks = dict(raw_hooks)
+    hooks["postToolUseFailure"] = wanted
+    data["version"] = 1
+    data["hooks"] = hooks
+    target.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return {"path": str(target), "status": "installed", "command": "claimidx hook"}
+
+
 def install_harness(*, own: str, agent: str = "") -> dict:
     """Sensors, skill drop, and MCP for every harness already on this machine."""
     return {
@@ -1521,6 +1710,7 @@ def install_harness(*, own: str, agent: str = "") -> dict:
         "vscode": install_vscode_mcp(own=own, agent=agent),
         "codex": install_codex_mcp(own=own, agent=agent),
         "codex_hooks": install_codex_hooks(),
+        "copilot_hooks": install_copilot_hooks(),
         "gemini": install_gemini_mcp(own=own, agent=agent),
         "gemini_hooks": install_gemini_hooks(),
         "cline": install_cline_mcp(own=own, agent=agent),

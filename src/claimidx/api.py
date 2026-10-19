@@ -361,6 +361,7 @@ def create_app(db: str | None = None) -> FastAPI:
         claim_id: str,
         own: str = Query(""),
         replay: bool = Query(False),
+        net: str = Query(""),
         trust_domain: str = Query("", max_length=200),
         sensor_plane: str = Query("", max_length=200),
         _auth: str = Depends(require_write),
@@ -378,14 +379,25 @@ def create_app(db: str | None = None) -> FastAPI:
         except PolicyError as e:
             raise HTTPException(403, str(e)) from e
         # Never run eval.cmd in the home process. Replay is `claimidx confirm --replay` on the agent.
+        # ?net=open records the asserted replay and does not mint nr.
+        networked = bool(replay) and (net or "").strip().lower() in {"open", "unenforced", "net"}
         detail = None
-        if replay or trust_domain or sensor_plane:
+        if replay or trust_domain or sensor_plane or (net or "").strip():
             detail = {
                 "held": True,
                 "trust_domain": trust_domain,
                 "sensor_plane": sensor_plane,
+                "net": (net or "").strip(),
             }
-        confirmed = store.confirm(claim_id, actor, replayed=bool(replay), detail=detail)
+        confirmed = store.confirm(claim_id, actor, replayed=bool(replay) and not networked, detail=detail)
+        if networked:
+            return {
+                "held": True,
+                "recorded": True,
+                "nr_minted": False,
+                "reason": "net-open: a networked replay does not mint nr",
+                "claim": confirmed.model_dump(mode="json"),
+            }
         if replay:
             return {"held": True, "recorded": True, "claim": confirmed.model_dump(mode="json")}
         return confirmed.model_dump(mode="json")

@@ -377,7 +377,8 @@ def test_install_wires_all_four_events(tmp_path, capsys):
     data = json.loads(settings.read_text(encoding="utf-8"))
     for event in ("PostToolUseFailure", "PostToolUse", "SessionStart", "Stop"):
         assert any("claimidx hook" in json.dumps(g) for g in data["hooks"][event]), event
-    assert data["hooks"]["PostToolUse"][0]["matcher"] == "Bash"
+    assert data["hooks"]["PostToolUse"][0]["matcher"] == "Bash|PowerShell"
+    assert data["hooks"]["PostToolUseFailure"][0]["matcher"] == "Bash|PowerShell"
     assert "matcher" not in data["hooks"]["Stop"][0]
     assert main(["hook", "--install"]) == 0
     data2 = json.loads(settings.read_text(encoding="utf-8"))
@@ -772,3 +773,212 @@ def test_mcp_hook_absence_arg(tmp_path, monkeypatch):
     assert miss.get("hit") is False
     assert "fp" in miss
     assert "delivered" not in miss
+
+
+def test_cursor_timeout_failure_type_asks(tmp_path, capsys):
+    """Cursor postToolUseFailure carries error_message and failure_type, not exit_code."""
+    db = str(tmp_path / "ix.sqlite")
+    payload = json.dumps(
+        {
+            "hook_event_name": "postToolUseFailure",
+            "error_message": "timed out",
+            "failure_type": "timeout",
+        }
+    )
+    assert main(["--db", db, "hook", "--err", payload]) == 0
+    assert "CLAIMIDX miss" in capsys.readouterr().out
+
+
+def test_cursor_failure_type_only_asks():
+    from claimidx.hook import extract_hook_err, hook_is_failure
+
+    raw = json.dumps({"hookEventName": "postToolUseFailure", "failureType": "timeout"})
+    err, event = extract_hook_err(raw)
+    assert event == "PostToolUseFailure"
+    assert err == "hook failure: timeout"
+    assert hook_is_failure(raw, event, err) is True
+
+
+def test_codex_tool_response_failure_without_exit_asks(tmp_path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    payload = json.dumps(
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_input": {"command": "npm test"},
+            "tool_response": {"success": False, "error": "Error: npm ERR! missing script: test"},
+        }
+    )
+    assert main(["--db", db, "hook", "--err", payload]) == 0
+    assert "CLAIMIDX miss" in capsys.readouterr().out
+
+
+def test_codex_tool_response_success_without_exit_stays_silent(tmp_path, capsys):
+    db = str(tmp_path / "ix.sqlite")
+    payload = json.dumps(
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_input": {"command": "npm test"},
+            "tool_response": {"success": True, "stdout": "ok\n"},
+        }
+    )
+    assert main(["--db", db, "hook", "--err", payload]) == 0
+    assert "CLAIMIDX miss" not in capsys.readouterr().out
+    assert "CLAIMIDX verdict" not in capsys.readouterr().out
+
+
+def test_codex_string_tool_response_is_not_a_structured_failure():
+    from claimidx.hook import extract_hook_err, hook_is_failure
+
+    raw = json.dumps(
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_response": "Error: npm ERR! this string is stdout, not a structured failure",
+        }
+    )
+    err, event = extract_hook_err(raw)
+    assert event == "PostToolUse"
+    assert hook_is_failure(raw, event, err) is False
+
+
+def test_empty_dict_success_false_names_tool_response():
+    from claimidx.hook import extract_hook_err, hook_is_failure
+
+    raw = json.dumps({"hook_event_name": "PostToolUse", "tool_response": {"success": False}})
+    err, event = extract_hook_err(raw)
+    assert err == "hook failure: tool_response"
+    assert hook_is_failure(raw, event, err) is True
+
+
+def test_session_start_failure_type_is_not_a_failure():
+    from claimidx.hook import extract_hook_err, hook_is_failure
+
+    raw = json.dumps(
+        {
+            "hook_event_name": "SessionStart",
+            "failure_type": "timeout",
+            "error_message": "timed out",
+        }
+    )
+    err, event = extract_hook_err(raw)
+    assert err is None and event == "SessionStart"
+    assert hook_is_failure(raw, event, err) is False
+
+
+def test_unknown_failure_kind_is_not_a_failure_by_itself():
+    from claimidx.hook import extract_hook_err, hook_is_failure
+
+    raw = json.dumps({"hook_event_name": "PostToolUse", "failure_type": "cancelled"})
+    err, event = extract_hook_err(raw)
+    assert err is None
+    assert hook_is_failure(raw, event, err) is False
+
+
+def test_copilot_post_tool_use_failure_extracts_error():
+    from claimidx.hook import extract_hook_err, hook_is_failure
+
+    raw = json.dumps(
+        {
+            "hookEventName": "postToolUseFailure",
+            "sessionId": "s",
+            "toolName": "bash",
+            "toolArgs": {"command": "npm test"},
+            "error": "timed out",
+        }
+    )
+    err, event = extract_hook_err(raw)
+    assert event == "PostToolUseFailure"
+    assert err == "timed out"
+    assert hook_is_failure(raw, event, err) is True
+
+    bare = json.dumps({"error": "Error: npm ERR! code ELIFECYCLE"})
+    err2, event2 = extract_hook_err(bare)
+    assert event2 is None
+    assert err2 and "npm ERR!" in err2
+
+
+def test_claude_stale_matcher_widens_to_powershell(tmp_path):
+    from claimidx.hook import hook_command, install_claude_hook
+
+    cmd = hook_command()
+    settings = tmp_path / "settings.json"
+    settings.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PostToolUseFailure": [{"matcher": "Bash", "hooks": [{"type": "command", "command": cmd}]}],
+                    "PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": cmd}]}],
+                    "SessionStart": [{"hooks": [{"type": "command", "command": cmd}]}],
+                    "Stop": [{"hooks": [{"type": "command", "command": cmd}]}],
+                }
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    rec = install_claude_hook(settings)
+    assert rec["status"] == "installed"
+    assert rec["matcher"] == "Bash|PowerShell"
+    data = json.loads(settings.read_text(encoding="utf-8"))
+    assert data["hooks"]["PostToolUse"][0]["matcher"] == "Bash|PowerShell"
+    assert data["hooks"]["PostToolUseFailure"][0]["matcher"] == "Bash|PowerShell"
+    again = install_claude_hook(settings)
+    assert again["status"] == "present"
+
+
+def test_copilot_hooks_skip_when_absent(tmp_path):
+    from claimidx.hook import install_copilot_hooks
+
+    rec = install_copilot_hooks()
+    assert rec["status"] == "skip"
+    assert rec["reason"] == "no copilot config"
+    assert not (tmp_path / "absent-copilot" / "hooks" / "claimidx.json").exists()
+
+
+def test_copilot_hooks_install_and_keep_foreign(tmp_path, monkeypatch):
+    from claimidx.hook import install_copilot_hooks
+
+    path = tmp_path / "copilot" / "claimidx.json"
+    monkeypatch.setenv("CLAIMIDX_COPILOT_HOOKS", str(path))
+    foreign = {"type": "command", "bash": "echo keep", "timeoutSec": 5}
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps({"version": 1, "hooks": {"postToolUseFailure": [foreign], "preToolUse": [{"type": "command", "bash": "echo no"}]}}) + "\n",
+        encoding="utf-8",
+    )
+    rec = install_copilot_hooks()
+    assert rec["status"] == "installed"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["version"] == 1
+    rows = data["hooks"]["postToolUseFailure"]
+    assert rows[0]["bash"] == "claimidx hook"
+    assert rows[0]["powershell"] == "claimidx hook"
+    assert rows[0]["timeoutSec"] == 10
+    assert rows[1] == foreign
+    assert data["hooks"]["preToolUse"][0]["bash"] == "echo no"
+    assert "preToolUse" not in json.dumps(rows)
+    again = install_copilot_hooks()
+    assert again["status"] == "present"
+    assert json.loads(path.read_text(encoding="utf-8")) == data
+
+
+def test_copilot_hooks_reject_other_versions(tmp_path):
+    from claimidx.hook import install_copilot_hooks
+
+    path = tmp_path / "claimidx.json"
+    path.write_text(json.dumps({"version": 2, "hooks": {}}) + "\n", encoding="utf-8")
+    rec = install_copilot_hooks(path)
+    assert rec["status"] == "error"
+    assert rec["error"] == "hooks version is not 1"
+
+
+def test_codex_second_install_is_present(tmp_path):
+    from claimidx.hook import install_codex_hooks
+
+    path = tmp_path / "hooks.json"
+    first = install_codex_hooks(path)
+    assert first["status"] in {"installed", "updated"}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert "PostToolUseFailure" not in data["hooks"]
+    assert "shell" in data["hooks"]["PostToolUse"][0]["matcher"]
+    second = install_codex_hooks(path)
+    assert second["status"] == "present"
