@@ -5,6 +5,27 @@ from pathlib import Path
 
 import pytest
 
+# Git exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE to hooks. Tests that `git init` / `git commit` in a temp tree
+# would then write into the checkout that ran the hook (once: core.bare=true and test commits on the branch).
+# Strip them before any test runs so every subprocess git finds only its own temp repo.
+_GIT_REPO_ENV = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_NAMESPACE",
+    "GIT_PREFIX",
+    "GIT_QUARANTINE_PATH",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+)
+for _key in list(os.environ):
+    if _key in _GIT_REPO_ENV or _key.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
+        del os.environ[_key]
+
 
 @pytest.fixture(autouse=True)
 def isolate_claimidx(tmp_path, monkeypatch):

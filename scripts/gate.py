@@ -128,6 +128,34 @@ class GateError(Exception):
     pass
 
 
+# Repo-locating variables git exports to hooks. A child that inherits them (pytest's `git init` / `git commit`
+# in a temp tree, the smoke's scratch repos) writes into the real checkout instead: once that set core.bare=true
+# and committed test trees onto a branch. Every stage subprocess runs without them.
+GIT_REPO_ENV = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_NAMESPACE",
+    "GIT_PREFIX",
+    "GIT_QUARANTINE_PATH",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+)
+
+
+def isolated_env(base: dict[str, str] | None = None) -> dict[str, str]:
+    """A copy of `base` (default os.environ) with every repo-locating GIT_* variable removed."""
+    env = dict(os.environ if base is None else base)
+    for key in list(env):
+        if key in GIT_REPO_ENV or key.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
+            env.pop(key, None)
+    return env
+
+
 def _git(*args: str) -> str:
     return subprocess.run(["git", *args], cwd=ROOT, check=True, capture_output=True, text=True, encoding="utf-8").stdout
 
@@ -230,7 +258,7 @@ def sanitize(*, staged: bool) -> None:
 
 
 def _check(name: str, cmd: list[str], *, shell: bool = False) -> None:
-    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", shell=shell)
+    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", shell=shell, env=isolated_env())
     if proc.returncode != 0:
         tail = "\n".join((proc.stdout + "\n" + proc.stderr).strip().splitlines()[-40:])
         raise GateError(f"{name} failed ({' '.join(cmd)})\n{tail}")
@@ -259,7 +287,7 @@ def _rpc_lines(messages: list[dict]) -> list[dict]:
     """Drive the stdio server with line-delimited JSON in an isolated temp home."""
     with tempfile.TemporaryDirectory() as tmp:
         env = {
-            **os.environ,
+            **isolated_env(),
             "CLAIMIDX_DB": str(Path(tmp) / "gate.sqlite"),
             "CLAIMIDX_CONFIG": str(Path(tmp) / "config.json"),
             "CLAIMIDX_OUTBOX": str(Path(tmp) / "outbox.jsonl"),

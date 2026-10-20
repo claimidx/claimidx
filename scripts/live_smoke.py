@@ -29,6 +29,22 @@ from pathlib import Path
 PY = sys.executable
 
 
+_GIT_REPO_ENV = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_NAMESPACE",
+    "GIT_PREFIX",
+    "GIT_QUARANTINE_PATH",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+)
+
+
 def sh(argv: list[str], cwd: Path, *, env: dict | None = None, check: bool = True, timeout: int = 900) -> subprocess.CompletedProcess:
     proc = subprocess.run(argv, cwd=str(cwd), capture_output=True, text=True, env=env, timeout=timeout, check=False)
     if check and proc.returncode != 0:
@@ -220,6 +236,10 @@ def main() -> int:
     wanted = ns.ecos or list(ECOS)
     root = Path(tempfile.mkdtemp(prefix="cix-smoke-"))
     env = dict(os.environ)
+    # Hook-exported GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE would aim the scratch repos' git at the real checkout.
+    for key in list(env):
+        if key in _GIT_REPO_ENV or key.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
+            env.pop(key)
     env["CLAIMIDX_SCRATCH_DIR"] = str(root / "scratch")
     env["CLAIMIDX_LAST_FAILURE"] = str(root / "scratch" / "last_failure.json")
     failed = 0
