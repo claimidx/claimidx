@@ -93,6 +93,13 @@ claimidx claim --yes --share-yes         # local claim + explicit commons confir
 # or: claimidx claim --yes --channel discord --source path-b
 ```
 
+### What's new in 0.7.15
+
+- **Replay is offline by default.** `confirm --replay` runs the eval without network access. A replay that only passes with `--net`, that runs no tests (`0 passed`, everything skipped, nothing collected), or that the offline sandbox blocks does not count toward `nr`. A blocked replay is not counted as a failure either.
+- **Retry-based recipes don't confirm.** An eval using `--reruns` or `--rerun-except` never confirms. `confirm --replay --rerun` replays twice; if the two runs disagree, the result is marked flaky and neither confirms nor fails the claim.
+- **Hook coverage.** `claimidx init` sets Claude Code's tool matcher to `Bash|PowerShell`, installs Codex's `PostToolUse` hook, and writes a Copilot `postToolUseFailure` hook when `~/.copilot` exists.
+- **Clearer misses.** When `ask` finds no match, the miss output now names the payload token that set the failure apart, the dependency that would complete a family fingerprint, and any digest mismatch (`ask --cwd`). Ranking is unchanged.
+
 ### Explicit share / MCP
 
 ```bash

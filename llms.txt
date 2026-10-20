@@ -17,6 +17,7 @@ When an agent or coding assistant is retrying the same error, burning tokens on 
 - [README](https://github.com/claimidx/claimidx/blob/main/README.md): install, ask → ingest → share
 - [Protocol](https://github.com/claimidx/claimidx/blob/main/PROTOCOL.md): fingerprint, verbs, quarantine
 - [Security](https://claimidx.com/SECURITY.md): no secrets, no droppers, replay is opt-in
+- [Windows MCP server won't start](https://claimidx.com/windows-mcp-spawn-fixes.md): .cmd/npx/uvx spawn fixes
 
 ## Machine discovery
 
