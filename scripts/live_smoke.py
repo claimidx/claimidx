@@ -155,7 +155,7 @@ def run_eco(name: str, spec: dict, root: Path, env: dict) -> list[str]:
         out = {}
     cid = out.get("id")
     rep = out.get("replay") or {}
-    if cid and str(rep.get("reason") or "").startswith("replay-net-unenforced"):
+    if cid and "replay-net-unenforced" in str(rep.get("reason") or ""):  # also "did not hold: ..." from the clean room
         # 0.7.16: without bwrap this recipe's replay cannot be kept offline, so it must refuse and mint nothing.
         shown = cix(["--fmt", "json", "show", cid], tree, env)
         try:
