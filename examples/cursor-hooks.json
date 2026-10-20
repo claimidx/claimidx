@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterShellExecution": [
+      { "command": "python -m claimidx hook", "timeout": 15 }
+    ],
+    "postToolUseFailure": [
+      { "command": "python -m claimidx hook", "timeout": 15 }
+    ],
+    "postToolUse": [
+      { "command": "python -m claimidx hook", "timeout": 15 }
+    ],
+    "sessionStart": [
+      { "command": "python -m claimidx hook", "timeout": 15 }
+    ],
+    "stop": [
+      { "command": "python -m claimidx hook", "timeout": 15, "loop_limit": 1 }
+    ]
+  }
+}

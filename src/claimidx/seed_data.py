@@ -1,0 +1,251 @@
+"""Bundled coding-agent failure claims. Fingerprints are computed, not invented."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from .fingerprint import classify, fingerprint, normalize_error
+from .models import Claim, EvalSpec, Fix
+
+_TS = datetime(2026, 8, 1, tzinfo=UTC)
+
+_SEEDS: list[dict] = [
+    {
+        "id": "spr_a11c000000000001",
+        "err": "TypeError: params is a Promise",
+        "eco": "npm",
+        "rt": "node@20.18.2",
+        "dep": ["next@15.0.0"],
+        "tried": ["sync-access", "restart"],
+        "fix": ("patch", "const { slug } = await params"),
+        "eval": "npx tsc --noEmit",
+        "note": "Next 15 dynamic APIs are async.",
+    },
+    {
+        "id": "spr_a11c000000000002",
+        "err": "TypeError: searchParams is a Promise",
+        "eco": "npm",
+        "rt": "node@20",
+        "dep": ["next@15.0.0"],
+        "tried": ["sync-access"],
+        "fix": ("patch", "const sp = await searchParams"),
+        "eval": "npx tsc --noEmit",
+        "note": "Same class as cookies()/headers() in Next 15.",
+    },
+    {
+        "id": "spr_a11c000000000003",
+        "err": "ModuleNotFoundError: No module named 'pydantic_core'",
+        "eco": "py",
+        "rt": "py@3.12",
+        "dep": ["pydantic@2.9.0"],
+        "tried": ["pip-install-pydantic"],
+        "fix": ("pin", "pydantic>=2.7,<3"),
+        "eval": "python -c 'import pydantic'",
+    },
+    {
+        "id": "spr_a11c000000000005",
+        "err": "npm ERR! ERESOLVE unable to resolve dependency tree",
+        "eco": "npm",
+        "rt": "node@20",
+        "dep": ["react@19.0.0", "next@15.0.0"],
+        "tried": ["npm-install"],
+        "fix": ("config", "legacy-peer-deps=true"),
+        "eval": "npm ls --depth=0",
+    },
+    {
+        "id": "spr_a11c000000000006",
+        "err": "Cannot find module '@/lib/utils' or its corresponding type declarations.",
+        "eco": "npm",
+        "rt": "node@20",
+        "dep": ["typescript@5.6.0"],
+        "tried": ["relative-import"],
+        "fix": ("config", '{"compilerOptions":{"baseUrl":".","paths":{"@/*":["./src/*"]}}}'),
+        "eval": "npx tsc --noEmit",
+    },
+    {
+        "id": "spr_a11c000000000007",
+        "err": "browserType.launch: Executable doesn't exist at /home/runner/.cache/ms-playwright/chromium",
+        "eco": "browser",
+        "rt": "node@20",
+        "dep": ["playwright@1.48.0"],
+        "tried": ["npm-install"],
+        "fix": ("cmd", "npx playwright install --with-deps chromium"),
+        "eval": "npx playwright --version",
+    },
+    {
+        "id": "spr_a11c000000000008",
+        "err": 'ZodError: Required at "email"',
+        "eco": "npm",
+        "rt": "node@20",
+        "dep": ["zod@3.23.0"],
+        "tried": ["optional-field"],
+        "fix": ("patch", "email: z.string().email()"),
+        "eval": "npx tsc --noEmit",
+    },
+    {
+        "id": "spr_a11c00000000000c",
+        "err": "ModuleNotFoundError: No module named 'src'",
+        "eco": "py",
+        "rt": "py@3.12",
+        "dep": [],
+        "tried": ["sys-path-hack"],
+        "fix": ("config", "pip install -e ."),
+        "eval": 'python -c "import src"',
+    },
+    {
+        "id": "spr_a11c00000000000d",
+        "err": "TypeError: useFormState is not exported from 'react-dom'",
+        "eco": "npm",
+        "rt": "node@20",
+        "dep": ["react@19.0.0", "react-dom@19.0.0"],
+        "tried": ["react-dom-import"],
+        "fix": ("patch", "import { useActionState } from 'react'"),
+        "eval": "npx tsc --noEmit",
+        "note": "useFormState is exported on react-dom 19.0+; RC-era fingerprint. Prefer useActionState from react.",
+    },
+    {
+        "id": "spr_a11c00000000000e",
+        "err": "CssSyntaxError: @tailwind is not a known at-rule",
+        "eco": "npm",
+        "rt": "node@20",
+        "dep": ["tailwindcss@4.0.0"],
+        "tried": ["postcss-config"],
+        "fix": ("patch", '@import "tailwindcss";'),
+        "eval": "npx tailwindcss --help",
+        "note": "@tailwind at-rule is stylelint/language-service, not tailwindcss 4 CLI.",
+    },
+    {
+        "id": "spr_a11c00000000000f",
+        "err": "go: verifying module: checksum mismatch",
+        "eco": "go",
+        "rt": "go@1.23",
+        "dep": [],
+        "tried": ["go-clean-modcache"],
+        "fix": ("cmd", "go clean -modcache && go mod download"),
+        "eval": "go mod verify",
+    },
+    {
+        "id": "spr_a11c000000000011",
+        "err": "Error: Cannot find module 'next/headers' from '/app/src/app/page.tsx'",
+        "eco": "npm",
+        "rt": "node@18",
+        "dep": ["next@13.5.0"],
+        "tried": ["pages-router-import"],
+        "fix": ("constraint", "next/headers only exists in the app router"),
+        "eval": "npx next build",
+    },
+    {
+        "id": "spr_a11c000000000018",
+        "err": "ModuleNotFoundError: No module named 'cgi'",
+        "eco": "py",
+        "rt": "py@3.13",
+        "dep": [],
+        "tried": ["import cgi"],
+        "fix": ("constraint", "cgi was removed in 3.13; use email.message / multipart"),
+        "eval": 'python -c "import cgi"',
+    },
+    {
+        "id": "spr_a11c000000000028",
+        "err": "ModuleNotFoundError: No module named 'langchain_openai'",
+        "eco": "py",
+        "rt": "py@3.12",
+        "dep": ["langchain@1.0.0"],
+        "tried": ["pip-install-langchain"],
+        "fix": ("pin", "pip install langchain-openai"),
+        "eval": 'python -c "import langchain_openai"',
+    },
+    {
+        "id": "spr_a11c00000000002a",
+        "err": "ModuleNotFoundError: No module named 'llama_index.core'",
+        "eco": "py",
+        "rt": "py@3.12",
+        "dep": ["llama-index"],
+        "tried": ["pip-install-llama-index"],
+        "fix": ("pin", "pip install llama-index-core"),
+        "eval": 'python -c "import llama_index.core"',
+    },
+    {
+        "id": "spr_a11c00000000002c",
+        "err": "ModuleNotFoundError: No module named 'distutils'",
+        "eco": "py",
+        "rt": "py@3.12",
+        "dep": ["crewai"],
+        "tried": ["import distutils"],
+        "fix": ("pin", "pip install setuptools  # distutils removed in Python 3.12"),
+        "eval": 'python -c "import distutils"',
+    },
+    {
+        "id": "spr_a11c00000000002d",
+        "err": "ModuleNotFoundError: No module named 'mcp.server.fastmcp'",
+        "eco": "py",
+        "rt": "py@3.12",
+        "dep": ["mcp@2.0.0"],
+        "tried": ["from mcp.server.fastmcp import FastMCP"],
+        "fix": ("patch", "from mcp.server import MCPServer  # FastMCP renamed in MCP Python SDK v2"),
+        "eval": 'python -c "import mcp.server.fastmcp"',
+    },
+    {
+        "id": "spr_a11c000000000034",
+        "err": "Error: Cannot find module 'crypto'",
+        "eco": "npm",
+        "rt": "node@20",
+        "dep": ["webpack@5"],
+        "tried": ["node-polyfill"],
+        "fix": ("constraint", "Webpack 5 does not polyfill Node builtins. Use Web Crypto or resolve.fallback."),
+        "eval": "node -e \"require('crypto')\"",
+    },
+    {
+        "id": "spr_a11c000000000053",
+        "err": "ModuleNotFoundError: No module named 'pkg_resources'",
+        "eco": "py",
+        "rt": "py@3.12",
+        "dep": [],
+        "tried": ["import pkg_resources"],
+        "fix": ("pin", "pip install setuptools"),
+        "eval": 'python -c "import pkg_resources"',
+        "note": "setuptools 84 dropped pkg_resources; pin setuptools<81. See cix_5e3965fdc7fed2d5.",
+    },
+    {
+        "id": "spr_a11c000000000056",
+        "err": "Error: Cannot find module 'sharp'",
+        "eco": "npm",
+        "rt": "node@20",
+        "dep": ["next@15.0.0"],
+        "tried": ["next-image"],
+        "fix": ("pin", "npm install sharp  # required for next/image in standalone/CI"),
+        "eval": "node -e \"require('npm install sharp  # required for next/image in standalone/CI')\"",
+    },
+]
+
+
+def materialize() -> list[Claim]:
+    out: list[Claim] = []
+    for raw in _SEEDS:
+        err = raw["err"]
+        cls = classify(err)
+        dep = list(raw.get("dep") or [])
+        eco = raw.get("eco") or "other"
+        rt = raw.get("rt") or ""
+        k, b = raw["fix"]
+        out.append(
+            Claim(
+                id=raw["id"],
+                fp=fingerprint(err=err, cls=cls, eco=eco, rt=rt, dep=dep),
+                cls=cls,
+                err=normalize_error(err),
+                eco=eco,
+                rt=rt,
+                dep=dep,
+                tried=list(raw.get("tried") or []),
+                fix=Fix(k=k, b=b),
+                eval=EvalSpec(cmd=raw["eval"]),
+                st=raw.get("st") or "proposed",
+                nc=int(raw.get("nc") or 0),
+                nf=int(raw.get("nf") or 0),
+                own="did:claimidx:seed",
+                ts=_TS,
+                note=raw.get("note") or "",
+                src="seed",
+            )
+        )
+    return out

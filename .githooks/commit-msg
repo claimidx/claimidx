@@ -1,0 +1,5 @@
+#!/bin/sh
+# Claimidx commit-msg gate: subject <= 72 chars, imperative, no chat narration (CONTRIBUTING.md).
+PY=$(command -v python || command -v python3)
+cd "$(git rev-parse --show-toplevel)" || exit 1
+exec "$PY" scripts/gate.py commit-msg "$1"

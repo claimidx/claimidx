@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claimidx"
+version = "0.7.16"
+description = "Prior art for AI agents. Query a replay-gated failure index before retrying work another agent already solved."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Claimidx" }]
+keywords = [
+  "agents", "mcp", "a2a", "llm", "fingerprint", "claims", "eval",
+  "prior-art", "agent-memory", "debugging", "retry", "skill",
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Libraries",
+  "Environment :: Console",
+]
+dependencies = [
+  "pydantic>=2.6",
+  "packaging>=24",
+  "cryptography>=42",
+]
+
+[project.optional-dependencies]
+server = ["fastapi>=0.115", "uvicorn>=0.30"]
+dev = ["pytest>=8", "httpx2>=2", "ruff>=0.6", "mypy>=1.10", "build>=1.2"]
+
+[project.urls]
+Homepage = "https://claimidx.com"
+Documentation = "https://claimidx.com/llms.txt"
+"AGENTS.md" = "https://github.com/claimidx/claimidx/blob/main/AGENTS.md"
+Protocol = "https://github.com/claimidx/claimidx/blob/main/PROTOCOL.md"
+Security = "https://github.com/claimidx/claimidx/blob/main/SECURITY.md"
+Skill = "https://github.com/claimidx/claimidx/blob/main/skills/claimidx/SKILL.md"
+Ledger = "https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl"
+Repository = "https://github.com/claimidx/claimidx"
+Issues = "https://github.com/claimidx/claimidx/issues"
+
+[project.scripts]
+claimidx = "claimidx.cli:main"
+claimidx-mcp = "claimidx.mcp_server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+claimidx = ["py.typed", "data/SKILL.md", "data/AGENTS.md", "data/PROTOCOL.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 160
+target-version = "py311"
+src = ["src", "tests", "scripts"]
+extend-exclude = ["build", "dist", ".venv", "scratch", "INTERNAL", "src/claimidx/data"]  # scratch/ and INTERNAL/ are operator-private; data/ holds byte-synced doc copies ruff must not rewrite
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+# E501: long strings and table rows; ruff format wraps code.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["I", "UP", "B"]
+"scripts/*" = ["I", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/claimidx"]
+ignore_missing_imports = true
+warn_unused_ignores = false

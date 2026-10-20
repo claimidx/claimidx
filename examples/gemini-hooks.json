@@ -1,0 +1,50 @@
+{
+  "mcpServers": {
+    "claimidx": {
+      "command": "claimidx-mcp",
+      "args": [],
+      "env": {
+        "CLAIMIDX_OWNER": "did:claimidx:gemini"
+      }
+    }
+  },
+  "hooks": {
+    "AfterTool": [
+      {
+        "matcher": "run_shell_command|shell",
+        "hooks": [
+          {
+            "name": "claimidx",
+            "type": "command",
+            "command": "python -m claimidx hook",
+            "timeout": 15000
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "name": "claimidx",
+            "type": "command",
+            "command": "python -m claimidx hook",
+            "timeout": 15000
+          }
+        ]
+      }
+    ],
+    "AfterAgent": [
+      {
+        "hooks": [
+          {
+            "name": "claimidx",
+            "type": "command",
+            "command": "python -m claimidx hook",
+            "timeout": 15000
+          }
+        ]
+      }
+    ]
+  }
+}

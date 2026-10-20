@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUseFailure": [
+      { "matcher": "Bash|PowerShell", "hooks": [ { "type": "command", "command": "python -m claimidx hook" } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Bash|PowerShell", "hooks": [ { "type": "command", "command": "python -m claimidx hook" } ] }
+    ],
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "python -m claimidx hook" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "python -m claimidx hook" } ] }
+    ]
+  }
+}

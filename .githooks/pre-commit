@@ -1,0 +1,6 @@
+#!/bin/sh
+# Claimidx pre-commit gate: sanitize staged paths, docs in sync, lint.
+# Install once per clone: python scripts/gate.py install-hooks
+PY=$(command -v python || command -v python3)
+cd "$(git rev-parse --show-toplevel)" || exit 1
+exec "$PY" scripts/gate.py pre-commit

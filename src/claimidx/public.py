@@ -1,0 +1,437 @@
+"""Public projection of a local claim.
+
+Local ingest keeps the full (secret-scanned) record. The public commons
+only receives a twin that still matches (same fingerprint) but has no
+notes, no local paths, no project eval recipes, no mailbox identifiers.
+
+A private live home (CLAIMIDX_HOME_API you control) still gets the full
+claim. The outbox / home-propose path — the GitHub ledger — always
+projects. That is how the public library grows without shipping a
+private local tree.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+
+from .fingerprint import normalize_error
+from .models import Claim, EvalSpec, Fix
+from .team import agent_slug
+
+# A mailbox, not a pin: `react@18.2.0`, `github.com/google/uuid@v1.6.0` and `serde@1.0` are what fix.b is for.
+_EMAIL = re.compile(r"\b\S+@(?!v?\d)\S+\.\S+\b")
+# Home/drive/tests/ paths only. A basename recipe (`python3 check.py`) is portable
+# when fix.b is the script; a `.py` suffix is not a leak.
+_EVAL_LOCAL = re.compile(
+    r"(?:tests[/\\]|[A-Za-z]:[/\\]|/(?:home|Users)/|\\\\)",
+    re.I,
+)
+_HOSTY = re.compile(
+    r"\b(?:localhost|\.internal\b|\.local\b|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+)\b",
+    re.I,
+)
+# Home/tmp/drive paths only. Relative aliases like ./src/* are public recipe.
+# Windows drive is C:\ or C:/foo — not l:// inside postgresql:// or https://.
+_ABS_PATH = re.compile(
+    r"(?:[A-Za-z]:(?:\\+|/(?!/))|\\\\|~[/\\]|/(?:home|Users|usr|var|tmp|root|etc)/)[^\s'\"]+",
+    re.I,
+)
+
+
+class PublicSkip(ValueError):
+    """This claim must not leave the machine."""
+
+
+_TAUTOLOGY_CMD = re.compile(
+    r"^(true|false|(?:python3?|node|go|cargo|rustc|npm|npx|pnpm|yarn|bun|docker|uv|pip3?|pytest|java|javac|mvn|gradle|git)"
+    r"(?:\.exe)?\s+(?:--version|-version|-v|-V|version))\s*$",
+    re.I,
+)
+
+HINT_WARN = "eval is a hint; confirm --replay cannot prove this claim. Supply a discriminating eval.cmd"
+PLACEHOLDER_WARN = "err contains placeholders; ingest the raw error string, normalize_error keeps identifiers and error codes"
+
+
+def _hint_suggestion(raw_err: str, *, cls: str = "", dep: list[str] | None = None, eco: str = "") -> str:
+    """ ". Use: <eval>" when a discriminating eval can be drafted from the claim target or a pin."""
+    from .fingerprint import classify
+    from .target import claim_target, suggest_eval
+
+    target = claim_target(cls=cls or classify(raw_err or ""), err=raw_err or "", dep=dep)
+    ev = suggest_eval(target, eco) if target else ""
+    if not ev:
+        refined = refine_eval("true", dep=dep, eco=eco)
+        ev = refined if refined != "true" else ""
+    return f". Use: {ev}" if ev else ""
+
+
+def target_warning(raw_err: str, eval_cmd: str, *, cls: str = "", dep: list[str] | None = None, eco: str = "") -> str:
+    """Warn when the eval never names the module/package the claim is about; suggests the passing eval."""
+    from .fingerprint import classify
+    from .target import claim_target, eval_observes_target, suggest_eval
+
+    target = claim_target(cls=cls or classify(raw_err or ""), err=raw_err or "", dep=dep)
+    if not target or not eval_is_proof(eval_cmd) or eval_observes_target(eval_cmd, target):
+        return ""
+    hint = suggest_eval(target, eco)
+    return f"eval does not observe claimed target '{target}'; confirm --replay will not mint nr" + (f". Use: {hint}" if hint else "")
+
+
+def ingest_warnings(raw_err: str, eval_cmd: str, *, cls: str = "", dep: list[str] | None = None, eco: str = "") -> list[str]:
+    """What the author should fix before this claim is worth sharing."""
+    from .fingerprint import PLACEHOLDERS
+
+    warns: list[str] = []
+    if not eval_is_proof(eval_cmd):
+        warns.append(HINT_WARN + _hint_suggestion(raw_err, cls=cls, dep=dep, eco=eco))
+    tw = target_warning(raw_err, eval_cmd, cls=cls, dep=dep, eco=eco)
+    if tw:
+        warns.append(tw)
+    if any(tok in (raw_err or "") for tok in PLACEHOLDERS):
+        warns.append(PLACEHOLDER_WARN)
+    return warns
+
+
+def eval_is_proof(cmd: str | None) -> bool:
+    """True when eval.cmd can discriminate held vs miss. `true` is a hint."""
+    raw = (cmd or "").strip()
+    if not raw:
+        return False
+    if _TAUTOLOGY_CMD.match(raw):
+        return False
+    head = raw.split()[0].lower()
+    return head not in {"true", "false"}
+
+
+def public_eval(cmd: str) -> str:
+    """Portable recipe only. A tree path is not rewritten as `true` — that looked like proof."""
+    raw = (cmd or "").strip()
+    if not raw:
+        return ""
+    if _EVAL_LOCAL.search(raw) or _ABS_PATH.search(raw) or _HOSTY.search(raw) or _EMAIL.search(raw):
+        return ""
+    # `./...` is a portable Go package spec, not a tree path.
+    rel = re.sub(r"(?<=\s)\./\.\.\.(?=\s|$)", "", raw)
+    if re.search(r"(?:^|[\s=])(?:\.\.?[/\\]|~[/\\])", rel):
+        return ""
+    out = raw[:200]
+    from .policy import eval_allowed
+
+    # Truncation can split a quoted python -c payload and leave `;` unquoted.
+    # A commons recipe that Claim refuses is not a recipe — blank it, do not
+    # rewrite as `true`.
+    ok, _ = eval_allowed(out)
+    if not ok:
+        return ""
+    return out
+
+
+def _pkg_token(raw: str) -> str:
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    if s.startswith("@"):
+        body = s[1:]
+        if "/" in body:
+            scope, _, rest = body.partition("/")
+            name, _, _ = rest.partition("@")
+            name = name.split("[", 1)[0].strip()
+            if scope and name:
+                return "@" + scope + "/" + name
+        return ""
+    m = re.fullmatch(r"([A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+):[A-Za-z0-9_.+-]+", s)
+    if m:
+        return m.group(1)  # group:artifact:version -> group:artifact
+    for sep in ("==", ">=", "<=", "~=", ">", "<", "@", "["):
+        if sep in s:
+            s = s.split(sep, 1)[0]
+            break
+    return s.strip()
+
+
+def _pin_line(raw: str) -> str:
+    s = (raw or "").strip().splitlines()[0] if raw else ""
+    s = re.split(r"\s+#", s, maxsplit=1)[0].strip()
+    return re.sub(
+        r"^(?:(?:pip3?|uv|python3?\s+-m\s+pip)\s+install|go\s+get|cargo\s+add)\s+",
+        "",
+        s,
+        count=1,
+        flags=re.I,
+    ).strip()
+
+
+def _exact_pin(raw: str) -> tuple[str, str] | None:
+    """Name + exact version, or None for a range / unversioned pin."""
+    s = _pin_line(raw)
+    if not s:
+        return None
+    if s.startswith("@"):
+        m = re.fullmatch(r"(@[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@([A-Za-z0-9_.+-]+)", s)
+        return (m.group(1), m.group(2)) if m else None
+    m = re.fullmatch(r"([A-Za-z0-9_.-]+)==([A-Za-z0-9_.+-]+)", s)
+    if m:
+        return m.group(1), m.group(2)
+    m = re.fullmatch(r"([A-Za-z0-9_./-]+)@([A-Za-z0-9_.+-]+)", s)
+    if m:
+        return m.group(1), m.group(2)
+    m = re.fullmatch(r"([A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+):([A-Za-z0-9_.+-]+)", s)
+    if m:
+        return m.group(1), m.group(2)
+    return None
+
+
+def _version_triple(raw: str) -> tuple[int, int, int] | None:
+    """Numeric X / X.Y / X.Y.Z only."""
+    s = (raw or "").strip()
+    if not re.fullmatch(r"\d+(?:\.\d+){0,2}", s):
+        return None
+    parts = [int(p) for p in s.split(".")] + [0, 0]
+    return parts[0], parts[1], parts[2]
+
+
+def _installed_triple(raw: str) -> tuple[int, int, int] | None:
+    """PEP 440 against >=,< : post/local count as the release; pre-releases miss."""
+    s = (raw or "").strip().split("+", 1)[0]
+    if re.search(r"(?:a|b|rc|dev)\d", s, re.I):
+        return None
+    s = re.sub(r"\.post\d+$", "", s, flags=re.I)
+    return _version_triple(s)
+
+
+def _compatible_release(ver: str) -> list[tuple[str, tuple[int, int, int]]] | None:
+    """~=X.Y → >=X.Y,<X+1 ; ~=X.Y.Z → >=X.Y.Z,<X.Y+1. One segment is invalid."""
+    parts = ver.split(".")
+    if len(parts) < 2:
+        return None
+    lower = _version_triple(ver)
+    if lower is None:
+        return None
+    prefix = [int(p) for p in parts[:-1]]
+    prefix[-1] += 1
+    padded = (prefix + [0, 0])[:3]
+    upper = (padded[0], padded[1], padded[2])
+    return [(">=", lower), ("<", upper)]
+
+
+_ONE_SEG_TILDE = re.compile(r"~=\s*\d+(?!\.)")
+
+
+def _one_segment_tilde(raw: str) -> bool:
+    return bool(_ONE_SEG_TILDE.search(_pin_line(raw)))
+
+
+def _env_marker(raw: str) -> bool:
+    return ";" in _pin_line(raw)
+
+
+def pin_error(fix_k: str, fix_b: str) -> str | None:
+    """Admission error for a pin that cannot hold. None if the row may exist."""
+    if (fix_k or "") != "pin":
+        return None
+    if _one_segment_tilde(fix_b):
+        return "malformed compatible-release pin; ~= needs two version segments"
+    return None
+
+
+def _range_pin(raw: str) -> tuple[str, list[tuple[str, tuple[int, int, int]]]] | None:
+    """Name + numeric range clauses. None for exact, unversioned, or non-numeric specs."""
+    s = _pin_line(raw)
+    if not s or s.startswith("@"):
+        return None
+    m = re.match(r"^([A-Za-z0-9_.-]+)(?:\[[^\]]*\])?\s*(.*)$", s)
+    if not m:
+        return None
+    name, rest = m.group(1), (m.group(2) or "").strip()
+    if not rest:
+        return None
+    clauses: list[tuple[str, tuple[int, int, int]]] = []
+    while rest:
+        rest = rest.lstrip(",").strip()
+        if not rest:
+            break
+        cm = re.match(r"(~=|==|!=|<=|>=|<|>)\s*([A-Za-z0-9_.+-]+)", rest)
+        if not cm:
+            return None
+        op, ver = cm.group(1), cm.group(2)
+        rest = rest[cm.end() :].strip()
+        if op == "~=":
+            extra = _compatible_release(ver)
+            if extra is None:
+                return None
+            clauses.extend(extra)
+            continue
+        trip = _version_triple(ver)
+        if trip is None:
+            return None
+        clauses.append((op, trip))
+    if not clauses:
+        return None
+    if len(clauses) == 1 and clauses[0][0] == "==":
+        return None
+    return name, clauses
+
+
+def _py_range_eval(name: str, clauses: list[tuple[str, tuple[int, int, int]]]) -> str | None:
+    """Stdlib-only interval check. Pre-releases miss; post/local compare as the release."""
+    if not re.match(r"^[A-Za-z0-9._-]+$", name):
+        return None
+    conds = " and ".join(f"(v{op}{trip})" for op, trip in clauses)
+    return (
+        'python -c "from importlib.metadata import version as V;import re;'
+        f"s=V({name!r}).split('+')[0];p=re.search(r'(?:a|b|rc|dev)\\d',s);"
+        "s=re.sub(r'\\.post\\d+$','',s);"
+        "v=tuple(int(x) for x in (s.split('.')+['0','0'])[:3]);"
+        f'raise SystemExit(bool(p) or not ({conds}))"'
+    )
+
+
+def refine_eval(
+    cmd: str,
+    *,
+    fix_k: str = "",
+    fix_b: str = "",
+    dep: list[str] | None = None,
+    eco: str = "",
+) -> str:
+    """If the agent passed a tautology, upgrade a pin into a portable import/require.
+
+    An exact pin (`pkg==1.2.3` / `pkg@1.2.3`) must check that version, not
+    merely that some build of `pkg` imports. A numeric range (`pkg>=1.2,<2`)
+    or compatible release (`pkg~=1.4` → `>=1.4,<2`) must check the interval
+    the same way. Env markers and other uncheckable specs stay a hint, not
+    an import. Never refuses. Never invents a tree recipe. A remaining
+    `true` is still a valid local hint.
+    """
+    raw = (cmd or "").strip() or "true"
+    if eval_is_proof(raw):
+        return raw
+    pin_src = fix_b if (fix_k or "") == "pin" else ""
+    exact = _exact_pin(pin_src) if pin_src else None
+    if not exact and not _pkg_token(pin_src):
+        for d in dep or []:
+            exact = _exact_pin(d)
+            if exact:
+                break
+    eco = (eco or "").lower()
+    if eco in {"go", "rust", "java"}:
+        # No import to write: the ecosystem's own tool observes the package, or nothing does.
+        from .target import suggest_eval
+
+        token = _pkg_token(pin_src) if pin_src else ""
+        if not token:
+            for d in dep or []:
+                token = _pkg_token(d)
+                if token:
+                    break
+        ev = suggest_eval(token, eco) if token else ""
+        return ev or raw
+    if exact:
+        name, ver = exact
+        if eco in {"npm", "node"} or name.startswith("@"):
+            # Single quotes inside: the recipe is shlex-split before exec, and inner
+            # double quotes would be eaten (node then sees a bare path and a numeric literal).
+            req = "'" + (name + "/package.json").replace("'", "") + "'"
+            return f"node -e \"if(require({req}).version!=='{ver.replace(chr(39), '')}') process.exit(1)\""
+        if re.match(r"^[A-Za-z0-9._-]+$", name):
+            return f'python -c "from importlib.metadata import version; raise SystemExit(version({name!r})!={ver!r})"'
+    rng = _range_pin(pin_src) if pin_src else None
+    if not rng and not _pkg_token(pin_src):
+        for d in dep or []:
+            rng = _range_pin(d)
+            if rng:
+                break
+    if rng and eco not in {"npm", "node"}:
+        generated = _py_range_eval(rng[0], rng[1])
+        if generated:
+            return generated
+    if pin_src and (_one_segment_tilde(pin_src) or _env_marker(pin_src)):
+        return raw
+    token = _pkg_token(pin_src) if pin_src else ""
+    if not token:
+        for d in dep or []:
+            token = _pkg_token(d)
+            if token:
+                break
+    if not token:
+        return raw
+    if eco in {"npm", "node"} or token.startswith("@"):
+        return "node -e \"require('" + token.replace("'", "") + "')\""
+    mod = token.replace("-", "_")
+    if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", mod):
+        return f'python -c "import {mod}"'
+    return raw
+
+
+def public_tried(items: list[str] | None) -> list[str]:
+    out: list[str] = []
+    for t in items or []:
+        slug = agent_slug(t)[:40]
+        if slug in ("agent", "") or _EVAL_LOCAL.search(t) or "/" in t or "\\" in t:
+            continue
+        out.append(slug)
+        if len(out) >= 8:
+            break
+    return out
+
+
+def public_fix_body(text: str) -> str:
+    """Redact mailbox, internal hosts, and absolute home paths.
+
+    Do not run error-normalization here: that rewrites pins (`pydantic>=2.7,<3`
+    → `pydantic>=<N>.<N>,<<N>`), flags (`--max-old-space-size=4096`), and
+    relative paths (`./src/*`) that agents need to apply the fix.
+    """
+    s = (text or "").strip()
+    s = _EMAIL.sub("<STR>", s)
+    s = _HOSTY.sub("<HOST>", s)
+    s = _ABS_PATH.sub("<PATH>", s)
+    return s[:4000]
+
+
+def project_public(claim: Claim) -> Claim:
+    """Same id + fingerprint, fields safe for the commons."""
+    body = public_fix_body(claim.fix.b)
+    if not body.strip():
+        raise PublicSkip("fix empty after public projection")
+    data = claim.model_dump()
+    data["err"] = normalize_error(claim.err)
+    data["note"] = ""
+    data["model"] = ""
+    data["tried"] = public_tried(claim.tried)
+    data["tool"] = public_tried(claim.tool)
+    data["fix"] = Fix(k=claim.fix.k, b=body)
+    data["eval"] = EvalSpec(cmd=public_eval(claim.eval.cmd), expect=claim.eval.expect)
+    data["src"] = "home"
+    return Claim.model_validate(data)
+
+
+def projection_preview(claim: Claim) -> dict:
+    """Explain exactly what a public share would retain, redact, or remove."""
+    projected = project_public(claim)
+    original = claim.model_dump(mode="json")
+    public = projected.model_dump(mode="json")
+    removed: list[str] = []
+    transformed: list[str] = []
+    for key in ("note", "model", "tried", "tool"):
+        if original.get(key) and not public.get(key):
+            removed.append(key)
+        elif original.get(key) != public.get(key):
+            transformed.append(key)
+    if original["fix"]["b"] != public["fix"]["b"]:
+        transformed.append("fix.b")
+    if original["eval"]["cmd"] != public["eval"]["cmd"]:
+        transformed.append("eval.cmd")
+    if original["err"] != public["err"]:
+        transformed.append("err")
+    encoded = json.dumps(public, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return {
+        "safe": True,
+        "claim_id": claim.id,
+        "fingerprint_preserved": claim.fp == projected.fp,
+        "removed": sorted(set(removed)),
+        "transformed": sorted(set(transformed)),
+        "public_bytes": len(encoded.encode("utf-8")),
+        "projection": public,
+    }
