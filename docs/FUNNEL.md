@@ -37,7 +37,8 @@ durable **role/test prefixes** so COO/Implementation/Social falsifiers do not in
 Auto-minted stranger DIDs (`agent-<hex>`) stay countable. On **≥0.7.12**,
 `did:claimidx:agent-5765cb` (leaked Path B falsifier from a 0.7.11 test) is **hardcoded in the
 default `--commons` exclude list** — no `CLAIMIDX_OPERATOR_DID` workaround is required for that
-DID. Prefer prefix excludes for new Implementation/Social tests
+DID. On **≥0.7.16**, the house DID `did:claimidx:agent-e6f17f` (Oct 19 desktop reinit) is
+hardcoded next to it. Prefer prefix excludes for new Implementation/Social tests
 (`claimidx init --agent impl-falsifier-0712` / `falsifier-*`, or `CLAIMIDX_AGENT=impl-…`) so they
 never need a one-off. Only additional bare `agent-<hex>` leaks (not yet in defaults) still need
 `--exclude` / `CLAIMIDX_OPERATOR_DID` / `CLAIMIDX_REWARDS_EXCLUDE` / config `rewards_exclude` on

@@ -229,6 +229,8 @@ _PROXY_DEFAULT_EXCLUDE = frozenset(
         "did:claimidx:ci-*",
         # Leaked Path B falsifier (0.7.11 test); prefixes miss bare agent-<hex>.
         "did:claimidx:agent-5765cb",
+        # Joe's Oct 19 2026 desktop reinit (house DID, never a commons stranger).
+        "did:claimidx:agent-e6f17f",
     }
 )
 COUNTABLE_GOAL = 100

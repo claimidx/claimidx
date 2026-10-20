@@ -106,6 +106,7 @@ def test_commons_proxy_excludes_role_prefixes_and_operator_did(monkeypatch):
         _c("did:claimidx:coo-grind"),
         _c("did:claimidx:social-outreach"),
         _c("did:claimidx:agent-5765cb"),  # known leaked falsifier; default-excluded
+        _c("did:claimidx:agent-e6f17f"),  # house DID (Oct 19 desktop reinit); default-excluded
         _c("did:claimidx:agent-aabbcc"),  # other auto-mint stays countable
         _c("did:claimidx:grok"),
     ]
@@ -113,6 +114,7 @@ def test_commons_proxy_excludes_role_prefixes_and_operator_did(monkeypatch):
     assert "did:claimidx:stranger-a" in out["countable_ids"]
     assert "did:claimidx:agent-aabbcc" in out["countable_ids"]
     assert "did:claimidx:agent-5765cb" not in out["countable_ids"]
+    assert "did:claimidx:agent-e6f17f" not in out["countable_ids"]
     assert "did:claimidx:impl-falsifier-0711" not in out["countable_ids"]
     assert "did:claimidx:coo-grind" not in out["countable_ids"]
     assert "did:claimidx:social-outreach" not in out["countable_ids"]
@@ -122,5 +124,17 @@ def test_commons_proxy_excludes_role_prefixes_and_operator_did(monkeypatch):
     monkeypatch.setenv("CLAIMIDX_OPERATOR_DID", "did:claimidx:stranger-*")
     out2 = commons_owner_proxy(days=30, claims=rows, ledger="test")
     assert "did:claimidx:agent-5765cb" not in out2["countable_ids"]
+    assert "did:claimidx:agent-e6f17f" not in out2["countable_ids"]
     assert "did:claimidx:agent-aabbcc" in out2["countable_ids"]
     assert out2["countable"] == 1  # agent-aabbcc; stranger-a matched stranger-*
+
+
+def test_house_did_e6f17f_is_default_excluded_like_5765cb():
+    from claimidx.impact import _PROXY_DEFAULT_EXCLUDE, _proxy_excluded, _proxy_is_excluded
+
+    assert "did:claimidx:agent-e6f17f" in _PROXY_DEFAULT_EXCLUDE
+    assert "did:claimidx:agent-5765cb" in _PROXY_DEFAULT_EXCLUDE
+    pats = _proxy_excluded()
+    assert _proxy_is_excluded("did:claimidx:agent-e6f17f", pats)
+    assert _proxy_is_excluded("did:claimidx:agent-5765cb", pats)
+    assert not _proxy_is_excluded("did:claimidx:agent-e6f17a", pats)  # exact, not a prefix
