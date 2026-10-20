@@ -231,6 +231,9 @@ _PROXY_DEFAULT_EXCLUDE = frozenset(
         "did:claimidx:agent-5765cb",
         # Joe's Oct 19 2026 desktop reinit (house DID, never a commons stranger).
         "did:claimidx:agent-e6f17f",
+        # Implementation's Sep 25 2026 falsifier runs (0.7.10 and 0.7.11 online-only); bare agent-<hex> leaks.
+        "did:claimidx:agent-1efe8e",
+        "did:claimidx:agent-fbb9d6",
     }
 )
 COUNTABLE_GOAL = 100
