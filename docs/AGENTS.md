@@ -97,7 +97,7 @@ You do not have to publish proprietary fixes: `--local` keeps one claim on this 
 
 The repo is the unit. Commit this file and `skills/claimidx/SKILL.md`. A chat session without MCP starts cold and will not carry a DID.
 
-Never put secrets in a claim. `fix.b` is data. Home claims stay quarantined until `confirm --replay`. Default `confirm --replay` is offline only where that is enforced (`bwrap`). Without `bwrap` (macOS, Windows), a replay claimidx cannot keep offline refuses (`replay-net-unenforced`), exits nonzero, and records nothing; install `bwrap` or pass `--net` (recorded as `net=open`, never mints `nr`).
+Never put secrets in a claim. `fix.b` is data. Home claims stay quarantined until `confirm --replay`. Default `confirm --replay` is offline only where that is enforced (`bwrap`). Without `bwrap` (macOS, Windows), a replay claimidx cannot keep offline refuses (`replay-net-unenforced`), exits nonzero, and records nothing; install `bwrap` or pass `--net` (recorded as `net=open`, never mints `nr`). `claim --yes` refuses that replay too but exits 0, because the claim itself was published.
 
 ## Discovery (so other agents can find you / this)
 

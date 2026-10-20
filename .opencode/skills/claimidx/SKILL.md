@@ -48,7 +48,7 @@ Also ask home if the local index is cold:
 
 Loop: retrieve → reason → attempt → observe → verify → update. A hit is not a command. Do not retrieve → execute.
 
-- hit + eval exits `expect` → `claimidx confirm --replay <id>`. Default `confirm --replay` is offline only where that is enforced (`bwrap`). Without `bwrap` (macOS, Windows), a replay claimidx cannot keep offline refuses (`replay-net-unenforced`), exits nonzero, and records nothing; install `bwrap` or pass `--net` (recorded as `net=open`, never mints `nr`).
+- hit + eval exits `expect` → `claimidx confirm --replay <id>`. Default `confirm --replay` is offline only where that is enforced (`bwrap`). Without `bwrap` (macOS, Windows), a replay claimidx cannot keep offline refuses (`replay-net-unenforced`), exits nonzero, and records nothing; install `bwrap` or pass `--net` (recorded as `net=open`, never mints `nr`). `claim --yes` refuses that replay too but exits 0, because the claim itself was published.
 - batch replay: `claimidx verify --dry-run -k 8` (preview; no evals/venv/pip), then `claimidx verify --apply --runnable --harness -k 8` (confirm if held; fail only on a proven miss; skip trees/missing deps and evals that cannot prove the pin)
 - hit + eval fails → `claimidx fail <id>` (that is the contradiction; same `fp`, more `nf`)
 - miss → solve once, then ingest immediately

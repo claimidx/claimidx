@@ -198,3 +198,134 @@ def test_hook_cancelled_after_a_failure_is_not_a_pass(tmp_path: Path, capsys):
     ok = json.dumps({"hook_event_name": "PostToolUse", "command": "sleep 999", "output": "", "exit_code": 0})
     assert main(["--db", db, "hook", "--err", ok]) == 0
     assert "CLAIMIDX fixed" in capsys.readouterr().out
+
+
+# --- claim path: the claim is published (exit 0); only the replay is refused, and it says so plainly ---
+
+_OLD_CONTRADICTION = "nr minted from the working tree only"
+_BROKEN = "import json\n\ndef load(t):\n    return json.loads(t, encoding='utf-8')\n"
+_FIXED = "import json\n\ndef load(t):\n    return json.loads(t)\n"
+_LOADS_ERR = "TypeError: loads() got an unexpected keyword argument 'encoding'"
+
+
+def _git_tree(tmp_path: Path) -> Path:
+    import subprocess
+
+    tree = tmp_path / "repo"
+    tree.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=tree, check=True)
+    (tree / "mod.py").write_text(_BROKEN, encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tree, check=True)
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "broken"], cwd=tree, check=True)
+    (tree / "mod.py").write_text(_FIXED, encoding="utf-8")  # the fix, uncommitted
+    return tree
+
+
+def _claim_cli(db: str, capsys, *args: str) -> tuple[int, dict, str]:
+    rc = main(["--db", db, "--fmt", "json", "claim", *args, "--yes"])
+    cap = capsys.readouterr()
+    return rc, json.loads(cap.out), cap.err
+
+
+def _assert_claim_replay_refused(db: str, rc: int, out: dict, err: str) -> None:
+    assert rc == 0, out  # the claim itself succeeded; agents must not read Path B as failed
+    assert out["ok"] is True and out["id"]
+    assert out["replay"]["recorded"] is False
+    assert "replay-net-unenforced" in str(out["replay"]["reason"])
+    warns = " | ".join(out.get("warn") or [])
+    assert "replay skipped" in warns and "not enforced" in warns and "no nr was minted" in warns
+    assert "bwrap" in warns and "--net" in warns
+    assert _OLD_CONTRADICTION not in json.dumps(out) and _OLD_CONTRADICTION not in err
+    assert "OFFLINE REPLAY IS NOT ENFORCED" in err
+    c = Store(db).get(out["id"])
+    assert c.nr == 0 and c.nc == 0 and c.nf == 0
+    kinds = [e["kind"] for e in Store(db).events(limit=50)]
+    assert "confirm-replay" not in kinds and "confirm" not in kinds and "fail" not in kinds
+    if "nr" in out:
+        assert out["nr"] == 0
+
+
+def test_cli_claim_unenforced_exits_0_mints_nothing_and_says_replay_skipped(tmp_path: Path, capsys, no_bwrap):
+    db = str(tmp_path / "ix.sqlite")
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    rc, out, err = _claim_cli(
+        db,
+        capsys,
+        "--err",
+        "ModuleNotFoundError: No module named 'json'",
+        "--cwd",
+        str(tree),
+        "--eval",
+        _UNENFORCED_EVAL,
+        "--no-diff",
+        "--fix",
+        "pip install json",
+    )
+    _assert_claim_replay_refused(db, rc, out, err)
+
+
+def test_clean_room_claim_unenforced_exits_0_mints_nothing_and_says_replay_skipped(tmp_path: Path, capsys, no_bwrap):
+    tree = _git_tree(tmp_path)
+    db = str(tmp_path / "ix.sqlite")
+    rc, out, err = _claim_cli(db, capsys, "--err", _LOADS_ERR, "--cwd", str(tree), "--eval", "python -S -c \"import mod; mod.load('{}')\"")
+    assert out["clean_room"]["ran"] is True, out["clean_room"]
+    _assert_claim_replay_refused(db, rc, out, err)
+
+
+def test_clean_room_skipped_claim_unenforced_never_says_nr_minted(tmp_path: Path, capsys, no_bwrap):
+    tree = _git_tree(tmp_path)
+    db = str(tmp_path / "ix.sqlite")
+    rc, out, err = _claim_cli(
+        db,
+        capsys,
+        "--err",
+        _LOADS_ERR,
+        "--cwd",
+        str(tree),
+        "--eval",
+        "python -S -c \"import mod; mod.load('{}')\"",
+        "--fix",
+        "removed the encoding kwarg",
+        "--fix-k",
+        "patch",
+    )
+    assert out["clean_room"]["ran"] is False
+    _assert_claim_replay_refused(db, rc, out, err)
+
+
+def test_onboarding_without_bwrap_claim_and_apply_still_hold(tmp_path: Path, capsys, no_bwrap):
+    """Hook-covered `python -c` evals still mint nr=1 and exit 0 on hosts without bwrap."""
+    import subprocess
+
+    tree = _git_tree(tmp_path)
+    db = str(tmp_path / "ix.sqlite")
+    ev = "python -c \"import mod; mod.load('{}')\""
+    rc, out, err = _claim_cli(db, capsys, "--err", _LOADS_ERR, "--cwd", str(tree), "--eval", ev, "--no-replay")
+    assert rc == 0
+    cid = out["id"]
+    other = tmp_path / "other"
+    subprocess.run(["git", "clone", "-q", str(tree), str(other)], check=True)
+    assert main(["--db", db, "--fmt", "json", "apply", cid, "--cwd", str(other), "--yes"]) == 0
+    applied = json.loads(capsys.readouterr().out)
+    assert applied["applied"] is True and applied["replay"]["recorded"] is True and applied["replay"]["nr"] == 1
+    assert applied["replay"]["replay"]["net_how"] == "interpreter"
+
+
+def test_claim_share_yes_without_bwrap_still_reaches_commons(tmp_path: Path, capsys, no_bwrap, monkeypatch):
+    from claimidx import home
+    from claimidx.env import remember_failure
+
+    monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
+    monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
+    calls: list[str] = []
+    monkeypatch.setattr(home, "_post", lambda url, payload, token="", timeout=20.0: calls.append(url) or {"exists": False, "claim": {"id": payload.get("id")}})
+    db = str(tmp_path / "ix.sqlite")
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    remember_failure("ModuleNotFoundError: No module named 'json'", cwd=str(tree), eco="py", rt=_py_rt())
+    assert main(["--db", db, "--fmt", "json", "claim", "--yes", "--share-yes", "--no-diff", "--fix", "pip install json"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["ok"] and out.get("share", {}).get("status") == "commons"
+    assert any(u.endswith("/api/publish") for u in calls)
+    assert out["replay"]["recorded"] is True and Store(db).get(out["id"]).nr == 1
