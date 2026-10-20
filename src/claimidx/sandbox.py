@@ -484,6 +484,8 @@ def _apply_offline(env: dict[str, str], parts: list[str], argv: list[str], *, ne
 
 
 def _close_job(job: object) -> None:
+    if sys.platform != "win32":
+        return
     try:
         import ctypes
 
@@ -498,6 +500,8 @@ def _close_job(job: object) -> None:
 def _job_kill_on_close(proc: subprocess.Popen) -> object | None:
     """Windows Job Object with KILL_ON_JOB_CLOSE. Not a network control. Failure is ignored."""
     if os.name != "nt":
+        return None
+    if sys.platform != "win32":
         return None
     job = None
     try:
