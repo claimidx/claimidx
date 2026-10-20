@@ -229,6 +229,8 @@ _PROXY_DEFAULT_EXCLUDE = frozenset(
         "did:claimidx:ci-*",
         # Leaked Path B falsifier (0.7.11 test); prefixes miss bare agent-<hex>.
         "did:claimidx:agent-5765cb",
+        # Joe's Oct 19 2026 desktop reinit (house DID, never a commons stranger).
+        "did:claimidx:agent-e6f17f",
     }
 )
 COUNTABLE_GOAL = 100
@@ -398,7 +400,7 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
     }
     # Invite copy: after a countable share, Path B's leftover job is minting *another* stranger DID.
     invite_step = (
-        f'invite another agent onto Path B: pip install -U "claimidx[server]>=0.7.15" && '
+        f'invite another agent onto Path B: pip install -U "claimidx[server]>=0.7.16" && '
         f"claimidx init --agent <them> && claimidx apply {FIRST_HOLD_ID} --cwd . --yes && claimidx claim --yes --share-yes"
     )
     if not countable:

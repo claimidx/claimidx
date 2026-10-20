@@ -520,7 +520,9 @@ TOOLS: list[dict[str, Any]] = [
             "digest_drift when a published observed_digest no longer matches local bytes under the same pin (warn by default; "
             "strict_digest=true refuses nr). Returns id, st, held, nc, nf, own when recorded; replay adds replay, lights, and "
             "optional warn, or recorded=false with reason and suggest. "
-            "A networked replay and a vacuous pass do not mint nr. An offline block is recorded=false and does not increment nf."
+            "A networked replay and a vacuous pass do not mint nr. An offline block is recorded=false and does not increment nf. "
+            "Default replay is offline only where it is enforced (bwrap); elsewhere a default replay that could reach the network "
+            "returns isError with reason replay-net-unenforced and records nothing; pass net=true to allow the network explicitly."
         ),
         "inputSchema": {
             "type": "object",
@@ -542,7 +544,7 @@ TOOLS: list[dict[str, Any]] = [
                 "net": {
                     "type": "boolean",
                     "default": False,
-                    "description": "Allow the network during replay. The run is stored and does not mint nr.",
+                    "description": "Allow the network during replay. The run is recorded with net=open and does not mint nr. Required where offline is not enforced (no bwrap): without it that replay refuses (isError) and records nothing.",
                 },
                 "rerun": {
                     "type": "boolean",
@@ -1083,7 +1085,11 @@ def handle(msg: dict, store: Store) -> dict:
         name = str(params.get("name") or "")
         args = params.get("arguments") or {}
         try:
-            return _ok(mid, _text(_call(name, args, store)))
+            res = _call(name, args, store)
+            out = _text(res)
+            if isinstance(res, dict) and res.get("ok") is False and res.get("error"):
+                out["isError"] = True  # e.g. replay-net-unenforced: the caller must see a failure, not a quiet skip
+            return _ok(mid, out)
         except KeyError as e:
             return _err(mid, -32602, f"Invalid params: missing {e}")
         except Exception as e:
@@ -1332,10 +1338,36 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                 actor=resolve_owner(args.get("own")),
             )
             gate_warns = list(decision.warns)
+            if not decision.mint_nr and decision.record_net:
+                from .gate import net_open_detail
+                from .match import confirm_lights
+
+                netted = store.confirm(
+                    args["id"],
+                    resolve_owner(args.get("own")),
+                    replayed=False,
+                    detail=net_open_detail(result, {**eval_detail, "mode": "net"}),
+                )
+                return {
+                    "id": netted.id,
+                    "st": netted.st,
+                    "nc": netted.nc,
+                    "nf": netted.nf,
+                    "nr": netted.nr,
+                    "held": True,
+                    "recorded": True,
+                    "nr_minted": False,
+                    "net": result.net or "open",
+                    "reason": decision.reason,
+                    "replay": replay_body,
+                    "lights": confirm_lights(held=True, recorded=True, warns=gate_warns, contested=netted.st == "contested"),
+                }
             if not decision.mint_nr:
                 from .match import confirm_lights
 
                 refusal = decision.refusal()
+                if decision.unenforced:
+                    refusal["ok"] = False
                 return {
                     "id": current.id,
                     "st": current.st,

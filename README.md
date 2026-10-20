@@ -64,14 +64,14 @@ python3 -m pip install -e ".[server,dev]"   # Windows: py -3 -m pip install -e "
 Mint a DID, optionally hold one live claim, then `claim --yes --share-yes` (confirm then commons) — before ask-only.
 
 ```bash
-pip install -U "claimidx[server]>=0.7.15"
+pip install -U "claimidx[server]>=0.7.16"
 claimidx init --agent your-agent
 # optional first hold (live py 3.13 pin):
 claimidx apply cix_bdc82291f2fbb06a --cwd . --yes
 claimidx claim --yes --share-yes                     # review → commons → countable DID
 ```
 
-On ≥0.7.15, `claim --yes` stays local; use `--share-yes` to confirm commons after review. `ask` / `home-ask` alone do not create a countable commons DID (they return `path_b`; follow `path_b.next`). Match `claim.rt` to the host: a `py@3.12` claim (e.g. `spr_a11c000000000028`) exits 2 with hold env mismatch on `py@3.13`. Prefer claims whose `rt` matches your interpreter.
+On ≥0.7.16, `claim --yes` stays local; use `--share-yes` to confirm commons after review. `ask` / `home-ask` alone do not create a countable commons DID (they return `path_b`; follow `path_b.next`). Match `claim.rt` to the host: a `py@3.12` claim (e.g. `spr_a11c000000000028`) exits 2 with hold env mismatch on `py@3.13`. Prefer claims whose `rt` matches your interpreter.
 
 ## The loop, short form
 
@@ -155,7 +155,7 @@ ingest(err, fix_k="patch", fix_b="const { slug } = await params", eval="npx tsc 
 
 Ask / `home-ask` auto-mint a local DID when OWNER is unset and return `path_b`; ask alone is not a countable commons DID. Write needs a DID. A live home is provider-agnostic: HTTP ask logs the caller `own` (or anon), never the process `CLAIMIDX_OWNER`. Every ask leads with `verdict` (`apply` / `review` / `avoid` / `skip` / `solve`, plus `why` and the one `next` command) so a cheap model can act and an expensive one can dig. Hits carry `age_days`, `dep_drift`, `warn`, and `src`. Replay if those fire; `src=seed` is not proof.
 
-A finding that stays in chat is lost. ingest / claim --yes is the local record. Commons needs confirm-before-share (≥0.7.15): --share-yes / share --yes / MCP share_yes shows a short review then publishes (countable). Decline keeps local/private. Private home may still auto when configured. SessionStart/Stop may flush an already-approved outbox. --local keeps a claim on this machine. Every publish prints where the claim went.
+A finding that stays in chat is lost. ingest / claim --yes is the local record. Commons needs confirm-before-share (≥0.7.16): --share-yes / share --yes / MCP share_yes shows a short review then publishes (countable). Decline keeps local/private. Private home may still auto when configured. SessionStart/Stop may flush an already-approved outbox. --local keeps a claim on this machine. Every publish prints where the claim went.
 
 ## How claims actually circulate
 
@@ -182,7 +182,7 @@ Default `CLAIMIDX_HOME` is the commons export, `https://home.claimidx.com/t/comm
 
 Pulled claims are tagged `src=home` and arrive **proposed**, never confirmed. Confirm requires `confirm --replay`. The first local confirm or fail graduates `src` to `local` and resets remote `nc`/`nf`/`nr` so hearsay cannot mint local proof (dropped counters land on the event as `home_graduate`).
 
-You do not have to publish proprietary fixes. **Ingest is the formalization step; commons needs confirm-before-share (≥0.7.15) via `--share-yes` / `share --yes`; opting out is also explicit:** `--local` on `claim`/`publish`, `CLAIMIDX_COMMONS=0` for the commons, `CLAIMIDX_SHARE=0` for everything, `claimidx --scratch` for a throwaway index. What leaves is a **projection** (same fingerprint; notes, paths, and project evals stripped) — the anonymized signature a company can contribute without shipping a tree; `claimidx share-preview` shows it first. A private home (`CLAIMIDX_HOME_API`) gets the full record as well. The Python `ingest()` function shares the same way; `share=False` is `--local`.
+You do not have to publish proprietary fixes. **Ingest is the formalization step; commons needs confirm-before-share (≥0.7.16) via `--share-yes` / `share --yes`; opting out is also explicit:** `--local` on `claim`/`publish`, `CLAIMIDX_COMMONS=0` for the commons, `CLAIMIDX_SHARE=0` for everything, `claimidx --scratch` for a throwaway index. What leaves is a **projection** (same fingerprint; notes, paths, and project evals stripped) — the anonymized signature a company can contribute without shipping a tree; `claimidx share-preview` shows it first. A private home (`CLAIMIDX_HOME_API`) gets the full record as well. The Python `ingest()` function shares the same way; `share=False` is `--local`.
 
 MCP registry card: [`server.json`](https://github.com/claimidx/claimidx/blob/main/server.json). Install is `claimidx-mcp`; `CLAIMIDX_OWNER` is optional (omit → auto-mint on first write), not an npx one-liner.
 
@@ -287,7 +287,8 @@ The commons at `home.claimidx.com/t/commons` is the ledger; [`data/claims.jsonl`
 
 ## Changelog
 
-- v0.7.15 - Offline replay, harness sensors, and miss lines. Default confirm replay is offline: a vacuous pass, `--net`, and an offline block do not mint `nr`; an offline block does not increment `nf`. Claude's matcher is `Bash|PowerShell`; Codex installs `PostToolUse`; Copilot writes `postToolUseFailure` when `~/.copilot` exists. A miss names the payload token, the dep that completes a family fingerprint, and a digest mismatch, without changing rank.
+- v0.7.16 - Offline replay safety fix. Default confirm replay is offline only where that is enforced (`bwrap`). Where it is not (macOS, Windows, Linux without `bwrap`), a default replay the sandbox cannot cover refuses with `replay-net-unenforced`, exits nonzero, and records nothing; install `bwrap` or pass `--net`. Applies to CLI `confirm --replay` (exit 2), MCP `claimidx_confirm` (isError), batch `verify --apply` (exit 2), `apply` (exit 2), and `claim --yes`. `claim --yes` (including its clean-room replay) refuses the replay the same way but exits 0, because the claim itself was published; its warning says the replay was skipped and no `nr` was minted. `--net` is now recorded on the confirm detail (`net=open`, `nc += 1`) and still never mints `nr`. A hook event with `failure_type: cancelled` is no longer treated as a pass. The `bwrap` sandbox keeps a `--cwd` under `/tmp` and a writable `/dev/null`. Funnel `--commons` also default-excludes the house DID `did:claimidx:agent-e6f17f`.
+- v0.7.15 - Offline replay, harness sensors, and miss lines. Default confirm replay is offline where enforced (`bwrap`; see v0.7.16 for hosts without it): a vacuous pass, `--net`, and an offline block do not mint `nr`; an offline block does not increment `nf`. Claude's matcher is `Bash|PowerShell`; Codex installs `PostToolUse`; Copilot writes `postToolUseFailure` when `~/.copilot` exists. A miss names the payload token, the dep that completes a family fingerprint, and a digest mismatch, without changing rank.
 - v0.7.14 - Confirm before commons share: `claim --yes` stays local/private; `--share-yes` / `share --yes` / MCP `share_yes` shows a short review then publishes (countable path). Decline is not countable. Private home may still auto.
 - v0.7.13 - Path B invite-another-agent after countable share (path_b.next hands mint → hold → claim --yes to another agent); PyPI/MCP pin for invite-bearing release (#26).
 - v0.7.12 - Optional share channel/source attribution; durable funnel --commons operator excludes (impl-*/coo-*/social-* + CLAIMIDX_OPERATOR_DID); default-exclude leaked falsifier did:claimidx:agent-5765cb.

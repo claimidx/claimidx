@@ -557,10 +557,43 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
             actor=resolve_owner(ns.own),
         )
         gate_warns = list(decision.warns)
+        if not decision.mint_nr and decision.record_net:
+            # --net: the network was allowed on purpose. Record the confirm with net=open on its detail; no nr.
+            from .gate import net_open_detail
+            from .match import confirm_lights
+
+            netted = store.confirm(
+                ns.id,
+                resolve_owner(ns.own),
+                replayed=False,
+                detail=net_open_detail(result, {**eval_detail, "mode": "net"}),
+            )
+            lights = confirm_lights(held=True, recorded=True, warns=gate_warns, contested=netted.st == "contested")
+            body = {
+                "held": True,
+                "replay": replay_info,
+                "recorded": True,
+                "nr_minted": False,
+                "net": result.net or "open",
+                "reason": decision.reason,
+                "lights": lights,
+                "claim": json.loads(netted.model_dump_json()),
+            }
+            if ns.fmt == "json":
+                print(json.dumps(body, default=str))
+            else:
+                print(json.dumps(replay_info), file=sys.stderr)
+                print(f"recorded with net=open (nr not minted): {decision.reason}", file=sys.stderr)
+                print(_dumps(netted, ns.fmt))
+            return 0
         if not decision.mint_nr:
             from .match import confirm_lights
 
             refusal = decision.refusal()
+            if decision.unenforced:
+                from .gate import UNENFORCED_MESSAGE
+
+                print(f"claimidx: ERROR: {UNENFORCED_MESSAGE}", file=sys.stderr)
             lights = confirm_lights(
                 held=True,
                 recorded=False,
@@ -1103,6 +1136,12 @@ def cmd_verify(ns: argparse.Namespace) -> int:
         trust_eval=bool(ns.trust_eval),
     )
     print(json.dumps(report, default=str, indent=2 if ns.fmt == "json" else None))
+    from .gate import UNENFORCED_MESSAGE, UNENFORCED_PREFIX
+
+    unenforced = [r.get("id") for r in report.get("results") or [] if str(r.get("reason") or "").startswith(UNENFORCED_PREFIX)]
+    if unenforced:
+        print(f"claimidx: ERROR: {UNENFORCED_MESSAGE} (claims: {', '.join(str(i) for i in unenforced[:8])})", file=sys.stderr)
+        return 2
     if report["counts"].get("fail"):
         return 2
     return 0
@@ -1924,7 +1963,12 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--cwd")
     c.add_argument("--trust-eval", action="store_true", help="run this claim's eval even though it was not published here (prints it first)")
     c.add_argument("--strict-digest", action="store_true", help="refuse nr on digest_drift instead of warning (also CLAIMIDX_STRICT_DIGEST=1)")
-    c.add_argument("--net", action="store_true", help="allow the network during --replay; the run is stored and does not mint nr")
+    c.add_argument(
+        "--net",
+        action="store_true",
+        help="allow the network during --replay; the run is recorded with net=open and does not mint nr. "
+        "Where offline is not enforced (no bwrap, e.g. macOS/Windows), a default replay refuses and records nothing",
+    )
     c.add_argument("--rerun", action="store_true", help="replay twice; disagreement is flaky and does not mint nr or fail the claim")
     c.add_argument("--trust-domain", help="declared observation trust domain (provenance, not quorum)")
     c.add_argument("--sensor-plane", help="declared observation sensor plane (provenance, not quorum)")

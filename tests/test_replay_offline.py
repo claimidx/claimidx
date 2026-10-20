@@ -212,14 +212,17 @@ def test_confirm_replay_net_open_does_not_mint(tmp_path: Path, capsys):
         eval_cmd='python -c "print(1)"',
     )
     rc, out = _confirm(db, capsys, cid, extra=["--net"])
-    assert rc == 2
+    # 0.7.16: --net is recorded on the confirm detail (net=open), as PROTOCOL promises; it never mints nr.
+    assert rc == 0
     assert out["held"] is True
-    assert out["recorded"] is False
+    assert out["recorded"] is True
+    assert out["nr_minted"] is False
     assert str(out.get("reason") or "").startswith("net-open")
     assert out["replay"]["net"] == "open"
     shown = _show(db, capsys, cid)
     assert shown["nr"] == 0
     assert shown["nf"] == 0
+    assert shown["nc"] == 1
 
 
 def test_api_confirm_net_open_records_without_nr(tmp_path: Path):

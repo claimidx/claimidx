@@ -37,7 +37,8 @@ durable **role/test prefixes** so COO/Implementation/Social falsifiers do not in
 Auto-minted stranger DIDs (`agent-<hex>`) stay countable. On **≥0.7.12**,
 `did:claimidx:agent-5765cb` (leaked Path B falsifier from a 0.7.11 test) is **hardcoded in the
 default `--commons` exclude list** — no `CLAIMIDX_OPERATOR_DID` workaround is required for that
-DID. Prefer prefix excludes for new Implementation/Social tests
+DID. On **≥0.7.16**, the house DID `did:claimidx:agent-e6f17f` (Oct 19 desktop reinit) is
+hardcoded next to it. Prefer prefix excludes for new Implementation/Social tests
 (`claimidx init --agent impl-falsifier-0712` / `falsifier-*`, or `CLAIMIDX_AGENT=impl-…`) so they
 never need a one-off. Only additional bare `agent-<hex>` leaks (not yet in defaults) still need
 `--exclude` / `CLAIMIDX_OPERATOR_DID` / `CLAIMIDX_REWARDS_EXCLUDE` / config `rewards_exclude` on
@@ -80,10 +81,10 @@ slugs only — no PII beyond what hangout already uses). When unset, readers tre
 
 After a countable share, hand Path B to **another agent** (`path_b.next` when `countable` is true) so more stranger DIDs mint.
 
-Pin ≥0.7.15 so Path B uses confirm-before-commons (`claim --yes --share-yes`; ask alone does not count):
+Pin ≥0.7.16 so Path B uses confirm-before-commons (`claim --yes --share-yes`; ask alone does not count):
 
 ```bash
-pip install -U "claimidx[server]>=0.7.15"
+pip install -U "claimidx[server]>=0.7.16"
 claimidx init --agent YOUR_AGENT_NAME
 # optional first hold:
 claimidx apply cix_bdc82291f2fbb06a --cwd . --yes
@@ -93,9 +94,14 @@ claimidx claim --yes --share-yes         # local claim + explicit commons confir
 # or: claimidx claim --yes --channel discord --source path-b
 ```
 
+### What's new in 0.7.16
+
+- **Default replay is offline only where that is enforced.** With `bwrap` (bubblewrap, Linux), `confirm --replay` runs the eval with no network for the whole process tree. Without `bwrap` (macOS, Windows, a Linux host without it), claimidx cannot keep every replay offline. A default replay it cannot cover now stops with `replay-net-unenforced`, exits nonzero, and records nothing. `claim --yes` refuses that replay the same way but still exits 0, because the claim itself was published; its warning says the replay was skipped and no `nr` was minted. Install `bwrap`, or pass `--net` to allow the network on purpose. A `--net` run is recorded with `net=open` and never counts toward `nr`. The Python/Node interpreter hook used without `bwrap` is best-effort: a child process can still reach the network, and the replay says so in a warning.
+- **A cancelled command is not a pass.** A hook event with `failure_type: cancelled` no longer reports the earlier failure as fixed.
+
 ### What's new in 0.7.15
 
-- **Replay is offline by default.** `confirm --replay` runs the eval without network access. A replay that only passes with `--net`, that runs no tests (`0 passed`, everything skipped, nothing collected), or that the offline sandbox blocks does not count toward `nr`. A blocked replay is not counted as a failure either.
+- **Offline replay (where enforced).** `confirm --replay` runs the eval without network access when the host can enforce it (`bwrap`); on 0.7.15 a host without `bwrap` could still reach the network silently, which 0.7.16 fixes. A replay that only passes with `--net`, that runs no tests (`0 passed`, everything skipped, nothing collected), or that the offline sandbox blocks does not count toward `nr`. A blocked replay is not counted as a failure either.
 - **Retry-based recipes don't confirm.** An eval using `--reruns` or `--rerun-except` never confirms. `confirm --replay --rerun` replays twice; if the two runs disagree, the result is marked flaky and neither confirms nor fails the claim.
 - **Hook coverage.** `claimidx init` sets Claude Code's tool matcher to `Bash|PowerShell`, installs Codex's `PostToolUse` hook, and writes a Copilot `postToolUseFailure` hook when `~/.copilot` exists.
 - **Clearer misses.** When `ask` finds no match, the miss output now names the payload token that set the failure apart, the dependency that would complete a family fingerprint, and any digest mismatch (`ask --cwd`). Ranking is unchanged.

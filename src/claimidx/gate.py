@@ -10,7 +10,8 @@ Checks live here, in order, and each returns the first refusal:
 1. env       claim.rt must match the observed executing runtime (python/node)
 2. vacuous   a held 0-passed / skipped / empty collection does not mint nr
    reruns    --reruns / --rerun-except never confirms
-   net       --net is stored and does not mint nr; an unenforced fetch does not either
+   net       an unenforced default replay (no bwrap) refuses loudly and records nothing;
+             --net is recorded on the confirm detail (net=open) and does not mint nr
 3. target    the eval must observe the claimed target            [X1]
 4. binding   proof artifact digests must still match under --cwd [X2]
 5. digest    observed dependency digests drift -> warn           [I1]
@@ -41,13 +42,21 @@ class GateDecision:
     reason: str
     warns: list[str] = field(default_factory=list)
     suggest: dict[str, str] = field(default_factory=dict)  # the passing form, when a refusal has one
+    record_net: bool = False  # --net hold: record the confirm with net=open, never mint nr
 
     def as_tuple(self) -> tuple[bool, str]:
         return self.mint_nr, self.reason
 
+    @property
+    def unenforced(self) -> bool:
+        return self.reason.startswith(UNENFORCED_PREFIX)
+
     def refusal(self) -> dict:
         """Payload callers merge into a not-recorded response."""
         out: dict = {"reason": self.reason}
+        if self.unenforced:
+            out["error"] = UNENFORCED_PREFIX
+            out["message"] = UNENFORCED_MESSAGE
         if self.suggest:
             out["suggest"] = self.suggest
         if self.warns:
@@ -89,9 +98,27 @@ _NO_TESTS = re.compile(r"no tests ran", re.I)
 _EXECUTED_ZERO = re.compile(r"Executed 0 of 0")
 _SKIPPED = re.compile(r"\d+ skipped|\bSKIPPED\b")
 _RERUNS = re.compile(r"(?:^|[\s=])--reruns(?:\s|=|$)|(?:^|[\s=])--rerun-except(?:\s|=|$)")
-_FETCH_HEADS = {"npm", "npx", "uv", "go", "cargo", "pip"}
-_FETCH_VERBS = {"install", "fetch", "get", "ci", "add", "sync"}
 _INTERPRETER_WARN = "interpreter hook is not process-tree offline; a child process can still open the network"
+UNENFORCED_PREFIX = "replay-net-unenforced"
+UNENFORCED_MESSAGE = (
+    "OFFLINE REPLAY IS NOT ENFORCED ON THIS HOST. claimidx could not sandbox this eval's network "
+    "(no bwrap here, e.g. macOS or Windows), so the replay may have reached the network. "
+    "Nothing was recorded and nr was not minted. Install bubblewrap (bwrap) to replay offline, "
+    "or re-run with --net to allow the network explicitly (recorded as net=open; it never mints nr)."
+)
+NET_OPEN_REASON = "net-open: a networked replay does not mint nr (recorded with net=open)"
+
+
+def unenforced_reason(result: ReplayResult) -> str:
+    how = (result.net_how or "").strip() or "none"
+    return f"{UNENFORCED_PREFIX}: offline replay is not enforced on this host (net_how={how}); install bwrap or pass --net"
+
+
+def net_open_detail(result: ReplayResult, base: dict | None = None) -> dict:
+    """Confirm detail for a --net hold: net mode on the record, never an nr."""
+    detail = dict(base or {})
+    detail.update({"held": True, "net": result.net or "open", "net_how": result.net_how or "", "nr_minted": False})
+    return detail
 
 
 def vacuous_reason(text: str) -> str:
@@ -108,25 +135,6 @@ def vacuous_reason(text: str) -> str:
     if _SKIPPED.search(blob) and not _POSITIVE_PASSED.search(blob):
         return "vacuous-pass: skipped target"
     return ""
-
-
-def _unenforced_network_recipe(cmd: str) -> bool:
-    if "http://" in (cmd or "") or "https://" in (cmd or ""):
-        return True
-    from .policy import _norm_head, split_eval
-
-    try:
-        _env, parts = split_eval(cmd)
-    except ValueError:
-        return False
-    if not parts:
-        return False
-    head = _norm_head(parts[0])
-    if head == "go" and "get" in parts[1:]:
-        return True
-    if head in _FETCH_HEADS and any(p in _FETCH_VERBS for p in parts[1:]):
-        return True
-    return False
 
 
 def _patch_unapplied(fix_b: str, cwd: str | None) -> str:
@@ -265,6 +273,14 @@ def graduation_gate(
     this gate only sees holds that ran. `store` is needed for the binding and
     digest checks (they live on the v2 Proof); without it those are skipped.
     """
+    if (result.net or "") == "unenforced":
+        # Default replay asked for offline and this host could not enforce it (no bwrap): the run may have
+        # used the network. Refuse loudly; record nothing. `--net` is the explicit way to allow the network.
+        return GateDecision(
+            False,
+            unenforced_reason(result),
+            suggest={"hint": "install bubblewrap (bwrap) so default replay is offline, or re-run confirm --replay --net"},
+        )
     ok, why = replay_records_hold(claim.rt, result, claim.eval.cmd)
     if not ok:
         return GateDecision(False, why, suggest=_env_suggestion(claim, result, why))
@@ -274,9 +290,7 @@ def graduation_gate(
     if _RERUNS.search(claim.eval.cmd or ""):
         return GateDecision(False, "reruns: a recipe with --reruns or --rerun-except never confirms")
     if (result.net or "") == "open":
-        return GateDecision(False, "net-open: a networked replay does not mint nr")
-    if (result.net or "") == "unenforced" and result.rc == 0 and result.held and _unenforced_network_recipe(claim.eval.cmd):
-        return GateDecision(False, "replay-net-unenforced: the offline sandbox could not cover this recipe")
+        return GateDecision(False, NET_OPEN_REASON, record_net=True)
     target = claim_target(cls=claim.cls, err=claim.err, dep=claim.dep)
     if target and not eval_observes_target(claim.eval.cmd, target) and not proof_observes_target(_proof_steps(store, claim.id), target):
         suggest = suggest_eval(target, claim.eco)
@@ -367,7 +381,7 @@ def flag_refusal(flag: str) -> dict | None:
         return {
             "reason": "replay-offline: the eval tried to use the network and the offline replay blocked it",
             "suggest": {
-                "hint": "confirm --replay --net records the run and does not mint nr; it does not fail the claim",
+                "hint": "confirm --replay --net records the run with net=open and does not mint nr; it does not fail the claim",
             },
         }
     if flag == "flaky":

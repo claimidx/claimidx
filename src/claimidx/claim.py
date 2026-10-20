@@ -17,6 +17,7 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 from typing import Any
 
 from .env import infer_env, installed_version, last_failure, tree_eval
@@ -447,17 +448,50 @@ def publish_draft(
                 out["replay"] = room.get("after") or {}
             else:
                 out["replay"] = {"held": bool(room.get("after_held")), "recorded": False, "reason": room.get("reason")}
-                warns.append("clean clone: " + str(room.get("reason")) + "; nothing minted")
+                if _replay_unenforced(out["replay"]):
+                    warns.append(claim_unenforced_warning(out["id"]))
+                else:
+                    warns.append("clean clone: " + str(room.get("reason")) + "; nothing minted")
         else:
             out["replay"] = _replay_now(out["id"], db=db, own=own, cwd=cwd)
-            if room is not None:
-                warns.append("clean-room skipped: " + str(room.get("reason")) + "; nr minted from the working tree only")
+            if _replay_unenforced(out["replay"]):
+                # The claim is published (exit 0); only the replay was refused. Never say nr was minted.
+                warns.append(claim_unenforced_warning(out["id"]))
+            elif room is not None:
+                if (out["replay"] or {}).get("recorded"):
+                    warns.append("clean-room skipped: " + str(room.get("reason")) + "; nr minted from the working tree only")
+                else:
+                    warns.append("clean-room skipped: " + str(room.get("reason")) + "; the working-tree replay did not record, no nr minted")
         if warns:
             out["warn"] = warns
+        try:
+            from .store import DEFAULT_DB, Store
+
+            latest = Store(db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)).get(out["id"])
+        except Exception:
+            latest = None
+        if latest is not None:
+            # Top-level st/nr/nc/nf reflect the stored claim after the replay, not the pre-replay ingest.
+            for key in ("st", "nr", "nc", "nf"):
+                if key in out:
+                    out[key] = getattr(latest, key)
     from .env import forget_failure
 
     forget_failure()
     return out
+
+
+def _replay_unenforced(rep: dict | None) -> bool:
+    from .gate import UNENFORCED_PREFIX
+
+    return UNENFORCED_PREFIX in str((rep or {}).get("reason") or "")
+
+
+def claim_unenforced_warning(claim_id: str) -> str:
+    return (
+        "replay skipped: the network is not enforced offline on this host (no bwrap), so no nr was minted; "
+        f"the claim itself was published. Install bubblewrap (bwrap), or re-run with --net: claimidx confirm {claim_id} --replay --net"
+    )
 
 
 def _replay_now(
@@ -496,6 +530,10 @@ def _replay_now(
         return {"held": False, "recorded": False, "reason": "eval-miss: the fix did not hold under this eval", "replay": info}
     decision = graduation_gate(c, result, cwd=cwd or None, store=store, actor=resolve_owner(own))
     if not decision.mint_nr:
+        if decision.unenforced:
+            from .gate import UNENFORCED_MESSAGE
+
+            print(f"claimidx: ERROR: {UNENFORCED_MESSAGE}", file=sys.stderr)
         return {"held": True, "recorded": False, **decision.refusal(), "replay": info}
     detail = {
         "ms": int(result.ms or 0),

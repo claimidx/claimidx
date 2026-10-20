@@ -266,6 +266,16 @@ def _failure_kind(obj: dict, event: str | None) -> str | None:
     return None
 
 
+def _tool_not_completed(obj: dict) -> bool:
+    """Any failure_type on a tool layer (cancelled, interrupted, aborted, ...): the command did not run to a pass."""
+    for layer in _tool_layers(obj):
+        for key in ("failure_type", "failureType"):
+            raw = layer.get(key)
+            if isinstance(raw, str) and raw.strip():
+                return True
+    return False
+
+
 def _structured_tool_failed(obj: dict, event: str | None) -> bool:
     """Dict tool_response only. A string body is not a structured failure."""
     if event not in _TOOL_EVENTS:
@@ -515,6 +525,9 @@ def success_nudge(raw: str, store) -> str | None:
     rec = last_failure()
     if not rec or rec.get("nudged"):
         return None
+    obj = _parse_hook_obj(raw)
+    if obj is not None and _tool_not_completed(obj):
+        return None  # failure_type:cancelled (or any kind) is not a pass, even when it is not a failure either
     ctx = extract_hook_context(raw)
     cmd = ctx.get("command", "")
     if not _same_command(cmd, str(rec.get("command") or "")):

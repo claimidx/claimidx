@@ -154,7 +154,22 @@ def run_eco(name: str, spec: dict, root: Path, env: dict) -> list[str]:
     except ValueError:
         out = {}
     cid = out.get("id")
-    if not cid or not (out.get("replay") or {}).get("recorded"):
+    rep = out.get("replay") or {}
+    if cid and "replay-net-unenforced" in str(rep.get("reason") or ""):  # also "did not hold: ..." from the clean room
+        # 0.7.16: without bwrap this recipe's replay cannot be kept offline, so it must refuse and mint nothing.
+        shown = cix(["--fmt", "json", "show", cid], tree, env)
+        try:
+            nr = json.loads(shown.stdout).get("nr")
+        except ValueError:
+            nr = None
+        if rep.get("recorded") or nr != 0:
+            problems.append(f"unenforced replay must record nothing: recorded={rep.get('recorded')} nr={nr}")
+        elif "OFFLINE REPLAY IS NOT ENFORCED" not in r.stderr:
+            problems.append(f"unenforced replay must say so loudly: {r.stderr[-300:]}")
+        else:
+            print(f"{name}: replay unenforced here (no bwrap); refused and recorded nothing, hold chain skipped")
+        return problems
+    if not cid or not rep.get("recorded"):
         problems.append(f"claim --yes should record: {r.stdout[-400:]} {r.stderr[-300:]}")
         return problems
     room = out.get("clean_room") or {}
