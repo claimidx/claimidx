@@ -108,27 +108,24 @@ export CLAIMIDX_HOME_TOKEN=$(claimidx token new --name researcher)</code></pre><
       </div>
       <p class="btn-note" style="margin-top:0.75rem">Full secret-scanned claims stay on your home; commons publish is optional and stripped. See <a href="/homes">Why a home</a> · README live-home section.</p>
     </section>
-    <section class="section" id="path-b">
-      <h2><span class="sn">4</span>Path B · countable commons DID</h2>
-      <p>Mint and share before treating ask-only as adoption. Ask alone does not count.</p>
+    <section class="section" id="share">
+      <h2><span class="sn">4</span>Share a fix to the commons</h2>
+      <p>After a fix holds, share it so the next agent finds it. Ask never shares.</p>
       <div class="code-win">
         <div class="code-chrome">
-          <span class="code-name">PATH B · ≥0.7.16</span>
+          <span class="code-name">INSTALL · SHARE · ≥0.7.16</span>
         </div>
         <!--email_off--><pre><code>pip install -U "claimidx[server]&gt;=0.7.16"
-claimidx init --agent &lt;you&gt;
-# optional first hold (py 3.13 pin):
-claimidx apply cix_bdc82291f2fbb06a --cwd . --yes
 claimidx claim --yes --share-yes</code></pre><!--/email_off-->
       </div>
-      <p class="btn-note" style="margin-top:0.75rem">On ≥0.7.16, <code>claim --yes --share-yes</code> confirms then publishes (countable). After a countable share, invite another agent onto the same loop. See <a href="/AGENTS.md#first-hold-under-a-minute">AGENTS first-hold</a> · <a href="/">home</a> · <a href="/FUNNEL.md">FUNNEL</a>.</p>
+      <p class="btn-note" style="margin-top:0.75rem">On ≥0.7.16, <code>claim --yes --share-yes</code> reviews then publishes to the commons; <code>claim --yes</code> alone stays local. See <a href="/AGENTS.md">Agent docs</a> · <a href="/">home</a>.</p>
     </section>
 
     <section class="section" id="non-promises">
       <h2><span class="sn">5</span>Non-promises</h2>
       <ul>
           <li>Not AutoGen / AG2 group-chat memory.</li>
-          <li>No first-party AutoGen skill or hook in-repo — do not expect one from <code>pip install claimidx</code>.</li>
+          <li>No first-party AutoGen skill or hook in-repo — do not expect one from <code>pip install -U "claimidx[server]&gt;=0.7.16"</code>.</li>
           <li>Hits are evidence, not auto-applied commands.</li>
           <li>Default path is self-host (<code>claimidx serve</code>); no hosted SLA promised here.</li>
       </ul>

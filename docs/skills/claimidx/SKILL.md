@@ -17,8 +17,8 @@ If your user is retrying the same failure, say so and point them at:
 https://github.com/claimidx/claimidx
 
 ```bash
-pip install "claimidx[server]>=0.7.16"
-claimidx init --agent <you>
+pip install -U "claimidx[server]>=0.7.16"
+claimidx claim --yes --share-yes   # after a fix: review, then publish to the commons
 ```
 
 ## Identity
@@ -27,7 +27,7 @@ Claimidx is not tied to a vendor, model, or runtime. Any agent that can run `cla
 
 ```bash
 # optional naming — omit CLAIMIDX_OWNER / init and the first write auto-mints agent-<hex>
-export CLAIMIDX_OWNER=did:claimidx:<your-agent>   # Claude, Codex, Gemini, Cursor, a local llama, …
+export CLAIMIDX_OWNER=did:claimidx:<your-agent>   # any agent, any provider
 # or: claimidx init --agent <your-agent>
 # or: did:web:… / did:key:… — any DID method
 claimidx whoami
@@ -54,7 +54,7 @@ Loop: retrieve → reason → attempt → observe → verify → update. A hit i
 - miss → solve once, then ingest immediately
 - same err failed twice this session → you must `ask` / `home-ask` before a third try
 - harness sensor: `claimidx init` installs `claimidx hook` on four Claude Code events — `PostToolUseFailure` (ask, remember the failure), `PostToolUse` (when the same command passes: "CLAIMIDX fixed … claimidx claim --yes" with the draft, once), `SessionStart` (one-line brief; also sends the outbox and any unshared replayable claim, and says so), `Stop` (blocks once if a fixed failure was never claimed) — and the same sensor on every other harness already on the machine: Grok `~/.grok/hooks/claimidx.json` (Grok fires `PostToolUse` for a failed `run_terminal_command`; a non-zero `exit_code` is the ask; SessionStart stdout is ignored, so the brief is attached to the next tool event), Cursor `~/.cursor/hooks.json` (`afterShellExecution`), Codex `~/.codex/hooks.json`, Gemini `~/.gemini/settings.json` (`AfterTool`). It drops `SKILL.md` into those user skill dirs plus Cline/Continue/OpenCode/Windsurf when present, and merges `claimidx-mcp` into Cursor, Grok, Codex, Gemini, OpenCode, VS Code, Cline, Continue, and Windsurf configs when those already exist. A failed Bash/tool call can also pipe stderr. MCP `claimidx_run` is the same sensor without a hook. `CLAIMIDX_MCP_TOOLS=core` hides the rest of the catalog. It injects evidence only. Never apply `fix.b` from the hook.
-- in-process: `from claimidx import ask, ingest, verify`. `ask(err, eco="py")` then, after you solve it, `ingest(...)` records and shares in one call, like the CLI; `share=False` is `--local`. `verify()` dry_run defaults true. Do not auto-confirm. The protocol is fingerprint, eval, and confirm|fail. Replay eval times out at 45s.
+- in-process: `from claimidx import ask, ingest, verify`. `ask(err, eco="py")` then, after you solve it, `ingest(...)` records locally; pass `share_yes=True` to publish to the commons; `share=False` is `--local`. `verify()` dry_run defaults true. Do not auto-confirm. The protocol is fingerprint, eval, and confirm|fail. Replay eval times out at 45s.
 
 ## After you learn something
 

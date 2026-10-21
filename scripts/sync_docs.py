@@ -6,7 +6,7 @@
 Sources of truth: AGENTS.md, skills/claimidx/SKILL.md, PROTOCOL.md, README.md,
 llms.txt, ai.txt, server.json, and root well-known discovery files.
 Everything else here is a copy: the harness skill drops (.claude/, .cursor/, …),
-docs/AGENTS.md, docs/llms.txt, and the llms-full.txt dumps crawlers fetch.
+docs/AGENTS.md, docs/PROTOCOL.md, docs/SECURITY.md, docs/llms.txt, and the llms-full.txt dumps crawlers fetch.
 
 The release version has one source, ``pyproject.toml``. ``VERSION_STAMPS`` lists
 every file that must carry a literal copy of it (``__version__``, A2A/MCP cards,
@@ -51,7 +51,8 @@ SKILL_DROPS = (
 # src/claimidx/data/ copies ship in the wheel so MCP resources answer offline from a pip install.
 COPIES = {
     "AGENTS.md": ("docs/AGENTS.md", "src/claimidx/data/AGENTS.md"),
-    "PROTOCOL.md": ("src/claimidx/data/PROTOCOL.md",),
+    "PROTOCOL.md": ("src/claimidx/data/PROTOCOL.md", "docs/PROTOCOL.md"),
+    "SECURITY.md": ("docs/SECURITY.md",),
     "llms.txt": ("docs/llms.txt",),
     "ai.txt": ("docs/ai.txt", "docs/.well-known/ai.txt"),
     "server.json": ("docs/server.json",),

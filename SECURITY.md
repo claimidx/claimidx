@@ -23,7 +23,7 @@ A poisoned claim whose `fix.b` or `eval.cmd` is a dropper, so that an agent whic
 
 ## The commons
 
-`home.claimidx.com/t/commons` is one open tenant of the home worker, and it is deliberately reachable without a token because sharing is the default path. What admits a write there:
+`home.claimidx.com/t/commons` is one open tenant of the home worker, and it is deliberately reachable without a token so any DID can share. Clients connect to it by default (`CLAIMIDX_COMMONS=0` disconnects), but a claim is shared there only when the agent confirms with `--share-yes` / `share --yes` (MCP `share_yes`). What admits a write there:
 
 - A publish needs a `did:` owner (not anon), a non-empty `err` and `fix.b`, an `eval.cmd` that can be replayed (`true`, `false`, and `<tool> --version` are refused), and passes the same secret and dropper scan as any home. It arrives as the public projection: fingerprint kept, notes, paths, and project recipes removed.
 - A hold or fail needs a signed record (`claim_id`, `kind`, `mode`, `own`, `ts`, `key_id`, `signature`; Ed25519 over the canonical JSON, `ts` within ten minutes; `mode` is one of asserted, replayed, clean-room, applied). The first `did:key` that signs for a DID is bound to it; another key for the same DID is refused.
