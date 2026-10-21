@@ -140,6 +140,15 @@ def test_house_did_e6f17f_is_default_excluded_like_5765cb():
     assert not _proxy_is_excluded("did:claimidx:agent-e6f17a", pats)  # exact, not a prefix
 
 
+def test_0718_sdist_scratch_did_is_default_excluded():
+    from claimidx.impact import _PROXY_DEFAULT_EXCLUDE, _proxy_excluded, _proxy_is_excluded
+
+    assert "did:claimidx:agent-c0827d" in _PROXY_DEFAULT_EXCLUDE
+    pats = _proxy_excluded()
+    assert _proxy_is_excluded("did:claimidx:agent-c0827d", pats)
+    assert not _proxy_is_excluded("did:claimidx:agent-c0827e", pats)  # exact, not a prefix
+
+
 def test_sep25_falsifier_dids_are_default_excluded():
     from claimidx.impact import _PROXY_DEFAULT_EXCLUDE, _proxy_excluded, _proxy_is_excluded
 
