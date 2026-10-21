@@ -12,7 +12,13 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from . import __version__
 from .store import Store
+
+# Canonical public install pin: the release that carries this text.
+INSTALL_MIN = __version__
+INSTALL_CMD = f'pip install -U "claimidx[server]>={INSTALL_MIN}"'
+SHARE_CMD = "claimidx claim --yes --share-yes"
 
 
 def _ts(raw: str | None) -> datetime | None:
@@ -110,8 +116,10 @@ def ledger_impact(own: str, *, url: str | None = None, store: Store | None = Non
 
 def commons_impact(own: str, *, days: int = 30) -> dict[str, Any]:
     """Your standing on the commons: holds by other agents, distinct verifiers, rank. Signed holds only."""
-    from .board import fetch_leaderboard
+    from .board import fetch_leaderboard, leaderboard_enabled, leaderboard_unavailable
 
+    if not leaderboard_enabled():
+        return {"available": False, "reason": leaderboard_unavailable()["reason"], "days": days}
     board = fetch_leaderboard(days=days, limit=200, own=own)
     you = board.get("you") or {}
     author = you.get("author") or {}
@@ -358,9 +366,6 @@ def commons_owner_proxy(
     }
 
 
-# Live py@3.13 first-hold on the commons (audioop-lts). Do not default spr_a11c… (py@3.12).
-FIRST_HOLD_ID = "cix_bdc82291f2fbb06a"
-FIRST_HOLD_RT = "py@3.13"
 # Real outward share only — local `publish` is claim-without-share (publish_no_share).
 _SHARE_KINDS = frozenset({"commons-push", "share-explicit", "home-push"})
 _HOLD_KINDS = frozenset({"confirm", "confirm-replay", "commons-hold"})
@@ -372,9 +377,10 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
 
     Ask may auto-mint a local DID; that is not a countable commons DID until a
     live share (commons-push / share-explicit / home-push). Local publish alone
-    is publish_no_share — keep `next` pointed at `claimidx share --yes`. When not
-    countable, `next` is staged: first-hold → claim --yes --share-yes (explicit
-    commons confirm after review; `claimidx share --yes` is the recovery path).
+    is publish_no_share — keep `next` pointed at `claimidx share --yes`. Otherwise
+    `next` is `claimidx claim --yes --share-yes` (explicit commons confirm after a
+    short review). No hold codes, no invites: `next` only ever names the user's
+    own claim/share step.
     """
     did = (actor or "").strip()
     minted = bool(did) and did.startswith("did:") and did not in _FUNNEL_EXCLUDED
@@ -401,29 +407,19 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
         "published": bool(minted and published),
         "shared": bool(minted and shared),
     }
-    # Invite copy: after a countable share, Path B's leftover job is minting *another* stranger DID.
-    invite_step = (
-        f'invite another agent onto Path B: pip install -U "claimidx[server]>=0.7.16" && '
-        f"claimidx init --agent <them> && claimidx apply {FIRST_HOLD_ID} --cwd . --yes && claimidx claim --yes --share-yes"
-    )
     if not countable:
-        share_step = "claimidx share --yes"
-        # Local claim, then explicit commons confirm (--share-yes) for countable path.
-        claim_step = "claimidx claim --yes --share-yes"
         if published and not shared:
             out["why"] = "publish_no_share: local claim is not a countable commons DID until share --yes"
-            out["next"] = share_step
+            out["next"] = "claimidx share --yes"
         elif held and not published:
             out["why"] = "hold alone is not a countable commons DID — claim --yes --share-yes (confirm then commons)"
-            out["next"] = claim_step
+            out["next"] = SHARE_CMD
         else:
             out["why"] = "ask alone does not create a countable commons DID"
-            out["next"] = f"claimidx init --agent <you> && claimidx apply {FIRST_HOLD_ID} --cwd . --yes && {claim_step}"
-        out["first_hold"] = {"id": FIRST_HOLD_ID, "rt": FIRST_HOLD_RT}
+            out["next"] = SHARE_CMD
     else:
-        out["why"] = "countable commons DID — invite another agent onto Path B so more stranger DIDs mint"
-        out["next"] = invite_step
-        out["first_hold"] = {"id": FIRST_HOLD_ID, "rt": FIRST_HOLD_RT}
+        out["why"] = "countable commons DID — a claim of yours is shared to the commons"
+        out["next"] = f"after your next fix: {SHARE_CMD}"
     return out
 
 
@@ -621,7 +617,7 @@ def render_line(out: dict[str, Any]) -> str:
             f"ledger: {pub.get('your_claims', 0)} of your claims, confirmed by others {pub.get('confirmed_by_others', 0)}, replayed {pub.get('replayed_by_others', 0)}"
         )
     com = out.get("commons") or {}
-    if com and not com.get("error"):
+    if com and not com.get("error") and com.get("available", True):
         rank = f", rank {com['rank']}" if com.get("rank") else ""
         bits.append(
             f"commons {com.get('days', 30)}d: held by others {com.get('held_by_others', 0)} ({com.get('verifiers', 0)} verifiers{rank}), you held {com.get('you_held', 0)}"

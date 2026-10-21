@@ -98,6 +98,8 @@ BOARD = {
 
 
 def test_leaderboard_command_and_impact_read_the_commons(tmp_path: Path, monkeypatch, capsys):
+    # Operator opt-in: the public leaderboard is hidden by default (0.7.17, audit M15).
+    monkeypatch.setenv("CLAIMIDX_LEADERBOARD", "1")
     monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
     monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:agent-a")
     seen: list[str] = []
@@ -161,3 +163,51 @@ def test_render_board_shows_eval_classes():
     }
     text = render_board(board)
     assert "recipe 1" in text and "version 1" in text and "presence 1" in text
+
+
+def test_leaderboard_is_hidden_by_default_and_makes_no_network_call(tmp_path: Path, monkeypatch, capsys):
+    """Like claimidx.com/leaderboard ("Not available"), CLI, MCP and impact report it unavailable, offline."""
+    from claimidx.board import leaderboard_enabled
+    from claimidx.mcp_server import handle
+    from claimidx.store import Store
+
+    monkeypatch.delenv("CLAIMIDX_LEADERBOARD", raising=False)
+    monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
+    monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:agent-a")
+    seen: list[str] = []
+
+    def fake_get(url, timeout=20.0):
+        seen.append(url)
+        if "/api/leaderboard" in url:
+            return json.dumps(BOARD).encode("utf-8")
+        raise home.HomeError("no ledger in this test")
+
+    monkeypatch.setattr(home, "_get", fake_get)
+    assert leaderboard_enabled() is False
+    db = str(tmp_path / "ix.sqlite")
+    assert main(["--db", db, "leaderboard"]) == 0
+    assert capsys.readouterr().out.strip() == "leaderboard: The commons leaderboard is not available."
+    assert main(["--db", db, "--fmt", "json", "leaderboard"]) == 0
+    body = json.loads(capsys.readouterr().out)
+    assert body["available"] is False and body["authors"] == [] and body["verifiers"] == []
+    rec = handle({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "claimidx_leaderboard", "arguments": {}}}, Store(db))
+    sc = rec["result"]["structuredContent"]
+    assert sc["available"] is False and "not available" in sc["reason"]
+    assert main(["--db", db, "--fmt", "json", "impact"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["commons"]["available"] is False
+    assert "commons 30d" not in out["line"]
+    assert not [u for u in seen if "/api/leaderboard" in u], seen
+
+
+def test_claimidx_serve_exposes_no_leaderboard(tmp_path: Path):
+    """`claimidx serve` (the home API) has no public leaderboard route, page or API."""
+    from fastapi.testclient import TestClient
+
+    from claimidx.api import create_app
+
+    client = TestClient(create_app(str(tmp_path / "ix.sqlite")))
+    for path in ("/leaderboard", "/api/leaderboard", "/t/commons/leaderboard", "/t/commons/api/leaderboard"):
+        assert client.get(path).status_code == 404, path
+    paths = {getattr(r, "path", "") for r in client.app.routes}
+    assert not [p for p in paths if "leaderboard" in p], paths

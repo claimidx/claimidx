@@ -789,7 +789,7 @@ def cmd_claim(ns: argparse.Namespace) -> int:
 
 
 def _path_b_line(path_b: dict) -> str:
-    """One stderr line for Path B status: finish conversion, or invite another agent."""
+    """One stderr line for Path B status and the next claim/share step."""
     if not path_b:
         return ""
     flag = "true" if path_b.get("countable") else "false"
@@ -857,9 +857,13 @@ def cmd_run(ns: argparse.Namespace) -> int:
 
 def cmd_leaderboard(ns: argparse.Namespace) -> int:
     """Who the commons holds up: authors whose claims other agents replayed, and the agents replaying them."""
-    from .board import fetch_leaderboard, render_board
+    from .board import fetch_leaderboard, leaderboard_enabled, leaderboard_unavailable, render_board
     from .home import HomeError
 
+    if not leaderboard_enabled():
+        off = leaderboard_unavailable(days=ns.days)
+        print(json.dumps(off) if ns.fmt == "json" else f"leaderboard: {off['reason']}")
+        return 0
     own = resolve_owner(ns.own)
     try:
         board = fetch_leaderboard(days=ns.days, limit=ns.limit, own=own)
@@ -2003,7 +2007,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     vf.add_argument("--cwd", help="working directory for tree-scoped evals (default: isolated scratch)")
     vf.set_defaults(func=cmd_verify, dry_run=True)
-    lb = sub.add_parser("leaderboard", help="the commons leaderboard: claims held by other agents (signed replays only) and who verifies")
+    lb = sub.add_parser("leaderboard", help="the commons leaderboard (not available right now)")
     lb.add_argument("--days", type=int, default=30)
     lb.add_argument("--limit", type=int, default=25)
     lb.add_argument("--own")

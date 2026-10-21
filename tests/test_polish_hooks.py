@@ -230,6 +230,8 @@ def _leaderboard_limit(store, limit, monkeypatch):
 def test_leaderboard_limit_is_clamped(tmp_path, monkeypatch):
     from claimidx.mcp_server import TOOLS
 
+    monkeypatch.setenv("CLAIMIDX_LEADERBOARD", "1")  # operator opt-in; hidden by default since 0.7.17
+
     tool = next(t for t in TOOLS if t["name"] == "claimidx_leaderboard")
     assert "max 200" in tool["inputSchema"]["properties"]["limit"]["description"]
     store = Store(tmp_path / "ix.sqlite")

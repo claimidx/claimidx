@@ -335,7 +335,15 @@ def test_mcp_server_json_is_honest():
     pypi = [p for p in pkgs if p.get("registryType") == "pypi"]
     assert pypi, "server.json must list the live PyPI package"
     assert pypi[0].get("identifier") == "claimidx"
-    assert pypi[0].get("version") == "0.7.16"
+    from claimidx import __version__
+    from packaging.version import Version
+
+    assert pypi[0].get("version") == __version__, "packages[].version is the PyPI release"
+    # Top-level version is the MCP Registry envelope: unique per publish, never reused. 0.7.17 and 0.7.18
+    # are already taken there, so it runs ahead of the package and must sort above the last published one.
+    assert data["version"] == "0.7.19"
+    assert Version(data["version"]) > Version("0.7.18")
+    assert Version(data["version"]) >= Version(__version__)
     envs = {e["name"]: e for e in (pypi[0].get("environmentVariables") or [])}
     owner = envs.get("CLAIMIDX_OWNER")
     assert owner is not None, "CLAIMIDX_OWNER must remain listed for naming a DID"
@@ -398,8 +406,12 @@ def test_mcp_registry_publish_only_on_tags():
     assert "if: startsWith(github.ref, 'refs/tags/')" not in dispatch
     assert "if: github.event_name == 'workflow_dispatch'" in dispatch
     assert "mcp-publisher publish" in dispatch
-    assert 'data["version"] = "0.7.18"' in dispatch
-    assert '"0.7.16"' in dispatch, "dispatch must leave the live PyPI package version unchanged"
+    # server.json is published as committed: no hardcoded envelope or package version in the workflow.
+    assert 'data["version"] =' not in text
+    assert '"0.7.1' not in text
+    assert "packages[].version must equal" in publish
+    assert "packages[].version must equal" in dispatch
+    assert 'removeprefix("v")' in publish, "tag job must check the tag against the package version"
     assert "if: startsWith(github.ref, 'refs/tags/')" not in hide
 
 
@@ -833,13 +845,13 @@ def test_discovery_cards_match_package_version():
         (ROOT / "a2a" / "agent-card.json", ("version",)),
         (ROOT / ".well-known" / "mcp.json", ("version",)),
         (ROOT / ".well-known" / "mcp" / "server-card.json", ("serverInfo", "version")),
-        (ROOT / "server.json", ("version",)),
+        (ROOT / "server.json", ("packages", 0, "version")),
         (ROOT / "docs" / ".well-known" / "agent-card.json", ("version",)),
         (ROOT / "docs" / ".well-known" / "agent.json", ("version",)),
         (ROOT / "docs" / ".well-known" / "agents.json", ("version",)),
         (ROOT / "docs" / ".well-known" / "mcp.json", ("version",)),
         (ROOT / "docs" / ".well-known" / "mcp" / "server-card.json", ("serverInfo", "version")),
-        (ROOT / "docs" / "server.json", ("version",)),
+        (ROOT / "docs" / "server.json", ("packages", 0, "version")),
     )
     for path, keys in cards:
         cur = json.loads(path.read_text(encoding="utf-8"))

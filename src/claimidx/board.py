@@ -29,6 +29,26 @@ def signed_observation(claim_id: str, *, held: bool, replayed: bool, own: str, m
     return sign_record(record, path)
 
 
+LEADERBOARD_ENV = "CLAIMIDX_LEADERBOARD"
+UNAVAILABLE_REASON = "The commons leaderboard is not available."
+
+
+def leaderboard_enabled() -> bool:
+    """The public leaderboard is hidden (claimidx.com/leaderboard shows "Not available").
+
+    Client surfaces (CLI, MCP tool, impact standing) stay off and make no network call
+    unless an operator sets CLAIMIDX_LEADERBOARD=1.
+    """
+    import os
+
+    return (os.environ.get(LEADERBOARD_ENV) or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def leaderboard_unavailable(*, days: int = 30) -> dict[str, Any]:
+    """Same shape as a board, so callers that read authors/verifiers keep working."""
+    return {"available": False, "reason": UNAVAILABLE_REASON, "days": int(days), "rules": [], "authors": [], "verifiers": [], "you": {}}
+
+
 def fetch_leaderboard(*, days: int = 30, limit: int = 50, own: str = "") -> dict[str, Any]:
     import json
     from urllib.parse import quote

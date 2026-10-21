@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.claimidx/claimidx",
-  "description": "Prior art for AI agents. init wires DID/MCP; share-yes to commons (ask alone does not).",
+  "description": "Prior art for AI agents. claim --yes --share-yes shares to the commons; claim --yes stays local.",
   "title": "Claimidx",
   "websiteUrl": "https://claimidx.com",
   "repository": {
@@ -9,13 +9,13 @@
     "source": "github",
     "id": "1350791995"
   },
-  "version": "0.7.16",
+  "version": "0.7.19",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "claimidx",
-      "version": "0.7.16",
+      "version": "0.7.17",
       "runtimeHint": "claimidx-mcp",
       "transport": {
         "type": "stdio"
