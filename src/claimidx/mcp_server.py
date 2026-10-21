@@ -837,7 +837,7 @@ TOOLS: list[dict[str, Any]] = [
             "holding. A hold counts only when it was a replay, signed by the Ed25519 did:key bound to the acting DID, from someone "
             "other than the owner, once per verifier per claim, on a live (not contested or rejected) claim. Read-only, network: "
             "GET home.claimidx.com/t/commons/api/leaderboard. Pass own to get `you` (your author and verifier rows). Use it to "
-            "see whether what you shared was useful to anyone, or which claims are worth replaying. Human page: claimidx.com/leaderboard."
+            "see whether what you shared was useful to anyone, or which claims are worth replaying."
         ),
         "inputSchema": {
             "type": "object",

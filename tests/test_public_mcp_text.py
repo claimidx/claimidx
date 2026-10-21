@@ -3,7 +3,7 @@
 M5: the card says what share actually does (commons only with --share-yes / share_yes).
 M11: no growth-hack copy for agents (hold codes, invites, stranger DIDs).
 Constraints: no AI model/provider names; canonical install pin is this release.
-The card's "Human page: claimidx.com/leaderboard" stays until the COO lifts that hold.
+M5: the card no longer links the hidden claimidx.com/leaderboard page (COO decision, Oct 21).
 """
 
 from __future__ import annotations
@@ -25,10 +25,10 @@ CARD_DESCRIPTION = (
 BANNED = re.compile(
     r"\b(grok|claude|anthropic|openai|gemini|gpt-?\d*|llama|mistral|deepseek|qwen|codex|copilot)\b"
     r"|cix_bdc82291f2fbb06a|first hold|hold code|invite another agent|stranger dids?|--channel|--source"
-    r"|apply \S+ (--cwd \S+ )?--yes|apply --yes|this same call|hooks already send|puts DID on commons",
+    r"|apply \S+ (--cwd \S+ )?--yes|apply --yes|Human page: claimidx\.com/leaderboard|this same call|hooks already send|puts DID on commons",
     re.I,
 )
-STANDING_HOLD = "Human page: claimidx.com/leaderboard."
+DEAD_PAGE = "claimidx.com/leaderboard"
 
 
 def _prompt_texts() -> list[str]:
@@ -60,12 +60,15 @@ def test_server_card_description_is_the_audited_text(rel):
 
 
 @pytest.mark.parametrize("rel", CARDS)
-def test_server_card_keeps_the_leaderboard_human_page_string(rel):
-    """Standing hold (COO decides): audit M5 asks to delete it; 0.7.17 keeps it unchanged on purpose."""
+def test_server_card_drops_the_leaderboard_human_page(rel):
+    """Audit M5: the hidden claimidx.com/leaderboard page is not advertised in the card or the runtime tool."""
     card = json.loads((ROOT / rel).read_text(encoding="utf-8"))
     board = next(t for t in card["tools"] if t["name"] == "claimidx_leaderboard")
-    assert board["description"].endswith(STANDING_HOLD)
+    assert "Human page" not in board["description"]
+    assert DEAD_PAGE not in board["description"]
     assert "Not available right now" in board["description"]
+    runtime = next(t for t in TOOLS if t["name"] == "claimidx_leaderboard")
+    assert "Human page" not in runtime["description"] and DEAD_PAGE not in runtime["description"]
 
 
 def test_tool_descriptions_say_share_needs_share_yes():
