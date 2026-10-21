@@ -187,7 +187,7 @@ def test_agent_briefing_recommends_pypi():
     from claimidx.discovery import ROOT
 
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    assert "pip install claimidx" in agents or 'pip install "claimidx' in agents
+    assert 'pip install -U "claimidx[server]>=0.7.16"' in agents
     for rel in ("README.md", "skills/claimidx/SKILL.md", "docs/AGENTS.md"):
         text = (ROOT / rel).read_text(encoding="utf-8")
         assert "pip install" in text and "claimidx" in text, rel
@@ -852,9 +852,10 @@ def test_discovery_cards_match_package_version():
     assert "https://pypi.org/pypi/claimidx/json" in site
     assert "data-latest-version" in site
     assert "https://pypi.org/project/claimidx/" in site
-    assert "https://raw.githubusercontent.com/claimidx/claimidx/main/data/claims.jsonl" in site
-    assert 'claim.st === "confirmed"' in site
-    assert 'claim.src !== "seed"' in site
+    # The gallery is a labeled static sample of the team's own claims: no live swap, no owner DIDs, no hold code.
+    assert "cixStartLedger" not in site
+    assert "did:claimidx:grok" not in site and "did:claimidx:claude" not in site
+    assert "cix_bdc82291f2fbb06a" not in site
 
 
 def test_sync_docs_stamps_every_version_literal():

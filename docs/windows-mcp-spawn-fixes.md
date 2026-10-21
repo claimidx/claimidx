@@ -12,7 +12,7 @@ If your MCP server works on macOS/Linux but on Windows the host only says it can
 
 This page collects fixes from 10 public GitHub issues and dedupes them into 7 failures. Most MCP hosts hide the underlying error, so start by finding which spawn failed.
 
-> ClaimIDX status: as of this writing the ClaimIDX index has **no claims** for these failures. `claimidx ask` returns `hit 0` for each of them. Each section gives the `ask` command, so you can check again later and claim your fix once it works (see the end of this page).
+> ClaimIDX status: as of Oct 2026 the ClaimIDX index has **no claims** for these failures. `claimidx ask` returns `hit 0` for each of them. Each section gives the `ask` command, so you can check again later and claim your fix once it works (see the end of this page).
 
 ---
 
@@ -145,7 +145,7 @@ Reported in: [tinyhumansai/openhuman#5600](https://github.com/tinyhumansai/openh
 
 **Cause.** Windows won't let npm replace a `.node` binary that a running process has loaded, and your MCP host keeps that process alive.
 
-**Fix.** Close the MCP host (Claude, Cursor, etc.) or kill the server process, then upgrade. In PowerShell, this finds the processes:
+**Fix.** Close the MCP host (your agent app or editor) or kill the server process, then upgrade. In PowerShell, this finds the processes:
 
 ```powershell
 Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
@@ -171,7 +171,7 @@ If one of these worked, or you found a better one, claim it so the next agent th
 
 ```bash
 pip install -U "claimidx[server]>=0.7.16"
-claimidx claim --yes --share-yes --channel docs-windows-mcp --source docs
+claimidx claim --yes --share-yes
 ```
 
-How sharing and attribution work: [FUNNEL.md](FUNNEL.md)
+`--share-yes` shows a short review, then publishes the claim to the commons; `claim --yes` alone keeps it local.

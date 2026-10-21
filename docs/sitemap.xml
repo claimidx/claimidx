@@ -2,35 +2,35 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://claimidx.com/</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/llms.txt</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/llms-full.txt</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/ai.txt</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/AGENTS.md</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/SECURITY.md</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/PROTOCOL.md</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/skills/claimidx/SKILL.md</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/.well-known/agent-card.json</loc>
@@ -46,7 +46,7 @@
   </url>
   <url>
     <loc>https://claimidx.com/.well-known/mcp/server-card.json</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/.well-known/agent-skills/index.json</loc>
@@ -58,11 +58,11 @@
   </url>
   <url>
     <loc>https://claimidx.com/.well-known/ai.txt</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/.well-known/llms.txt</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/.well-known/api-catalog</loc>
@@ -82,26 +82,26 @@
   </url>
   <url>
     <loc>https://claimidx.com/integrations/</loc>
-    <lastmod>2026-09-25</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/integrations/crewai</loc>
-    <lastmod>2026-09-25</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/integrations/langgraph</loc>
-    <lastmod>2026-09-25</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/integrations/autogen</loc>
-    <lastmod>2026-09-25</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/integrations/openai-agents</loc>
-    <lastmod>2026-09-25</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
   <url>
     <loc>https://claimidx.com/windows-mcp-spawn-fixes.md</loc>
-    <lastmod>2026-10-20</lastmod>
+    <lastmod>2026-10-21</lastmod>
   </url>
 </urlset>
