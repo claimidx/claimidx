@@ -14,6 +14,24 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v5
+      - name: Check server.json against the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          data = json.loads(Path("server.json").read_text(encoding="utf-8"))
+          pkg = re.search(r'(?m)^version = "([^"]+)"', Path("pyproject.toml").read_text(encoding="utf-8")).group(1)
+          tag = os.environ["TAG"].removeprefix("v")
+          assert tag == pkg, f"tag v{tag} != pyproject {pkg}"
+          assert all(p.get("version") == pkg for p in data.get("packages", [])), "packages[].version must equal the PyPI release"
+          # data["version"] is the registry envelope (unique, never reused); it may run ahead of the package.
+          print(f"registry version {data['version']} -> pypi claimidx {pkg}")
+          PY
       - name: Install mcp-publisher
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
@@ -32,18 +50,19 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.ref }}
-      - name: Set registry-only version
+      - name: Check registry-only envelope
         run: |
           python - <<'PY'
           import json
+          import re
           from pathlib import Path
 
-          path = Path("server.json")
-          data = json.loads(path.read_text(encoding="utf-8"))
-          # 0.7.16 is the live PyPI package; only the registry envelope advances.
-          data["version"] = "0.7.18"
-          assert all(p.get("version") == "0.7.16" for p in data.get("packages", []))
-          path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          data = json.loads(Path("server.json").read_text(encoding="utf-8"))
+          pkg = re.search(r'(?m)^version = "([^"]+)"', Path("pyproject.toml").read_text(encoding="utf-8")).group(1)
+          # server.json is published as committed: its top-level version is the registry envelope
+          # (bump it in a PR for a metadata-only refresh; the registry refuses a reused version).
+          assert all(p.get("version") == pkg for p in data.get("packages", [])), "packages[].version must equal the live PyPI release"
+          print(f"registry version {data['version']} -> pypi claimidx {pkg}")
           PY
       - name: Install mcp-publisher
         run: |

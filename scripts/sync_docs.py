@@ -72,12 +72,15 @@ FULL_TARGETS = ("llms-full.txt", "docs/llms-full.txt")
 PYPROJECT_VERSION = re.compile(r'(?m)^version = "([^"]+)"')
 
 # (path, pattern) — group 1 is the version literal to rewrite. Every match in the
-# file is stamped, so server.json's two `"version"` keys move together.
-# `"version":` does not match `"protocolVersion":` (the quote is required).
+# file is stamped. `"version":` does not match `"protocolVersion":` (the quote is required).
 _JSON_VERSION = r'"version": "([^"]+)"'
+# server.json: only the PyPI package pin follows pyproject. The top-level `version` is the
+# MCP Registry envelope, which must be unique per publish and is never reused (0.7.17 and
+# 0.7.18 are taken there), so it is bumped by hand and checked by tests/gate, not stamped.
+_SERVER_JSON_PACKAGE = r'"identifier": "claimidx",\s*"version": "([^"]+)"'
 VERSION_STAMPS: tuple[tuple[str, str], ...] = (
     ("src/claimidx/__init__.py", r'(?m)^__version__ = "([^"]+)"'),
-    ("server.json", _JSON_VERSION),
+    ("server.json", _SERVER_JSON_PACKAGE),
     (".well-known/agent-card.json", _JSON_VERSION),
     (".well-known/agent.json", _JSON_VERSION),
     (".well-known/agents.json", _JSON_VERSION),

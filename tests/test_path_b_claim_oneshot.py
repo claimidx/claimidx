@@ -11,9 +11,11 @@ import pytest
 from claimidx import home
 from claimidx.cli import main
 from claimidx.env import remember_failure
-from claimidx.impact import FIRST_HOLD_ID, path_b_cta
+from claimidx.impact import path_b_cta
 from claimidx.mcp_server import _call
 from claimidx.store import Store
+
+HELD_ID = "cix_0000000000000001"
 
 
 def _py_rt() -> str:
@@ -36,7 +38,7 @@ def commons(monkeypatch):
 def test_path_b_cta_after_hold_requires_share_yes(tmp_path: Path):
     store = Store(tmp_path / "ix.sqlite")
     did = "did:claimidx:agent-oneshot"
-    store.log("confirm-replay", did, FIRST_HOLD_ID, {"held": True})
+    store.log("confirm-replay", did, HELD_ID, {"held": True})
     cta = path_b_cta(store, did)
     assert cta["held"] is True
     assert cta["countable"] is False

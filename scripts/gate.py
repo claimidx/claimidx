@@ -17,7 +17,7 @@ Stages
   verify    lint + python -m pytest -q
   mcp       spawn the MCP server over stdio: initialize, tools/list, prompts/list, resources/list, one tools/call.
             Every tool is titled, described, annotated, and has described parameters; names and descriptions match
-            the server card; serverInfo, server.json, and pyproject agree on the version.
+            the server card; serverInfo, server.json packages, and pyproject agree on the version.
   site      docs/ is a complete Pages tree: every tracked public page, every file the operator's manifest
             (INTERNAL/site-required.txt, never in git) requires beside them, and a CSP that allows the commons.
             A deploy from an incomplete tree once replaced production; deploy-site refuses that.
@@ -370,8 +370,17 @@ def mcp_handshake() -> list[str]:
     if call.get("isError") or (call.get("structuredContent") or {}).get("version") != version:
         errors.append(f"tools/call claimidx_doctor: {json.dumps(call)[:300]}")
     server = json.loads((ROOT / "server.json").read_text(encoding="utf-8"))
-    if server.get("version") != version or any(p.get("version") != version for p in server.get("packages") or []):
-        errors.append(f"server.json versions != {version}")
+    if any(p.get("version") != version for p in server.get("packages") or []):
+        errors.append(f"server.json packages[].version != {version}")
+    # The top-level version is the MCP Registry envelope: unique per publish, never reused, so it may run
+    # ahead of the package (0.7.17/0.7.18 are taken there). It must never fall behind the package it pins.
+    from packaging.version import InvalidVersion, Version
+
+    try:
+        if Version(str(server.get("version"))) < Version(version):
+            errors.append(f"server.json registry version {server.get('version')} < package {version}")
+    except InvalidVersion:
+        errors.append(f"server.json registry version {server.get('version')!r} is not a version")
     return errors
 
 
