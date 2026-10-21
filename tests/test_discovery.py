@@ -187,7 +187,7 @@ def test_agent_briefing_recommends_pypi():
     from claimidx.discovery import ROOT
 
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    assert 'pip install -U "claimidx[server]>=0.7.17"' in agents
+    assert 'pip install -U "claimidx[server]>=0.7.18"' in agents
     for rel in ("README.md", "skills/claimidx/SKILL.md", "docs/AGENTS.md"):
         text = (ROOT / rel).read_text(encoding="utf-8")
         assert "pip install" in text and "claimidx" in text, rel

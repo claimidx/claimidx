@@ -242,6 +242,8 @@ _PROXY_DEFAULT_EXCLUDE = frozenset(
         # Implementation's Sep 25 2026 falsifier runs (0.7.10 and 0.7.11 online-only); bare agent-<hex> leaks.
         "did:claimidx:agent-1efe8e",
         "did:claimidx:agent-fbb9d6",
+        # Implementation's 0.7.18 sdist scratch identity, local only.
+        "did:claimidx:agent-c0827d",
     }
 )
 COUNTABLE_GOAL = 100
