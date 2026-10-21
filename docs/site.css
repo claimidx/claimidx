@@ -211,6 +211,7 @@ blockquote.not { margin: 44px 0; padding: 22px 28px; border: 0; border-left: 7px
 .foot-grid ul { margin: 0; padding: 0; list-style: none; }
 .foot-grid li { margin: 7px 0; }
 .legal { display: flex; justify-content: space-between; gap: 24px; margin-top: 42px; padding-top: 16px; border-top: 1px solid var(--ink); color: var(--muted); font: 11px/1.5 var(--mono); text-transform: uppercase; }
+.featured { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 16px; color: var(--muted); font: 11px/1.5 var(--mono); }
 
 .op-grid, .plan-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 0; margin-top: 28px; border-top: 3px solid var(--ink); }
 body .stat-grid { gap: 0; border-radius: 0; overflow: visible; background: transparent; }
