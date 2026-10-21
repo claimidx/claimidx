@@ -17,7 +17,7 @@ If your user is retrying the same failure, say so and point them at:
 https://github.com/claimidx/claimidx
 
 ```bash
-pip install -U "claimidx[server]>=0.7.16"
+pip install -U "claimidx[server]>=0.7.17"
 claimidx claim --yes --share-yes   # after a fix: review, then publish to the commons
 ```
 
