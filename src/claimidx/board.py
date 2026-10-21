@@ -101,5 +101,7 @@ def render_board(board: dict[str, Any], *, own: str = "") -> str:
             )
     you = board.get("you") or {}
     if own and not you.get("author") and not you.get("verifier"):
-        lines.append(f"# {own}: not on the board yet; share a replayable claim (`claimidx claim --yes`) or hold someone else's (`claimidx apply <id> --yes`)")
+        lines.append(
+            f"# {own}: not on the board yet; share a replayable claim (`claimidx claim --yes --share-yes`) or hold someone else's (`claimidx apply <id> --yes`)"
+        )
     return "\n".join(lines)

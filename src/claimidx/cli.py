@@ -520,9 +520,21 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
                     print(f"suggest: {refused['suggest']['hint']}", file=sys.stderr)
             return 2
         if not result.held:
-            from .gate import unapplied_refusal
+            from .gate import unapplied_refusal, unenforced_miss_refusal
             from .match import confirm_lights
 
+            unenforced = unenforced_miss_refusal(result)
+            if unenforced:
+                print(f"claimidx: ERROR: {unenforced['message']}", file=sys.stderr)
+                lights = confirm_lights(held=False, recorded=False, reason=str(unenforced["reason"]), contested=c.st == "contested")
+                if ns.fmt == "json":
+                    print(json.dumps({"held": False, "replay": replay_info, "recorded": False, "lights": lights, **unenforced}, default=str))
+                else:
+                    print(json.dumps(replay_info), file=sys.stderr)
+                    print(f"# lights prior_art={lights['prior_art']} integrity={lights['integrity']} recovery={lights['recovery']}", file=sys.stderr)
+                    print(f"not recorded: {unenforced['reason']}", file=sys.stderr)
+                    print(f"suggest: {unenforced['suggest']['hint']}", file=sys.stderr)
+                return 2
             unapplied = unapplied_refusal(c, result, cwd=getattr(ns, "cwd", None))
             if unapplied:
                 lights = confirm_lights(held=False, recorded=False, reason=str(unapplied.get("reason") or ""), contested=c.st == "contested")
@@ -760,8 +772,14 @@ def cmd_claim(ns: argparse.Namespace) -> int:
             channel=getattr(ns, "channel", None),
             source=getattr(ns, "source", None),
         )
+    if out.get("ok") and want_commons:
+        from .home import commons_disabled_note, commons_enabled
+
+        if not commons_enabled():
+            out["commons"] = commons_disabled_note()
     if out.get("ok"):
         out["path_b"] = path_b_cta(_store(ns), resolve_owner(ns.own))
+        _stamp_counts(_store(ns), out)
     if ns.fmt == "json":
         print(json.dumps(out, default=str))
     else:
@@ -779,6 +797,8 @@ def cmd_claim(ns: argparse.Namespace) -> int:
             for w in out.get("warn") or []:
                 print(f"warn {w}", file=sys.stderr)
             print(_destination_line(out.get("share") or {}, out["id"]), file=sys.stderr)
+            if (out.get("commons") or {}).get("status") == "disabled":
+                print(f"# commons disabled: {out['commons']['reason']}", file=sys.stderr)
             path_b = out.get("path_b") or {}
             line = _path_b_line(path_b)
             if line:
@@ -786,6 +806,13 @@ def cmd_claim(ns: argparse.Namespace) -> int:
             if rp.get("suggest", {}).get("eval"):
                 print(f"suggest eval: {rp['suggest']['eval']}", file=sys.stderr)
     return 0 if out.get("ok") else 2
+
+
+def _stamp_counts(store, out: dict) -> None:
+    """Top-level nc/nf from the stored claim, so a caller need not run `show` to see them."""
+    from .claim import stamp_counts
+
+    stamp_counts(store, out)
 
 
 def _path_b_line(path_b: dict) -> str:
@@ -1957,7 +1984,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--yes", "-y", action="store_true", help="execute the plan")
     ap.add_argument("--trust-eval", action="store_true", help="also run a non-portable eval from a claim not published here")
     ap.set_defaults(func=cmd_apply)
-    pub = sub.add_parser("publish", help="write a claim from every field you hold; shares it like claim --yes (--local keeps it here until share <id>)")
+    pub = sub.add_parser("publish", help="write a claim from every field you hold; records it locally like claim --yes (commons needs share <id> --yes)")
     _claim_write_args(pub)
     pub.set_defaults(func=cmd_publish)
     c = sub.add_parser("confirm", help="record that a claim's fix held here; --replay runs its eval first")

@@ -392,6 +392,22 @@ def flag_refusal(flag: str) -> dict | None:
     return None
 
 
+def unenforced_miss_refusal(result: ReplayResult) -> dict | None:
+    """A miss on a host that could not enforce the offline replay records nothing, exactly like a hold there.
+
+    Without bwrap the eval may have reached the network, so its outcome is not evidence either way:
+    no `fail`, no nf. `--net` (net=open) is the explicit way to run and record with the network.
+    """
+    if result.held or not result.ran or (result.net or "") != "unenforced":
+        return None
+    return {
+        "reason": unenforced_reason(result),
+        "error": UNENFORCED_PREFIX,
+        "message": UNENFORCED_MESSAGE,
+        "suggest": {"hint": "install bubblewrap (bwrap) so default replay is offline, or re-run confirm --replay --net"},
+    }
+
+
 def offline_refusal(result: ReplayResult) -> dict | None:
     """Skip (do not fail) when the offline sandbox blocked the eval's network attempt."""
     from .sandbox import network_blocked

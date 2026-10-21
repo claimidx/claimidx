@@ -559,6 +559,19 @@ def _replay_now(
     return out
 
 
+def stamp_counts(store, out: dict[str, Any]) -> None:
+    """Copy the stored claim's nc/nf (st only if absent) to the top of a claim result. Never raises."""
+    try:
+        c = store.get(str(out.get("id") or "")) if out.get("id") else None
+    except Exception:
+        return
+    if c is None:
+        return
+    out.setdefault("st", c.st)
+    out["nc"] = c.nc
+    out["nf"] = c.nf
+
+
 def render_draft(draft: dict[str, Any]) -> str:
     if not draft.get("ok"):
         return f"error: {draft.get('error')}"

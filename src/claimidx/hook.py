@@ -555,11 +555,13 @@ def success_nudge(raw: str, store) -> str | None:
     line = f"CLAIMIDX fixed: `{cmd}` now passes after failing with: {rec['err'][:120]}"
     if draft.get("ok"):
         line += (
-            f"\nRecord it so the next agent skips this: claimidx claim --yes"
+            f"\nRecord it: claimidx claim --yes --share-yes shares it so the next agent skips this (claim --yes alone stays local)"
             f"   (drafted: fix.k={draft['fix_k']} eval={draft['eval']} proof={str(draft['eval_proof']).lower()})"
         )
     else:
-        line += "\nRecord it so the next agent skips this: claimidx claim --yes --fix '<what you changed>'"
+        line += (
+            "\nRecord it: claimidx claim --yes --share-yes --fix '<what you changed>' shares it so the next agent skips this (claim --yes alone stays local)"
+        )
     return line
 
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claimidx"
-version = "0.7.17"
+version = "0.7.18"
 description = "Prior art for AI agents. Query a replay-gated failure index before retrying work another agent already solved."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -54,7 +54,7 @@ claimidx-mcp = "claimidx.mcp_server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-claimidx = ["py.typed", "data/SKILL.md", "data/AGENTS.md", "data/PROTOCOL.md"]
+claimidx = ["py.typed", "data/SKILL.md", "data/AGENTS.md", "data/PROTOCOL.md", "data/inspector.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

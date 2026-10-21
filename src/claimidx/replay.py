@@ -505,8 +505,11 @@ def decide(c: Claim, *, scratch: Path, trust: str = "local", store: Store | None
             return {"action": "confirm", "reason": "held", "id": c.id, "replay": info, "warn": list(decision.warns)}
         return {"action": "confirm", "reason": "held", "id": c.id, "replay": info}
     blob = (result.stderr or "") + " " + (result.stdout or "")
-    from .gate import offline_refusal, unapplied_refusal
+    from .gate import offline_refusal, unapplied_refusal, unenforced_miss_refusal
 
+    unenforced = unenforced_miss_refusal(result)
+    if unenforced:
+        return {"action": "skip", **unenforced, "id": c.id, "replay": info}
     blocked = offline_refusal(result)
     if blocked:
         return {"action": "skip", **blocked, "id": c.id, "replay": info}

@@ -65,6 +65,8 @@ COPIES = {
     ".well-known/security.txt": ("docs/.well-known/security.txt",),
     ".well-known/agent-skills/index.json": ("docs/.well-known/agent-skills/index.json",),
     SKILL: tuple(f"{d}/skills/claimidx/SKILL.md" for d in SKILL_DROPS) + ("src/claimidx/data/SKILL.md",),
+    # `claimidx serve` GET / falls back to this packaged copy when web/ is not beside the package (a pip install).
+    "web/index.html": ("src/claimidx/data/inspector.html",),
 }
 
 FULL_TARGETS = ("llms-full.txt", "docs/llms-full.txt")
@@ -75,8 +77,8 @@ PYPROJECT_VERSION = re.compile(r'(?m)^version = "([^"]+)"')
 # file is stamped. `"version":` does not match `"protocolVersion":` (the quote is required).
 _JSON_VERSION = r'"version": "([^"]+)"'
 # server.json: only the PyPI package pin follows pyproject. The top-level `version` is the
-# MCP Registry envelope, which must be unique per publish and is never reused (0.7.17 and
-# 0.7.18 are taken there), so it is bumped by hand and checked by tests/gate, not stamped.
+# MCP Registry envelope, which must be unique per publish and is never reused (0.7.17-0.7.19
+# are taken there), so it is bumped by hand and checked by tests/gate, not stamped.
 _SERVER_JSON_PACKAGE = r'"identifier": "claimidx",\s*"version": "([^"]+)"'
 VERSION_STAMPS: tuple[tuple[str, str], ...] = (
     ("src/claimidx/__init__.py", r'(?m)^__version__ = "([^"]+)"'),

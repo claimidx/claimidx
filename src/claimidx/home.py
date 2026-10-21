@@ -355,15 +355,29 @@ def commons_review(claim: Claim) -> dict[str, Any]:
         "dep": deps,
         "fix_k": claim.fix.k if claim.fix else "",
         "fix_b": ((claim.fix.b or "")[:120] if claim.fix else ""),
-        "destination": "commons",
+        "destination": "commons" if commons_enabled() else "none",
+        "commons": "on" if commons_enabled() else "disabled",
         "own": claim.own or "",
     }
+
+
+COMMONS_DISABLED_REASON = "the commons is disabled (CLAIMIDX_COMMONS=0 or config commons: false); nothing was sent to the commons"
+
+
+def commons_disabled_note() -> dict[str, Any]:
+    """Result block for a commons share asked for while the commons is off: say so instead of implying a send."""
+    return {"status": "disabled", "reason": COMMONS_DISABLED_REASON}
 
 
 def format_commons_review(claim: Claim) -> str:
     """One stderr block: what will leave the machine if the agent confirms commons share."""
     r = commons_review(claim)
     deps = ", ".join(r["dep"]) if r["dep"] else "(none)"
+    if r["commons"] == "disabled":
+        return (
+            "# commons review — commons disabled (CLAIMIDX_COMMONS=0 or config commons: false): nothing will be sent to the commons\n"
+            f"#   id={r['id']} stays local/private; unset CLAIMIDX_COMMONS (or set it to 1) and run `claimidx share {r['id']} --yes` to share it"
+        )
     return (
         f"# commons review — destination=commons\n"
         f"#   id={r['id']} eco={r['eco'] or '-'} rt={r['rt'] or '-'}\n"
@@ -814,6 +828,10 @@ def ensure_online_share(
         return out
     updated = dict(out)
     updated["share"] = shared
+    replay = updated.get("replay")
+    if isinstance(replay, dict) and "share" in replay:
+        # The replay's share was the pre-confirm attempt; report one share status, not two that disagree.
+        updated["replay"] = {**replay, "share": shared}
     if shared.get("review") and "review" not in updated:
         updated["review"] = shared["review"]
     return updated
