@@ -373,7 +373,7 @@ def mcp_handshake() -> list[str]:
     if any(p.get("version") != version for p in server.get("packages") or []):
         errors.append(f"server.json packages[].version != {version}")
     # The top-level version is the MCP Registry envelope: unique per publish, never reused, so it may run
-    # ahead of the package (0.7.17/0.7.18 are taken there). It must never fall behind the package it pins.
+    # ahead of the package (0.7.17-0.7.19 are taken there). It must never fall behind the package it pins.
     from packaging.version import InvalidVersion, Version
 
     try:

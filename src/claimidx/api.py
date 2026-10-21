@@ -33,6 +33,7 @@ from .team import activity
 from .team import whoami as team_whoami
 
 WEB = Path(__file__).resolve().parents[2] / "web" / "index.html"
+WEB_PACKAGED = Path(__file__).resolve().parent / "data" / "inspector.html"  # synced copy of web/index.html; ships in the wheel
 
 
 class AskBody(BaseModel):
@@ -139,7 +140,10 @@ def create_app(db: str | None = None) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def inspector():
-        return WEB.read_text(encoding="utf-8") if WEB.exists() else HTMLResponse("<pre>Claimidx inspector missing</pre>")
+        for page in (WEB, WEB_PACKAGED):
+            if page.exists():
+                return page.read_text(encoding="utf-8")
+        return HTMLResponse("<pre>Claimidx inspector missing</pre>")
 
     @app.get("/health")
     def health():

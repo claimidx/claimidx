@@ -295,7 +295,7 @@ def verdict_for(query: Claim | dict, hits: list[tuple[Claim, float]]) -> dict:
             "action": "solve",
             "id": "",
             "why": "no prior art for this fingerprint",
-            "next": "fix it, then `claimidx claim --yes` so the next agent skips this",
+            "next": "fix it, then `claimidx claim --yes --share-yes` to share it so the next agent skips this (`claim --yes` alone stays local)",
         }
     claim, sim = hits[0]
     ann = annotate(query, claim, sim)

@@ -339,10 +339,10 @@ def test_mcp_server_json_is_honest():
     from packaging.version import Version
 
     assert pypi[0].get("version") == __version__, "packages[].version is the PyPI release"
-    # Top-level version is the MCP Registry envelope: unique per publish, never reused. 0.7.17 and 0.7.18
+    # Top-level version is the MCP Registry envelope: unique per publish, never reused. 0.7.17-0.7.19
     # are already taken there, so it runs ahead of the package and must sort above the last published one.
-    assert data["version"] == "0.7.19"
-    assert Version(data["version"]) > Version("0.7.18")
+    assert data["version"] == "0.7.20"
+    assert Version(data["version"]) > Version("0.7.19")
     assert Version(data["version"]) >= Version(__version__)
     envs = {e["name"]: e for e in (pypi[0].get("environmentVariables") or [])}
     owner = envs.get("CLAIMIDX_OWNER")

@@ -835,8 +835,8 @@ TOOLS: list[dict[str, Any]] = [
             "Not available right now: returns available=false and makes no network call. "
             "Who the commons holds up: authors ranked by claims that other agents replayed and held, and the verifiers doing the "
             "holding. A hold counts only when it was a replay, signed by the Ed25519 did:key bound to the acting DID, from someone "
-            "other than the owner, once per verifier per claim, on a live (not contested or rejected) claim. Read-only, network: "
-            "GET home.claimidx.com/t/commons/api/leaderboard. Pass own to get `you` (your author and verifier rows). Use it to "
+            "other than the owner, once per verifier per claim, on a live (not contested or rejected) claim. Read-only. By default it makes no network call; only with "
+            "CLAIMIDX_LEADERBOARD=1 does it GET home.claimidx.com/t/commons/api/leaderboard. Pass own to get `you` (your author and verifier rows). Use it to "
             "see whether what you shared was useful to anyone, or which claims are worth replaying."
         ),
         "inputSchema": {
@@ -1305,9 +1305,21 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                     ),
                 }
             if not result.held:
-                from .gate import unapplied_refusal
+                from .gate import unapplied_refusal, unenforced_miss_refusal
                 from .match import confirm_lights
 
+                unenforced = unenforced_miss_refusal(result)
+                if unenforced:
+                    return {
+                        "id": current.id,
+                        "st": current.st,
+                        "held": False,
+                        "recorded": False,
+                        "ok": False,
+                        **unenforced,
+                        "replay": replay_body,
+                        "lights": confirm_lights(held=False, recorded=False, reason=str(unenforced["reason"]), contested=current.st == "contested"),
+                    }
                 unapplied = unapplied_refusal(current, result, cwd=args.get("cwd"))
                 if unapplied:
                     return {
@@ -1632,8 +1644,16 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                 claim = store.get(str(out["id"]))
                 if claim is not None:
                     out.setdefault("review", commons_review(claim))
+            if want_commons and isinstance(out, dict) and out.get("ok"):
+                from .home import commons_disabled_note, commons_enabled
+
+                if not commons_enabled():
+                    out["commons"] = commons_disabled_note()
         if isinstance(out, dict) and out.get("ok"):
+            from .claim import stamp_counts
+
             out["path_b"] = path_b_cta(store, resolve_owner(args.get("own")))
+            stamp_counts(store, out)
         return out
     if name == "claimidx_apply":
         from .apply import apply_claim

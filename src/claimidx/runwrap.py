@@ -153,7 +153,7 @@ def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None =
         fp=str(rec.get("fp") or ""),
         extra={"nudged": True},
     )
-    line = f"CLAIMIDX fixed: `{cmd}` now passes after failing with: {rec['err'][:120]}\nRecord it so the next agent skips this: claimidx claim --yes"
+    line = f"CLAIMIDX fixed: `{cmd}` now passes after failing with: {rec['err'][:120]}\nRecord it: claimidx claim --yes --share-yes shares it so the next agent skips this (claim --yes alone stays local)"
     if draft.get("ok"):
         line += f"   (drafted: fix.k={draft['fix_k']} eval={draft['eval']} proof={str(draft['eval_proof']).lower()})"
     if emit:
