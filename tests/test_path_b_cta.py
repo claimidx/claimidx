@@ -40,7 +40,8 @@ def test_path_b_cta_uncountable_until_share(tmp_path: Path):
     cta_pub = path_b_cta(store, did)
     assert cta_pub["countable"] is False
     assert cta_pub["published"] is True
-    assert cta_pub["next"] == "claimidx share --yes"
+    assert cta_pub["next"] == "claimidx share cix_localonly --yes"
+    assert cta_pub["claim_id"] == "cix_localonly"
     assert "publish_no_share" in cta_pub["why"]
     _assert_clean(cta_pub)
     store.log("commons-push", did, "cix_deadbeef", {"exists": False})

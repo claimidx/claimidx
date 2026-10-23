@@ -372,13 +372,13 @@ def mcp_handshake() -> list[str]:
     server = json.loads((ROOT / "server.json").read_text(encoding="utf-8"))
     if any(p.get("version") != version for p in server.get("packages") or []):
         errors.append(f"server.json packages[].version != {version}")
-    # The top-level version is the MCP Registry envelope: unique per publish, never reused, so it may run
-    # ahead of the package (0.7.17-0.7.19 are taken there). It must never fall behind the package it pins.
+    # The top-level version is the MCP Registry envelope and must equal the PyPI package it pins:
+    # the registry entry for a release names exactly that release (0.7.17-0.7.20 are taken there).
     from packaging.version import InvalidVersion, Version
 
     try:
-        if Version(str(server.get("version"))) < Version(version):
-            errors.append(f"server.json registry version {server.get('version')} < package {version}")
+        if Version(str(server.get("version"))) != Version(version):
+            errors.append(f"server.json registry version {server.get('version')} != package {version}")
     except InvalidVersion:
         errors.append(f"server.json registry version {server.get('version')!r} is not a version")
     return errors

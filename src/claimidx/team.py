@@ -80,13 +80,20 @@ def auto_identity(*, quiet: bool = False) -> dict | None:
 
         agent = default_agent_name()
         own = did_for_agent(agent)
-        data: dict = {"owner": own, "agent": agent, "share": True}
+        scratch = (os.environ.get("CLAIMIDX_SCRATCH") or "").strip() == "1"
+        # A scratch identity never shares: it is temporary and lives only in the private scratch dir.
+        data: dict = {"owner": own, "agent": agent, "share": not scratch}
         key_path = config.config_path().parent / "identity.json"
         if not key_path.exists():
             from .identity import generate_identity
 
             data["key"] = generate_identity(key_path)["did"]
-        config.save(data)
+        saved_path = config.save(data)
+        if scratch:
+            try:
+                os.chmod(saved_path, 0o600)
+            except OSError:
+                pass
         os.environ["CLAIMIDX_OWNER"] = own
         os.environ["CLAIMIDX_AGENT"] = agent
         try:
@@ -101,7 +108,13 @@ def auto_identity(*, quiet: bool = False) -> dict | None:
     if not quiet:
         import sys
 
-        print(f"claimidx: identity created {own} (claimidx init --agent <name> to rename)", file=sys.stderr)
+        if (os.environ.get("CLAIMIDX_SCRATCH") or "").strip() == "1":
+            print(
+                f"claimidx: scratch identity {own} (temporary, never shared, deleted when this command exits; claimidx init --agent <name> for a real one)",
+                file=sys.stderr,
+            )
+        else:
+            print(f"claimidx: identity created {own} (claimidx init --agent <name> to rename)", file=sys.stderr)
     return data
 
 

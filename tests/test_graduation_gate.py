@@ -338,8 +338,9 @@ def test_x2_mcp_path_b_confirm_surfaces_proof_artifact_drift_lights(tmp_path: Pa
     _write_check(tree, honest=False)
     (tree / "marker.txt").write_text("evil\n", encoding="utf-8")
     drifted = _call("claimidx_confirm", {"id": cid, "replay": True, "cwd": str(tree)}, store)
-    assert drifted.get("held") is True, drifted
+    assert drifted.get("held") is False and drifted.get("eval_passed") is True, drifted
     assert drifted.get("recorded") is False, drifted
+    assert drifted["replay"]["held"] is False and drifted["replay"]["recorded"] is False, drifted
     assert "proof-artifact-drift" in (drifted.get("reason") or ""), drifted
     assert drifted["lights"]["integrity"] == "proof-artifact-drift", drifted
     assert drifted["lights"]["recovery"] == "held_unrecorded", drifted

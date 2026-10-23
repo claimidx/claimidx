@@ -10,8 +10,9 @@ hand, run again (nudge), `claimidx claim --yes` (drafted pin or diff, proven
 in a clean clone), then clone the broken commit and `claimidx apply` the
 claim there (build passes, hold recorded, no nudge afterwards).
 
-Runs against a scratch index (`--scratch`): nothing is shared or remembered
-outside the smoke. Exit status is the number of ecosystems that failed.
+Runs against a private index in the smoke's own temp dir (sharing and the
+commons off; `--scratch` would delete its index after every command, and this
+loop spans many): nothing is shared or remembered outside the smoke. Exit status is the number of ecosystems that failed.
 The unit suite did not predict the failures this caught; keep it in CI.
 """
 
@@ -53,7 +54,7 @@ def sh(argv: list[str], cwd: Path, *, env: dict | None = None, check: bool = Tru
 
 
 def cix(args: list[str], cwd: Path, env: dict, *, check: bool = False) -> subprocess.CompletedProcess:
-    return sh([PY, "-m", "claimidx", "--scratch", *args], cwd, env=env, check=check)
+    return sh([PY, "-m", "claimidx", *args], cwd, env=env, check=check)
 
 
 def git_init(tree: Path, files: dict[str, str]) -> None:
@@ -240,8 +241,19 @@ def main() -> int:
     for key in list(env):
         if key in _GIT_REPO_ENV or key.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
             env.pop(key)
-    env["CLAIMIDX_SCRATCH_DIR"] = str(root / "scratch")
-    env["CLAIMIDX_LAST_FAILURE"] = str(root / "scratch" / "last_failure.json")
+    # A private index for the whole loop (root is mkdtemp, 0700): sharing and the commons are off, and any
+    # identity minted on the way is a scratch one (share false, 0600) inside root, never ~/.claimidx.
+    private = root / "scratch"
+    private.mkdir()
+    for key in ("CLAIMIDX_OWNER", "CLAIMIDX_AGENT", "CLAIMIDX_SCRATCH_DIR"):
+        env.pop(key, None)
+    env["CLAIMIDX_SHARE"] = "0"
+    env["CLAIMIDX_COMMONS"] = "0"
+    env["CLAIMIDX_SCRATCH"] = "1"
+    env["CLAIMIDX_DB"] = str(private / "index.sqlite")
+    env["CLAIMIDX_CONFIG"] = str(private / "config.json")
+    env["CLAIMIDX_OUTBOX"] = str(private / "outbox.jsonl")
+    env["CLAIMIDX_LAST_FAILURE"] = str(private / "last_failure.json")
     failed = 0
     for name in wanted:
         spec = ECOS[name]

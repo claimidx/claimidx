@@ -154,7 +154,8 @@ def test_scratch_uses_a_throwaway_index_and_never_shares(tmp_path: Path, commons
     assert main(["--scratch", "--fmt", "json", "claim", "--yes", "--no-diff", "--no-clean-room", "--fix", "pip install json"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["id"] and not out.get("share") and not commons
-    assert (tmp_path / "claimidx-scratch" / "index.sqlite").exists()
+    # A per-run private dir under CLAIMIDX_SCRATCH_DIR, removed on exit: nothing is left to reuse.
+    assert list((tmp_path / "claimidx-scratch").iterdir()) == []
     assert not (tmp_path / "ix.sqlite").exists()
 
 

@@ -121,9 +121,9 @@ def clean_room(claim: Claim, cwd: str, *, db, own: str | None, trust_eval: bool 
 
         rep = _replay_now(claim.id, db=db, own=own, cwd=room, trust_eval=trust_eval, detail_extra={"clean_room": True}, mode="clean-room")
         out["after"] = rep
-        out["after_held"] = bool(rep.get("held"))
+        out["after_held"] = bool(rep.get("held") or rep.get("eval_passed"))  # the eval passed after fix.b
         out["recorded"] = bool(rep.get("recorded"))
-        if not rep.get("held"):
+        if not out["after_held"]:
             out["reason"] = "fix.b applied in a clean clone, but the eval did not hold: " + str(rep.get("reason") or "")
         elif not rep.get("recorded"):
             out["reason"] = "held in a clean clone, not recorded: " + str(rep.get("reason") or "")

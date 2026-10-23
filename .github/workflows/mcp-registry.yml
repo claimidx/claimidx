@@ -29,7 +29,7 @@ jobs:
           tag = os.environ["TAG"].removeprefix("v")
           assert tag == pkg, f"tag v{tag} != pyproject {pkg}"
           assert all(p.get("version") == pkg for p in data.get("packages", [])), "packages[].version must equal the PyPI release"
-          # data["version"] is the registry envelope (unique, never reused); it may run ahead of the package.
+          assert data["version"] == pkg, f"server.json version {data['version']} != pyproject {pkg}"
           print(f"registry version {data['version']} -> pypi claimidx {pkg}")
           PY
       - name: Install mcp-publisher
@@ -59,9 +59,10 @@ jobs:
 
           data = json.loads(Path("server.json").read_text(encoding="utf-8"))
           pkg = re.search(r'(?m)^version = "([^"]+)"', Path("pyproject.toml").read_text(encoding="utf-8")).group(1)
-          # server.json is published as committed: its top-level version is the registry envelope
-          # (bump it in a PR for a metadata-only refresh; the registry refuses a reused version).
+          # server.json is published as committed: its top-level version equals the package it pins
+          # (the registry refuses a reused version, so a dispatch only works for an unpublished release).
           assert all(p.get("version") == pkg for p in data.get("packages", [])), "packages[].version must equal the live PyPI release"
+          assert data["version"] == pkg, f"server.json version {data['version']} != pyproject {pkg}"
           print(f"registry version {data['version']} -> pypi claimidx {pkg}")
           PY
       - name: Install mcp-publisher

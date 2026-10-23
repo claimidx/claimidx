@@ -154,8 +154,9 @@ def test_confirm_replay_vacuous_pass_does_not_mint_or_fail(tmp_path: Path, capsy
     )
     rc, out = _confirm(db, capsys, cid)
     assert rc == 2
-    assert out["held"] is True
+    assert out["held"] is False and out["eval_passed"] is True
     assert out["recorded"] is False
+    assert out["replay"]["held"] is False and out["replay"]["recorded"] is False
     assert str(out.get("reason") or "").startswith("vacuous-pass")
     shown = _show(db, capsys, cid)
     assert shown["nr"] == 0

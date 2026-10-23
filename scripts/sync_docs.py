@@ -76,13 +76,11 @@ PYPROJECT_VERSION = re.compile(r'(?m)^version = "([^"]+)"')
 # (path, pattern) — group 1 is the version literal to rewrite. Every match in the
 # file is stamped. `"version":` does not match `"protocolVersion":` (the quote is required).
 _JSON_VERSION = r'"version": "([^"]+)"'
-# server.json: only the PyPI package pin follows pyproject. The top-level `version` is the
-# MCP Registry envelope, which must be unique per publish and is never reused (0.7.17-0.7.19
-# are taken there), so it is bumped by hand and checked by tests/gate, not stamped.
-_SERVER_JSON_PACKAGE = r'"identifier": "claimidx",\s*"version": "([^"]+)"'
+# server.json: the top-level `version` (MCP Registry envelope) and packages[].version both
+# follow pyproject; gate.py and the mcp-registry workflow require them to be equal.
 VERSION_STAMPS: tuple[tuple[str, str], ...] = (
     ("src/claimidx/__init__.py", r'(?m)^__version__ = "([^"]+)"'),
-    ("server.json", _SERVER_JSON_PACKAGE),
+    ("server.json", _JSON_VERSION),
     (".well-known/agent-card.json", _JSON_VERSION),
     (".well-known/agent.json", _JSON_VERSION),
     (".well-known/agents.json", _JSON_VERSION),

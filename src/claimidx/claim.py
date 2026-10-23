@@ -447,7 +447,7 @@ def publish_draft(
             if room.get("recorded"):
                 out["replay"] = room.get("after") or {}
             else:
-                out["replay"] = {"held": bool(room.get("after_held")), "recorded": False, "reason": room.get("reason")}
+                out["replay"] = {"held": False, "recorded": False, "eval_passed": bool(room.get("after_held")), "reason": room.get("reason")}
                 if _replay_unenforced(out["replay"]):
                     warns.append(claim_unenforced_warning(out["id"]))
                 else:
@@ -534,7 +534,9 @@ def _replay_now(
             from .gate import UNENFORCED_MESSAGE
 
             print(f"claimidx: ERROR: {UNENFORCED_MESSAGE}", file=sys.stderr)
-        return {"held": True, "recorded": False, **decision.refusal(), "replay": info}
+        # The eval passed but the gate refused to mint: nothing is on record, so `held` stays false
+        # (held means a recorded hold); `eval_passed` keeps what the eval itself did.
+        return {"held": False, "recorded": False, "eval_passed": True, **decision.refusal(), "replay": info}
     detail = {
         "ms": int(result.ms or 0),
         "held": True,

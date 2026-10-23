@@ -1,3 +1,5 @@
+import re
+
 from fastapi.testclient import TestClient
 
 from claimidx.api import create_app
@@ -339,11 +341,10 @@ def test_mcp_server_json_is_honest():
     from packaging.version import Version
 
     assert pypi[0].get("version") == __version__, "packages[].version is the PyPI release"
-    # Top-level version is the MCP Registry envelope: unique per publish, never reused. 0.7.17-0.7.19
-    # are already taken there, so it runs ahead of the package and must sort above the last published one.
-    assert data["version"] == "0.7.20"
-    assert Version(data["version"]) > Version("0.7.19")
-    assert Version(data["version"]) >= Version(__version__)
+    # Top-level version is the MCP Registry envelope and equals the PyPI release it pins
+    # (0.7.17-0.7.20 are already taken there, so it must also sort above the last published one).
+    assert data["version"] == __version__, "server.json version must equal packages[].version"
+    assert Version(data["version"]) > Version("0.7.20")
     envs = {e["name"]: e for e in (pypi[0].get("environmentVariables") or [])}
     owner = envs.get("CLAIMIDX_OWNER")
     assert owner is not None, "CLAIMIDX_OWNER must remain listed for naming a DID"
@@ -394,7 +395,7 @@ def test_mcp_registry_hides_invalid_pypi_versions():
 
 
 def test_mcp_registry_publish_only_on_tags():
-    """Tags publish their package version; dispatch publishes only a bumped registry envelope."""
+    """Tags publish their package version; both jobs require server.json version == the package."""
     from claimidx.discovery import ROOT
 
     text = (ROOT / ".github" / "workflows" / "mcp-registry.yml").read_text(encoding="utf-8")
@@ -406,8 +407,12 @@ def test_mcp_registry_publish_only_on_tags():
     assert "if: startsWith(github.ref, 'refs/tags/')" not in dispatch
     assert "if: github.event_name == 'workflow_dispatch'" in dispatch
     assert "mcp-publisher publish" in dispatch
-    # server.json is published as committed: no hardcoded envelope or package version in the workflow.
-    assert 'data["version"] =' not in text
+    # server.json is published as committed: no hardcoded envelope or package version in the workflow,
+    # and both jobs require the registry version to equal the package version.
+    assert not re.search(r'data\["version"\] = [^=]', text)
+    assert 'assert data["version"] == pkg' in publish
+    assert 'assert data["version"] == pkg' in dispatch
+    assert "may run ahead" not in text
     assert '"0.7.1' not in text
     assert "packages[].version must equal" in publish
     assert "packages[].version must equal" in dispatch

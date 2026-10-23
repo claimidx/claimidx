@@ -86,6 +86,9 @@ def test_cli_confirm_unenforced_without_net_exits_nonzero_and_mints_no_nr(tmp_pa
     rc, out, err = _confirm(db, capsys, cid)
     assert rc != 0
     assert out["recorded"] is False
+    # Nothing was recorded, so nothing is held (top level and nested replay); the eval itself passed.
+    assert out["held"] is False and out["eval_passed"] is True
+    assert out["replay"]["held"] is False and out["replay"]["recorded"] is False and out["replay"]["eval_passed"] is True
     assert out["replay"]["net"] == "unenforced" and out["replay"]["net_how"] == "python-flags"
     assert out["reason"].startswith("replay-net-unenforced")
     assert "OFFLINE REPLAY IS NOT ENFORCED" in err and "bwrap" in err and "--net" in err
@@ -122,6 +125,8 @@ def test_mcp_confirm_unenforced_is_error_and_records_nothing(tmp_path: Path, cap
     assert result.get("isError") is True
     body = result["structuredContent"]
     assert body["recorded"] is False and body["reason"].startswith("replay-net-unenforced")
+    assert body["held"] is False and body["eval_passed"] is True
+    assert body["replay"]["held"] is False and body["replay"]["recorded"] is False
     assert "bwrap" in body["message"]
     c = store.get(cid)
     assert c.nr == 0 and c.nc == 0

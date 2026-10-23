@@ -711,8 +711,9 @@ def test_confirm_replay_python_hold_requires_matching_rt(tmp_path: Path, capsys)
     rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", empty_id])
     assert rc == 2
     empty_out = json.loads(capsys.readouterr().out)
-    assert empty_out["held"] is True
+    assert empty_out["held"] is False and empty_out["eval_passed"] is True
     assert empty_out["recorded"] is False
+    assert empty_out["replay"]["held"] is False and empty_out["replay"]["recorded"] is False
     assert empty_out["replay"]["env"].startswith("py@")
     assert "hold requires rt" in empty_out["reason"]
     assert main(["--db", db, "--fmt", "json", "show", empty_id]) == 0
@@ -779,7 +780,7 @@ def test_confirm_replay_python_hold_requires_matching_rt(tmp_path: Path, capsys)
     rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", miss_id])
     assert rc == 2
     miss_out = json.loads(capsys.readouterr().out)
-    assert miss_out["held"] is True
+    assert miss_out["held"] is False and miss_out["eval_passed"] is True
     assert miss_out["recorded"] is False
     assert "hold env mismatch" in miss_out["reason"]
 
