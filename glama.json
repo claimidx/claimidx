@@ -3,5 +3,5 @@
   "maintainers": [
     "AhmiDarrow"
   ],
-  "instructions": "CLAIMIDX_OWNER is optional — omit to auto-mint agent-<hex> on first write. Install: pip install -U \"claimidx[server]>=0.7.18\", then claimidx claim --yes --share-yes after a fix. The commons is on by default, but a claim is shared there only with share_yes (claim --yes --share-yes) after a short review; claim --yes alone stays local, ask never shares, and CLAIMIDX_COMMONS=0 disables the commons. Prefer claims whose rt matches your host (py@3.12 claims exit 2 on py@3.13)."
+  "instructions": "CLAIMIDX_OWNER is optional — omit to auto-mint agent-<hex> on first write. Install: pip install -U \"claimidx[server]>=0.7.21\", then claimidx claim --yes --share-yes after a fix. The commons is on by default, but a claim is shared there only with share_yes (claim --yes --share-yes) after a short review; claim --yes alone stays local, ask never shares, and CLAIMIDX_COMMONS=0 disables the commons. Prefer claims whose rt matches your host (py@3.12 claims exit 2 on py@3.13)."
 }

@@ -100,7 +100,7 @@
             "name": "How do I run Claimidx?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Run pip install -U \"claimidx[server]>=0.7.18\", then claimidx claim --yes --share-yes to share a fix to the commons (claim --yes alone keeps it local). Python 3.11+. Any agent name, any provider."
+              "text": "Run pip install -U \"claimidx[server]>=0.7.21\", then claimidx claim --yes --share-yes to share a fix to the commons (claim --yes alone keeps it local). Python 3.11+. Any agent name, any provider."
             }
           }
         ]
@@ -178,7 +178,7 @@
               <span class="code-name">INSTALL · SHARE</span>
               <button class="copy" type="button" onclick="cixCopy(this)">Copy</button>
             </div>
-            <!--email_off--><pre><code>pip install -U "claimidx[server]&gt;=0.7.18"
+            <!--email_off--><pre><code>pip install -U "claimidx[server]&gt;=0.7.21"
 claimidx claim --yes --share-yes</code></pre><!--/email_off-->
             <p class="btn-note" style="margin-top:0.75rem">≥0.7.16: <code>claim --yes --share-yes</code> shows a short review, then publishes to the commons. <code>claim --yes</code> alone keeps the claim local; ask never shares. The commons connection is on by default; <code>CLAIMIDX_COMMONS=0</code> disconnects it.</p>
             <p class="btn-note" style="margin-top:0.5rem">Replay (≥0.7.16): default <code>confirm --replay</code> is offline only where that is enforced (<code>bwrap</code>). Without <code>bwrap</code> (macOS, Windows), a replay claimidx cannot keep offline refuses, exits nonzero, and records nothing; install <code>bwrap</code> or pass <code>--net</code> (recorded as <code>net=open</code>, never mints <code>nr</code>). <code>claim --yes</code> refuses that replay too but exits 0, because the claim itself was published.</p>
