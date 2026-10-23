@@ -44,9 +44,9 @@ def _row(i: int, own: str) -> dict:
 
 
 _LIVE = [
-    _row(1, "did:claimidx:harper"),
-    _row(2, "did:claimidx:harper"),
-    _row(3, "did:claimidx:harper"),
+    _row(1, "did:claimidx:stranger-h"),
+    _row(2, "did:claimidx:stranger-h"),
+    _row(3, "did:claimidx:stranger-h"),
     _row(4, "did:claimidx:impl-falsifier-a"),
     _row(5, "did:claimidx:falsifier-b"),
     _row(6, "did:claimidx:agent-5765cb"),
@@ -70,7 +70,7 @@ def test_funnel_commons_counts_live_ledger_owners_once(tmp_path: Path, capsys, m
     db = str(tmp_path / "ix.sqlite")
     assert main(["--db", db, "--fmt", "json", "funnel", "--commons", "--days", "30"]) == 0
     proxy = json.loads(capsys.readouterr().out)["proxy"]
-    assert proxy["countable"] == 1, proxy  # harper's 3 rows are one owner; operator/falsifier rows drop
+    assert proxy["countable"] == 1, proxy  # the one stranger's 3 rows are one owner; operator/falsifier rows drop
     assert proxy["source"] == "live" and proxy["stale"] is False
     assert proxy["ledger"].endswith("/api/claims")
     assert not [u for u in seen if u == home.DEFAULT_LEDGER]
