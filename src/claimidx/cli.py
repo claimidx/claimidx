@@ -4,6 +4,7 @@ import argparse
 import errno
 import json
 import os
+import shutil
 import sys
 import time
 from typing import Any
@@ -36,12 +37,32 @@ def _print_cli_error(ns: argparse.Namespace, error: Exception, *, exit_code: int
         print(f"error: {error}", file=sys.stderr)
 
 
-def _scratch_dir() -> str:
+_ACTIVE_SCRATCH: str | None = None
+
+
+def _new_scratch_dir() -> str:
+    """A fresh private scratch dir (mkdtemp: unique name, mode 0700), never a fixed shared path.
+
+    Created under $CLAIMIDX_SCRATCH_DIR when set (a parent dir, not the scratch dir itself).
+    """
     import tempfile
 
-    d = os.environ.get("CLAIMIDX_SCRATCH_DIR") or os.path.join(tempfile.gettempdir(), "claimidx-scratch")
-    os.makedirs(d, exist_ok=True)
-    return d
+    base = os.environ.get("CLAIMIDX_SCRATCH_DIR") or None
+    if base:
+        os.makedirs(base, exist_ok=True)
+    return tempfile.mkdtemp(prefix="claimidx-scratch-", dir=base)
+
+
+def _scratch_dir() -> str:
+    global _ACTIVE_SCRATCH
+    if not _ACTIVE_SCRATCH or not os.path.isdir(_ACTIVE_SCRATCH):
+        _ACTIVE_SCRATCH = _new_scratch_dir()
+    return _ACTIVE_SCRATCH
+
+
+def _refused_replay(info: dict | None) -> dict:
+    """A replay the gate refused to record: the eval passed (`eval_passed`), nothing is held on record."""
+    return {**(info or {}), "held": False, "eval_passed": True, "recorded": False}
 
 
 def _has_identity() -> bool:
@@ -626,8 +647,11 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
                 reason=str(decision.reason or ""),
                 contested=c.st == "contested",
             )
+            # The eval passed but nothing was recorded: `held` (top level and nested) means a recorded hold.
+            replay_info = _refused_replay(replay_info)
             if ns.fmt == "json":
-                print(json.dumps({"held": True, "replay": replay_info, "recorded": False, "lights": lights, **refusal}, default=str))
+                body = {"held": False, "eval_passed": True, "replay": replay_info, "recorded": False, "lights": lights, **refusal}
+                print(json.dumps(body, default=str))
             else:
                 print(json.dumps(replay_info), file=sys.stderr)
                 print(f"# lights prior_art={lights['prior_art']} integrity={lights['integrity']} recovery={lights['recovery']}", file=sys.stderr)
@@ -1916,7 +1940,11 @@ def _claim_write_args(p: argparse.ArgumentParser) -> None:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="claimidx", description="Claimidx — prior art for agents. Ask before you burn tokens.")
     p.add_argument("--db", default=None, help="sqlite path (default: $CLAIMIDX_DB or ~/.claimidx/index.sqlite)")
-    p.add_argument("--scratch", action="store_true", help="throwaway index under the temp dir ($CLAIMIDX_SCRATCH_DIR); nothing is shared or queued")
+    p.add_argument(
+        "--scratch",
+        action="store_true",
+        help="throwaway private index in a fresh temp dir (under $CLAIMIDX_SCRATCH_DIR if set), deleted on exit; nothing is shared or queued",
+    )
     p.add_argument("--fmt", choices=["dense", "json", "id"], default="dense")
     p.add_argument("--version", action="version", version=f"claimidx {__version__}")
     p.add_argument(
@@ -2303,6 +2331,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if getattr(ns, "scratch", False):
             # Process-local: restored on the way out so an in-process caller (tests, MCP) is not left switched off.
+            # Each invocation gets its own private dir (0700), removed on exit: no scratch identity or key is
+            # ever shared between runs, HOMEs or users on the host.
+            global _ACTIVE_SCRATCH
+            prev_scratch = _ACTIVE_SCRATCH
+            _ACTIVE_SCRATCH = None
             d = _scratch_dir()
             keys = (
                 "CLAIMIDX_SHARE",
@@ -2332,6 +2365,8 @@ def main(argv: list[str] | None = None) -> int:
                         os.environ.pop(k, None)
                     else:
                         os.environ[k] = v
+                _ACTIVE_SCRATCH = prev_scratch
+                shutil.rmtree(d, ignore_errors=True)
         # --local is handled by the command itself (a durable keep-local mark), never by flipping the share switch.
         return int(ns.func(ns))
     except BrokenPipeError:

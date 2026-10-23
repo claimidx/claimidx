@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -221,7 +223,7 @@ def test_scratch_writes_no_home_identity(tmp_path: Path, capsys, monkeypatch):
     cap = capsys.readouterr()
     assert json.loads(cap.out)["id"]
     assert not (fake_home / ".claimidx").exists(), sorted(p.name for p in (fake_home / ".claimidx").iterdir())
-    assert (scratch / "index.sqlite").exists()
+    assert list(scratch.iterdir()) == []  # the per-run scratch dir is gone
     import os
 
     for k in ("CLAIMIDX_CONFIG", "CLAIMIDX_DB", "CLAIMIDX_SCRATCH"):
@@ -296,3 +298,101 @@ def test_claim_gate_refusal_replay_is_not_held(tmp_path: Path, capsys, no_bwrap)
     assert rep.get("eval_passed") is True
     for r in _walk_replays(out["replay"]):
         assert not (r["held"] is True and r["recorded"] is False), r
+
+
+# --- N1: --scratch uses a private per-run dir, never shares, never touches ~/.claimidx ----
+
+
+def _scratch_spy(monkeypatch) -> list[dict]:
+    """Snapshot each scratch dir just before cli removes it (then really remove it)."""
+    import os
+    import shutil
+    import stat
+
+    from claimidx import cli
+
+    real = shutil.rmtree
+    seen: list[dict] = []
+
+    def spy(path, *a, **kw):
+        p = Path(path)
+        snap: dict = {"path": str(p), "mode": stat.S_IMODE(os.stat(p).st_mode), "files": {}}
+        for f in p.iterdir():
+            snap["files"][f.name] = stat.S_IMODE(os.stat(f).st_mode)
+        cfg = p / "config.json"
+        snap["config"] = json.loads(cfg.read_text(encoding="utf-8")) if cfg.exists() else None
+        seen.append(snap)
+        return real(path, *a, **kw)
+
+    monkeypatch.setattr(cli.shutil, "rmtree", spy)
+    return seen
+
+
+def _scratch_claim(tmp_path: Path, monkeypatch, n: int) -> None:
+    from claimidx.env import remember_failure
+
+    tree = tmp_path / f"tree{n}"
+    tree.mkdir()
+    remember_failure("ModuleNotFoundError: No module named 'json'", cwd=str(tree), eco="py")
+    assert main(["--scratch", "--fmt", "json", "claim", "--yes", "--no-diff", "--no-clean-room", "--fix", "pip install json"]) == 0
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX modes")
+def test_scratch_private_per_run_dir_share_off_and_removed(tmp_path: Path, capsys, monkeypatch):
+    import tempfile
+
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setenv("USERPROFILE", str(fake_home))
+    for k in ("CLAIMIDX_OWNER", "CLAIMIDX_AGENT", "CLAIMIDX_CONFIG", "CLAIMIDX_DB", "CLAIMIDX_SCRATCH_DIR"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("CLAIMIDX_SHARE", "1")  # even with sharing on, a scratch run never shares
+    monkeypatch.setenv("CLAIMIDX_LAST_FAILURE", str(tmp_path / "lf.json"))
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / "tmp"))
+    (tmp_path / "tmp").mkdir()
+    seen = _scratch_spy(monkeypatch)
+    _scratch_claim(tmp_path, monkeypatch, 1)
+    _scratch_claim(tmp_path, monkeypatch, 2)
+    capsys.readouterr()
+    assert len(seen) == 2
+    a, b = seen
+    assert a["path"] != b["path"]  # unique per run, never a fixed shared path
+    for snap in seen:
+        assert Path(snap["path"]).name.startswith("claimidx-scratch-")
+        assert Path(snap["path"]).parent == tmp_path / "tmp"
+        assert Path(snap["path"]).name != "claimidx-scratch"
+        assert snap["mode"] == 0o700, oct(snap["mode"])
+        assert snap["files"].get("identity.json") == 0o600, snap
+        assert snap["files"].get("config.json") == 0o600, snap
+        assert snap["config"]["share"] is False, snap
+        assert not Path(snap["path"]).exists()  # removed after the command exits
+    assert a["config"]["owner"] != b["config"]["owner"]  # no DID or key reused between runs
+    assert not (fake_home / ".claimidx").exists()
+    assert os.environ.get("CLAIMIDX_SHARE") == "1"  # restored
+
+
+def test_scratch_never_reuses_the_old_fixed_dir(tmp_path: Path, monkeypatch):
+    import tempfile
+
+    from claimidx import cli
+
+    monkeypatch.delenv("CLAIMIDX_SCRATCH_DIR", raising=False)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    fixed = tmp_path / "claimidx-scratch"
+    fixed.mkdir()
+    one, two = cli._new_scratch_dir(), cli._new_scratch_dir()
+    assert one != two and Path(one) != fixed and Path(two) != fixed
+
+
+def test_house_exclude_covers_0721_candidate_dids():
+    from claimidx.impact import _PROXY_DEFAULT_EXCLUDE, _proxy_excluded, _proxy_is_excluded
+
+    pats = _proxy_excluded()
+    for did in ("did:claimidx:agent-77a9db", "did:claimidx:agent-a8f5a0"):
+        assert did in _PROXY_DEFAULT_EXCLUDE
+        assert _proxy_is_excluded(did, pats)
+    assert "did:claimidx:falsifier-*" in _PROXY_DEFAULT_EXCLUDE
+    for did in ("did:claimidx:falsifier-0721-a", "did:claimidx:falsifier-0721-path-b", "did:claimidx:falsifier-0721"):
+        assert _proxy_is_excluded(did, pats), did
+    assert not _proxy_is_excluded("did:claimidx:stranger-h", pats)

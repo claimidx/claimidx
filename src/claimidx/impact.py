@@ -244,6 +244,9 @@ _PROXY_DEFAULT_EXCLUDE = frozenset(
         "did:claimidx:agent-fbb9d6",
         # Implementation's 0.7.18 sdist scratch identity, local only.
         "did:claimidx:agent-c0827d",
+        # Implementation's 0.7.21 candidate scratch identities, local only.
+        "did:claimidx:agent-77a9db",
+        "did:claimidx:agent-a8f5a0",
     }
 )
 COUNTABLE_GOAL = 100

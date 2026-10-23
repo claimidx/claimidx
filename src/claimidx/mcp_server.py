@@ -1408,13 +1408,15 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                 refusal = decision.refusal()
                 if decision.unenforced:
                     refusal["ok"] = False
+                # The eval passed but nothing was recorded: `held` (top level and nested) means a recorded hold.
                 return {
                     "id": current.id,
                     "st": current.st,
-                    "held": True,
+                    "held": False,
+                    "eval_passed": True,
                     "recorded": False,
                     **refusal,
-                    "replay": replay_body,
+                    "replay": {**(replay_body or {}), "held": False, "eval_passed": True, "recorded": False},
                     "lights": confirm_lights(
                         held=True,
                         recorded=False,
