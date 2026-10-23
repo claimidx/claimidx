@@ -23,6 +23,7 @@ import os
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -222,6 +223,67 @@ def fetch_ledger(url: str | None = None) -> tuple[list[Claim], list[str], str]:
         text = _read_target(target)
     claims, skipped = parse_ledger(text)
     return claims, skipped, target
+
+
+COMMONS_CLAIMS_PAGE_CAP = 50
+
+
+def fetch_commons_claims(api: str | None = None, *, timeout: float = 20.0) -> tuple[list[Claim], list[str], str]:
+    """Read the live commons ledger from `<commons_api>/api/claims` (JSON).
+
+    The endpoint returns the whole ledger as a JSON array today. A paged shape
+    (`{"claims"|"items"|"data": [...], "next"|"next_cursor"|"cursor": ...}`) is also
+    followed, up to COMMONS_CLAIMS_PAGE_CAP pages, with rows deduped by id. Rows go
+    through the same validation as the jsonl ledger. Raises HomeError when the
+    live ledger cannot be read; the caller decides whether to fall back.
+    """
+    base = (api or commons_api()).rstrip("/")
+    first = base + "/api/claims"
+    url: str | None = first
+    rows: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    seen_urls: set[str] = set()
+    pages = 0
+    while url and pages < COMMONS_CLAIMS_PAGE_CAP:
+        if url in seen_urls:
+            break
+        seen_urls.add(url)
+        pages += 1
+        try:
+            body = json.loads(_get(url, timeout=timeout).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            raise HomeError(f"live ledger is not JSON: {url}") from e
+        nxt: Any = None
+        if isinstance(body, list):
+            batch = body
+        elif isinstance(body, dict):
+            found = [body[k] for k in ("claims", "items", "data") if isinstance(body.get(k), list)]
+            if not found:
+                raise HomeError(f"live ledger has no claim rows: {url}")
+            batch = found[0]
+            nxt = body.get("next") or body.get("next_cursor") or body.get("cursor")
+        else:
+            raise HomeError(f"live ledger has no claim rows: {url}")
+        for raw in batch:
+            if not isinstance(raw, dict):
+                continue
+            cid = str(raw.get("id") or "")
+            if cid and cid in seen_ids:
+                continue
+            if cid:
+                seen_ids.add(cid)
+            rows.append(raw)
+        if not nxt or not batch:
+            break
+        nxt = str(nxt)
+        if nxt.startswith(("http://", "https://")):
+            url = nxt
+        elif nxt.startswith("/"):
+            url = base + nxt
+        else:
+            url = first + "?" + urllib.parse.urlencode({"cursor": nxt})
+    claims, skipped = parse_ledger("\n".join(json.dumps(r) for r in rows))
+    return claims, skipped, first
 
 
 def pull(store, url: str | None = None) -> dict[str, Any]:

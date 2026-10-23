@@ -19,7 +19,8 @@ from pydantic import BaseModel, Field
 from . import __version__
 from . import tokens as home_tokens
 from .dense import encode
-from .discovery import LINK_HEADER, ROUTES
+from .discovery import ROUTES
+from .discovery import link_header as discovery_link_header
 from .discovery import resolve as resolve_discovery
 from .fingerprint import classify, fingerprint, normalize_error
 from .graph import Bundle, ProtocolEvent
@@ -96,10 +97,14 @@ def create_app(db: str | None = None) -> FastAPI:
     if origins:
         app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"])
 
+    # Advertise only discovery documents this host can serve (none in a bare pip install).
+    links = discovery_link_header()
+
     @app.middleware("http")
     async def agent_link_header(request: Request, call_next):
         resp: Response = await call_next(request)
-        resp.headers.setdefault("Link", LINK_HEADER)
+        if links:
+            resp.headers.setdefault("Link", links)
         return resp
 
     def _mount_discovery(url_path: str, request: Request | None = None):

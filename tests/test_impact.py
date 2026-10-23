@@ -356,11 +356,12 @@ def test_funnel_cli_commons_proxy(tmp_path: Path, capsys, monkeypatch):
         nr=1,
         st="confirmed",
     )
-    monkeypatch.setattr("claimidx.home.fetch_ledger", lambda url=None: ([claim], [], "mock-ledger"))
+    monkeypatch.setattr("claimidx.home.fetch_commons_claims", lambda api=None, **kw: ([claim], [], "mock-ledger"))
 
     assert main(["--db", db, "funnel", "--commons", "--days", "30"]) == 0
     out = capsys.readouterr().out
-    assert "commons proxy (public ledger): countable 1/100" in out
+    assert "commons proxy (live ledger): countable 1/100" in out
+    assert "STALE" not in out
     assert "held 1" in out
     assert "proxy limits:" in out
 
@@ -369,4 +370,5 @@ def test_funnel_cli_commons_proxy(tmp_path: Path, capsys, monkeypatch):
     assert payload["proxy"]["countable"] == 1
     assert payload["proxy"]["held"] == 1
     assert payload["proxy"]["ledger"] == "mock-ledger"
+    assert payload["proxy"]["source"] == "live" and payload["proxy"]["stale"] is False
     assert "commons-derived" in payload["locality"]

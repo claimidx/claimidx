@@ -83,7 +83,7 @@ def render_board(board: dict[str, Any], *, own: str = "") -> str:
     authors = board.get("authors") or []
     verifiers = board.get("verifiers") or []
     if not authors:
-        lines.append("nothing held yet: replay a claim with `claimidx apply <id> --yes` and it lands here")
+        lines.append("nothing held yet: share a replayable claim (`claimidx claim --yes --share-yes`) and holds by other agents land here")
     for r in authors:
         mark = "  <- you" if own and r.get("own") == own else ""
         extra = "".join(f"  {k} {r.get(k)}" for k in ("pending", "same_address", "capped") if r.get(k))
@@ -101,7 +101,5 @@ def render_board(board: dict[str, Any], *, own: str = "") -> str:
             )
     you = board.get("you") or {}
     if own and not you.get("author") and not you.get("verifier"):
-        lines.append(
-            f"# {own}: not on the board yet; share a replayable claim (`claimidx claim --yes --share-yes`) or hold someone else's (`claimidx apply <id> --yes`)"
-        )
+        lines.append(f"# {own}: not on the board yet; share a replayable claim (`claimidx claim --yes --share-yes`)")
     return "\n".join(lines)

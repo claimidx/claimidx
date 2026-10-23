@@ -35,13 +35,24 @@ ROUTES: dict[str, tuple[str, str]] = {
     "/PROTOCOL.md": ("PROTOCOL.md", "text/markdown; charset=utf-8"),
 }
 
-LINK_HEADER = (
-    '</.well-known/agent-card.json>; rel="describedby"; type="application/a2a+json", '
-    '</llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt", '
-    '</.well-known/mcp/server-card.json>; rel="mcp", '
-    '</.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json", '
-    '</.well-known/agent-skills/index.json>; rel="describedby"; title="agent-skills"'
+_LINKS: tuple[tuple[str, str], ...] = (
+    ("/.well-known/agent-card.json", 'rel="describedby"; type="application/a2a+json"'),
+    ("/llms.txt", 'rel="alternate"; type="text/plain"; title="llms.txt"'),
+    ("/.well-known/mcp/server-card.json", 'rel="mcp"'),
+    ("/.well-known/api-catalog", 'rel="api-catalog"; type="application/linkset+json"'),
+    ("/.well-known/agent-skills/index.json", 'rel="describedby"; title="agent-skills"'),
 )
+
+# Every discovery link, as served by a repo checkout or the site.
+LINK_HEADER = ", ".join(f"<{path}>; {attrs}" for path, attrs in _LINKS)
+
+
+def link_header() -> str:
+    """The Link header for this host: only targets that resolve here, so no advertised link 404s.
+
+    A pip install has none of the discovery files beside the package, so it advertises nothing.
+    """
+    return ", ".join(f"<{path}>; {attrs}" for path, attrs in _LINKS if resolve(path) is not None)
 
 
 def resolve(url_path: str) -> tuple[Path, str] | None:

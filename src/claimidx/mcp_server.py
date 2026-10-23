@@ -121,6 +121,29 @@ def _ann(*, read_only: bool, destructive: bool = False, idempotent: bool = False
     return {"readOnlyHint": read_only, "destructiveHint": destructive, "idempotentHint": idempotent, "openWorldHint": open_world}
 
 
+def _leaderboard_bad_arg(args: dict[str, Any]) -> dict[str, Any] | None:
+    """A structured invalid-argument error for claimidx_leaderboard, or None when the args are usable."""
+    own = args.get("own")
+    if own is not None and not isinstance(own, str):
+        return {
+            "ok": False,
+            "error": "invalid-argument",
+            "field": "own",
+            "reason": f"own must be a string DID (did:claimidx:<name>), got {type(own).__name__}",
+        }
+    for field in ("days", "limit"):
+        val = args.get(field)
+        if val is None:
+            continue
+        if isinstance(val, bool) or not isinstance(val, int | str):
+            return {"ok": False, "error": "invalid-argument", "field": field, "reason": f"{field} must be an integer, got {type(val).__name__}"}
+        try:
+            int(val)
+        except ValueError:
+            return {"ok": False, "error": "invalid-argument", "field": field, "reason": f"{field} must be an integer, got {val!r}"[:200]}
+    return None
+
+
 def _out(**props: dict[str, Any]) -> dict[str, Any]:
     """Loose output schema: documented keys and their types, no required list, extra keys allowed."""
     return {"type": "object", "properties": props}
@@ -1561,6 +1584,9 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
     if name == "claimidx_leaderboard":
         from .board import fetch_leaderboard, leaderboard_enabled, leaderboard_unavailable
 
+        bad = _leaderboard_bad_arg(args)
+        if bad is not None:
+            return bad
         if not leaderboard_enabled():
             return leaderboard_unavailable()
 

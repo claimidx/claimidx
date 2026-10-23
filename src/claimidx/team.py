@@ -101,7 +101,10 @@ def auto_identity(*, quiet: bool = False) -> dict | None:
     if not quiet:
         import sys
 
-        print(f"claimidx: identity created {own} (claimidx init --agent <name> to rename)", file=sys.stderr)
+        if (os.environ.get("CLAIMIDX_SCRATCH") or "").strip() == "1":
+            print(f"claimidx: scratch identity {own} (temporary, kept in the scratch dir; claimidx init --agent <name> for a real one)", file=sys.stderr)
+        else:
+            print(f"claimidx: identity created {own} (claimidx init --agent <name> to rename)", file=sys.stderr)
     return data
 
 

@@ -306,13 +306,30 @@ def commons_owner_proxy(
 
     patterns = _proxy_excluded(exclude)
     target = ledger or ""
+    source = "given"
+    stale = False
+    stale_reason = ""
     rows: list[Claim]
     if claims is not None:
         rows = list(claims)
-    else:
+    elif url:
+        # An explicit --ledger is read as given (file, URL or jsonl path); no live/stale claim.
         from .home import fetch_ledger
 
         rows, _skipped, target = fetch_ledger(url)
+        source = "ledger"
+    else:
+        # The live commons ledger first; the repo snapshot only when the live read fails.
+        from .home import DEFAULT_LEDGER, HomeError, fetch_commons_claims, fetch_ledger
+
+        try:
+            rows, _skipped, target = fetch_commons_claims()
+            source = "live"
+        except (HomeError, OSError, ValueError) as e:
+            stale_reason = str(e)[:200] or type(e).__name__
+            rows, _skipped, target = fetch_ledger(DEFAULT_LEDGER)
+            source = "snapshot"
+            stale = True
 
     since = datetime.now(UTC) - timedelta(days=max(1, min(int(days or 30), 365)))
     published: set[str] = set()
@@ -348,6 +365,8 @@ def commons_owner_proxy(
     return {
         "kind": "commons_proxy",
         "ledger": target,
+        "source": source,
+        "stale": stale,
         "claims": len(rows),
         "days": max(1, min(int(days or 30), 365)),
         "exclude": patterns,
@@ -365,6 +384,7 @@ def commons_owner_proxy(
             "commons-derived proxy only: distinct non-operator owners with a published claim on the public ledger; "
             "held = nr>0 on at least one owned claim; not install->init drop-off; local-only DIDs never shared are invisible"
         ),
+        **({"stale_reason": stale_reason} if stale else {}),
     }
 
 
@@ -379,7 +399,7 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
 
     Ask may auto-mint a local DID; that is not a countable commons DID until a
     live share (commons-push / share-explicit / home-push). Local publish alone
-    is publish_no_share — keep `next` pointed at `claimidx share --yes`. Otherwise
+    is publish_no_share — `next` is `claimidx share <id> --yes` for the newest local claim. Otherwise
     `next` is `claimidx claim --yes --share-yes` (explicit commons confirm after a
     short review). No hold codes, no invites: `next` only ever names the user's
     own claim/share step.
@@ -389,8 +409,9 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
     held = False
     published = False
     shared = False
+    last_published = ""  # newest local publish: the claim `share <id> --yes` should name
     if minted and store is not None:
-        for ev in store.events(limit=500, actor=did):
+        for ev in store.events(limit=500, actor=did):  # newest first
             kind = ev.get("kind") or ""
             if kind in _SHARE_KINDS:
                 shared = True
@@ -398,6 +419,8 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
                 held = True
             elif kind in _PUBLISH_KINDS:
                 published = True
+                if not last_published:
+                    last_published = str(ev.get("claim_id") or "")
             if shared and held and published:
                 break
     countable = bool(minted and shared)
@@ -411,8 +434,12 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
     }
     if not countable:
         if published and not shared:
-            out["why"] = "publish_no_share: local claim is not a countable commons DID until share --yes"
-            out["next"] = "claimidx share --yes"
+            out["why"] = "publish_no_share: local claim is not a countable commons DID until share <id> --yes"
+            if last_published:
+                out["claim_id"] = last_published
+                out["next"] = f"claimidx share {last_published} --yes"
+            else:
+                out["next"] = "claimidx share --yes"
         elif held and not published:
             out["why"] = "hold alone is not a countable commons DID — claim --yes --share-yes (confirm then commons)"
             out["next"] = SHARE_CMD
@@ -563,8 +590,14 @@ def render_funnel_scoreboard(life: dict[str, Any], *, commons: dict[str, Any] | 
         )
     if proxy and not proxy.get("error"):
         goal = proxy.get("countable_goal", COUNTABLE_GOAL)
+        if proxy.get("stale"):
+            lines.append(
+                f"WARNING: STALE commons proxy: the live ledger could not be read ({proxy.get('stale_reason') or 'unreachable'}); "
+                f"counts come from the repo snapshot {proxy.get('ledger', '')} and may be behind the live commons"
+            )
+        where = {"live": "live ledger", "snapshot": "repo snapshot, STALE", "ledger": "given ledger"}.get(str(proxy.get("source") or ""), "public ledger")
         lines.append(
-            f"commons proxy (public ledger): countable {proxy.get('countable', 0)}/{goal} "
+            f"commons proxy ({where}): countable {proxy.get('countable', 0)}/{goal} "
             f"held {proxy.get('held', 0)} confirmed {proxy.get('confirmed', 0)} "
             f"recent_published {proxy.get('recent_published', 0)} "
             f"(claims {proxy.get('claims', 0)}; excl. owners seen {proxy.get('excluded_owners_seen', 0)})"

@@ -44,6 +44,19 @@ def _scratch_dir() -> str:
     return d
 
 
+def _has_identity() -> bool:
+    """True when env or the active config already names an owner DID (nothing would be minted)."""
+    if (os.environ.get("CLAIMIDX_OWNER") or "").strip() or (os.environ.get("CLAIMIDX_AGENT") or "").strip():
+        return True
+    try:
+        from .config import load
+
+        data = load()
+    except Exception:
+        return False
+    return bool(str(data.get("owner") or "").strip() or str(data.get("agent") or "").strip())
+
+
 def _db_path(ns: argparse.Namespace) -> str:
     if getattr(ns, "scratch", False):
         return os.path.join(_scratch_dir(), "index.sqlite")
@@ -2034,7 +2047,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     vf.add_argument("--cwd", help="working directory for tree-scoped evals (default: isolated scratch)")
     vf.set_defaults(func=cmd_verify, dry_run=True)
-    lb = sub.add_parser("leaderboard", help="the commons leaderboard (not available right now)")
+    from .board import leaderboard_enabled
+
+    # `board` is an operator alias: it exists (and shows in help) only with CLAIMIDX_LEADERBOARD=1,
+    # like the leaderboard page itself; without it `claimidx board` is an unknown command.
+    if leaderboard_enabled():
+        lb = sub.add_parser("leaderboard", aliases=["board"], help="the commons leaderboard (alias: board)")
+    else:
+        lb = sub.add_parser("leaderboard", help="the commons leaderboard (not available right now)")
     lb.add_argument("--days", type=int, default=30)
     lb.add_argument("--limit", type=int, default=25)
     lb.add_argument("--own")
@@ -2284,10 +2304,26 @@ def main(argv: list[str] | None = None) -> int:
         if getattr(ns, "scratch", False):
             # Process-local: restored on the way out so an in-process caller (tests, MCP) is not left switched off.
             d = _scratch_dir()
-            saved = {k: os.environ.get(k) for k in ("CLAIMIDX_SHARE", "CLAIMIDX_COMMONS", "CLAIMIDX_OUTBOX")}
+            keys = (
+                "CLAIMIDX_SHARE",
+                "CLAIMIDX_COMMONS",
+                "CLAIMIDX_OUTBOX",
+                "CLAIMIDX_DB",
+                "CLAIMIDX_CONFIG",
+                "CLAIMIDX_OWNER",
+                "CLAIMIDX_AGENT",
+                "CLAIMIDX_SCRATCH",
+            )
+            saved = {k: os.environ.get(k) for k in keys}
             os.environ["CLAIMIDX_SHARE"] = "0"
             os.environ["CLAIMIDX_COMMONS"] = "0"
             os.environ["CLAIMIDX_OUTBOX"] = os.path.join(d, "outbox.jsonl")
+            os.environ["CLAIMIDX_DB"] = _db_path(ns)
+            os.environ["CLAIMIDX_SCRATCH"] = "1"
+            if not _has_identity():
+                # No DID is configured: a first write would mint one. In scratch mode it lives in the
+                # scratch dir, never as a permanent ~/.claimidx identity.
+                os.environ["CLAIMIDX_CONFIG"] = os.path.join(d, "config.json")
             try:
                 return int(ns.func(ns))
             finally:
