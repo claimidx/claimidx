@@ -427,6 +427,21 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
             if shared and held and published:
                 break
     countable = bool(minted and shared)
+    from .home import SCRATCH_NO_SHARE, scratch_mode
+
+    if scratch_mode():
+        # --scratch: a temporary index and identity. No share step exists, so name none.
+        return {
+            "countable": False,
+            "minted": minted,
+            "did": did if minted else "",
+            "held": bool(minted and held),
+            "published": bool(minted and published),
+            "shared": False,
+            "scratch": True,
+            "why": SCRATCH_NO_SHARE,
+            "next": "",
+        }
     out: dict[str, Any] = {
         "countable": countable,
         "minted": minted,

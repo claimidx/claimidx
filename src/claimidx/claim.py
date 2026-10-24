@@ -523,11 +523,20 @@ def _replay_now(
     if refused:
         return {"held": False, "recorded": False, **refused, "replay": info}
     if not result.held:
+        from .sandbox import eval_miss_info
+
+        info = eval_miss_info(info)
         unapplied = unapplied_refusal(c, result, cwd=cwd or None)
         if unapplied:
-            return {"held": False, "recorded": False, **unapplied, "replay": info}
+            return {"held": False, "recorded": False, "eval_passed": False, **unapplied, "replay": info}
         # The agent says it is fixed; the eval disagrees. Record nothing, say so loudly.
-        return {"held": False, "recorded": False, "reason": "eval-miss: the fix did not hold under this eval", "replay": info}
+        return {
+            "held": False,
+            "recorded": False,
+            "eval_passed": False,
+            "reason": "eval-miss: the fix did not hold under this eval",
+            "replay": info,
+        }
     decision = graduation_gate(c, result, cwd=cwd or None, store=store, actor=resolve_owner(own))
     if not decision.mint_nr:
         if decision.unenforced:
@@ -536,7 +545,9 @@ def _replay_now(
             print(f"claimidx: ERROR: {UNENFORCED_MESSAGE}", file=sys.stderr)
         # The eval passed but the gate refused to mint: nothing is on record, so `held` stays false
         # (held means a recorded hold); `eval_passed` keeps what the eval itself did.
-        return {"held": False, "recorded": False, "eval_passed": True, **decision.refusal(), "replay": info}
+        from .sandbox import refused_replay_info
+
+        return {"held": False, "recorded": False, "eval_passed": True, **decision.refusal(), "replay": refused_replay_info(info)}
     detail = {
         "ms": int(result.ms or 0),
         "held": True,

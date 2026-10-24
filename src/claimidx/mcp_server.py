@@ -1298,31 +1298,42 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             if result.is_hint():
                 from .gate import hint_refusal
                 from .match import confirm_lights
+                from .sandbox import not_recorded_info
 
                 refusal = hint_refusal(current, result, cwd=args.get("cwd"))
                 return {
                     "id": current.id,
                     "st": current.st,
                     "held": False,
+                    "eval_passed": bool(result.held),
                     "recorded": False,
                     **refusal,
-                    "replay": replay_body,
-                    "lights": confirm_lights(held=False, recorded=False, reason=str(refusal.get("reason") or ""), contested=current.st == "contested"),
+                    "replay": not_recorded_info(replay_body, bool(result.held)),
+                    "lights": confirm_lights(
+                        held=False,
+                        recorded=False,
+                        eval_passed=bool(result.held),
+                        reason=str(refusal.get("reason") or ""),
+                        contested=current.st == "contested",
+                    ),
                 }
             refused = flag_refusal(flag)
             if refused:
                 from .match import confirm_lights
+                from .sandbox import not_recorded_info
 
                 return {
                     "id": current.id,
                     "st": current.st,
                     "held": False,
+                    "eval_passed": bool(result.held),
                     "recorded": False,
                     **refused,
-                    "replay": replay_body,
+                    "replay": not_recorded_info(replay_body, bool(result.held)),
                     "lights": confirm_lights(
                         held=False,
                         recorded=False,
+                        eval_passed=bool(result.held),
                         reason=str(refused.get("reason") or ""),
                         contested=current.st == "contested",
                     ),
@@ -1330,13 +1341,17 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             if not result.held:
                 from .gate import unapplied_refusal, unenforced_miss_refusal
                 from .match import confirm_lights
+                from .sandbox import eval_miss_info
 
+                # The eval ran and missed: eval_passed is false (top level and nested), never left out.
+                replay_body = eval_miss_info(replay_body)
                 unenforced = unenforced_miss_refusal(result)
                 if unenforced:
                     return {
                         "id": current.id,
                         "st": current.st,
                         "held": False,
+                        "eval_passed": False,
                         "recorded": False,
                         "ok": False,
                         **unenforced,
@@ -1349,6 +1364,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                         "id": current.id,
                         "st": current.st,
                         "held": False,
+                        "eval_passed": False,
                         "recorded": False,
                         **unapplied,
                         "replay": replay_body,
@@ -1367,6 +1383,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                     "nf": failed.nf,
                     "replay": replay_body,
                     "held": False,
+                    "eval_passed": False,
                     "lights": confirm_lights(held=False, recorded=True, contested=failed.st == "contested"),
                 }
             decision = graduation_gate(
@@ -1404,6 +1421,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                 }
             if not decision.mint_nr:
                 from .match import confirm_lights
+                from .sandbox import refused_replay_info
 
                 refusal = decision.refusal()
                 if decision.unenforced:
@@ -1416,10 +1434,11 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                     "eval_passed": True,
                     "recorded": False,
                     **refusal,
-                    "replay": {**(replay_body or {}), "held": False, "eval_passed": True, "recorded": False},
+                    "replay": refused_replay_info(replay_body),
                     "lights": confirm_lights(
-                        held=True,
+                        held=False,
                         recorded=False,
+                        eval_passed=True,
                         warns=gate_warns,
                         reason=str(refusal.get("reason") or ""),
                         contested=current.st == "contested",
@@ -1772,6 +1791,9 @@ def _read_message(inp=None) -> tuple[dict | None, bool]:
 
 
 def main() -> None:
+    from .perms import secure_home
+
+    secure_home()  # tighten an older ~/.claimidx (dir 0700, files 0600) before anything is written
     store = Store(os.environ.get("CLAIMIDX_DB") or None)
     framed = False
     while True:

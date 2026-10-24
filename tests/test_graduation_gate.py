@@ -270,7 +270,7 @@ def test_x2_binding_at_publish_cwd_refuses_mutated_artifact(tmp_path: Path, caps
     assert rc != 0, out
     assert "proof-artifact-drift" in out.get("reason", ""), out
     assert out["lights"]["integrity"] == "proof-artifact-drift", out
-    assert out["lights"]["recovery"] == "held_unrecorded", out
+    assert out["lights"]["recovery"] == "unrecorded", out
     assert _nr(db, capsys, cid) == 0
 
 
@@ -299,7 +299,7 @@ def test_x2_tofu_then_mutation_refuses(tmp_path: Path, capsys):
     assert rc != 0, out
     assert "proof-artifact-drift" in out.get("reason", ""), out
     assert out["lights"]["integrity"] == "proof-artifact-drift", out
-    assert out["lights"]["recovery"] == "held_unrecorded", out
+    assert out["lights"]["recovery"] == "unrecorded", out
     assert _nr(db, capsys, cid) == 1
 
 
@@ -343,7 +343,7 @@ def test_x2_mcp_path_b_confirm_surfaces_proof_artifact_drift_lights(tmp_path: Pa
     assert drifted["replay"]["held"] is False and drifted["replay"]["recorded"] is False, drifted
     assert "proof-artifact-drift" in (drifted.get("reason") or ""), drifted
     assert drifted["lights"]["integrity"] == "proof-artifact-drift", drifted
-    assert drifted["lights"]["recovery"] == "held_unrecorded", drifted
+    assert drifted["lights"]["recovery"] == "unrecorded", drifted
 
 
 def test_x2b_tree_recipe_outside_its_tree_is_not_a_miss(tmp_path: Path, capsys, monkeypatch):
@@ -468,7 +468,7 @@ def test_i1_strict_digest_refuses_nr_on_drift(tmp_path: Path, capsys):
     assert rc == 2 and out.get("recorded") is False, out
     assert "digest_drift" in out.get("reason", ""), out
     assert out["lights"]["integrity"] == "digest_drift"
-    assert out["lights"]["recovery"] == "held_unrecorded"
+    assert out["lights"]["recovery"] == "unrecorded"
     assert _nr(db, capsys, cid) == 1
 
 
@@ -521,7 +521,7 @@ def test_i1_mcp_path_b_confirm_surfaces_digest_drift_lights(tmp_path: Path, monk
     assert refused.get("recorded") is False, refused
     assert "digest_drift" in (refused.get("reason") or ""), refused
     assert refused["lights"]["integrity"] == "digest_drift"
-    assert refused["lights"]["recovery"] == "held_unrecorded"
+    assert refused["lights"]["recovery"] == "unrecorded"
 
 
 # --------------------------------------------------------------------------

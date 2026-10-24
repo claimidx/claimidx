@@ -62,7 +62,9 @@ def _scratch_dir() -> str:
 
 def _refused_replay(info: dict | None) -> dict:
     """A replay the gate refused to record: the eval passed (`eval_passed`), nothing is held on record."""
-    return {**(info or {}), "held": False, "eval_passed": True, "recorded": False}
+    from .sandbox import refused_replay_info
+
+    return refused_replay_info(info)
 
 
 def _has_identity() -> bool:
@@ -527,11 +529,19 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
         if result.is_hint():
             from .gate import hint_refusal
             from .match import confirm_lights
+            from .sandbox import not_recorded_info
 
             refusal = hint_refusal(c, result, cwd=getattr(ns, "cwd", None))
-            lights = confirm_lights(held=False, recorded=False, reason=str(refusal.get("reason") or ""), contested=c.st == "contested")
+            replay_info = not_recorded_info(replay_info, bool(result.held))
+            lights = confirm_lights(
+                held=False, recorded=False, eval_passed=bool(result.held), reason=str(refusal.get("reason") or ""), contested=c.st == "contested"
+            )
             if ns.fmt == "json":
-                print(json.dumps({"held": False, "replay": replay_info, "recorded": False, "lights": lights, **refusal}, default=str))
+                print(
+                    json.dumps(
+                        {"held": False, "eval_passed": bool(result.held), "replay": replay_info, "recorded": False, "lights": lights, **refusal}, default=str
+                    )
+                )
             else:
                 print(json.dumps(replay_info), file=sys.stderr)
                 print(f"# lights prior_art={lights['prior_art']} integrity={lights['integrity']} recovery={lights['recovery']}", file=sys.stderr)
@@ -542,10 +552,18 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
         refused = flag_refusal(flag)
         if refused:
             from .match import confirm_lights
+            from .sandbox import not_recorded_info
 
-            lights = confirm_lights(held=False, recorded=False, reason=str(refused.get("reason") or ""), contested=c.st == "contested")
+            replay_info = not_recorded_info(replay_info, bool(result.held))
+            lights = confirm_lights(
+                held=False, recorded=False, eval_passed=bool(result.held), reason=str(refused.get("reason") or ""), contested=c.st == "contested"
+            )
             if ns.fmt == "json":
-                print(json.dumps({"held": False, "replay": replay_info, "recorded": False, "lights": lights, **refused}, default=str))
+                print(
+                    json.dumps(
+                        {"held": False, "eval_passed": bool(result.held), "replay": replay_info, "recorded": False, "lights": lights, **refused}, default=str
+                    )
+                )
             else:
                 print(json.dumps(replay_info), file=sys.stderr)
                 print(f"# lights prior_art={lights['prior_art']} integrity={lights['integrity']} recovery={lights['recovery']}", file=sys.stderr)
@@ -556,13 +574,18 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
         if not result.held:
             from .gate import unapplied_refusal, unenforced_miss_refusal
             from .match import confirm_lights
+            from .sandbox import eval_miss_info
 
+            # The eval ran and missed: say eval_passed false (top level and nested), never leave it out.
+            replay_info = eval_miss_info(replay_info)
             unenforced = unenforced_miss_refusal(result)
             if unenforced:
                 print(f"claimidx: ERROR: {unenforced['message']}", file=sys.stderr)
                 lights = confirm_lights(held=False, recorded=False, reason=str(unenforced["reason"]), contested=c.st == "contested")
                 if ns.fmt == "json":
-                    print(json.dumps({"held": False, "replay": replay_info, "recorded": False, "lights": lights, **unenforced}, default=str))
+                    print(
+                        json.dumps({"held": False, "eval_passed": False, "replay": replay_info, "recorded": False, "lights": lights, **unenforced}, default=str)
+                    )
                 else:
                     print(json.dumps(replay_info), file=sys.stderr)
                     print(f"# lights prior_art={lights['prior_art']} integrity={lights['integrity']} recovery={lights['recovery']}", file=sys.stderr)
@@ -573,7 +596,9 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
             if unapplied:
                 lights = confirm_lights(held=False, recorded=False, reason=str(unapplied.get("reason") or ""), contested=c.st == "contested")
                 if ns.fmt == "json":
-                    print(json.dumps({"held": False, "replay": replay_info, "recorded": False, "lights": lights, **unapplied}, default=str))
+                    print(
+                        json.dumps({"held": False, "eval_passed": False, "replay": replay_info, "recorded": False, "lights": lights, **unapplied}, default=str)
+                    )
                 else:
                     print(json.dumps(replay_info), file=sys.stderr)
                     print(f"# lights prior_art={lights['prior_art']} integrity={lights['integrity']} recovery={lights['recovery']}", file=sys.stderr)
@@ -588,7 +613,12 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
                 share_observation(store, failed, held=False, actor=resolve_owner(ns.own))
             lights = confirm_lights(held=False, recorded=True, contested=failed.st == "contested")
             if ns.fmt == "json":
-                print(json.dumps({"held": False, "replay": replay_info, "lights": lights, "claim": json.loads(failed.model_dump_json())}, default=str))
+                print(
+                    json.dumps(
+                        {"held": False, "eval_passed": False, "replay": replay_info, "lights": lights, "claim": json.loads(failed.model_dump_json())},
+                        default=str,
+                    )
+                )
             else:
                 print(json.dumps(replay_info), file=sys.stderr)
                 print(f"# lights prior_art={lights['prior_art']} integrity={lights['integrity']} recovery={lights['recovery']}", file=sys.stderr)
@@ -641,8 +671,9 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
 
                 print(f"claimidx: ERROR: {UNENFORCED_MESSAGE}", file=sys.stderr)
             lights = confirm_lights(
-                held=True,
+                held=False,
                 recorded=False,
+                eval_passed=True,
                 warns=gate_warns,
                 reason=str(decision.reason or ""),
                 contested=c.st == "contested",
@@ -799,9 +830,10 @@ def cmd_claim(ns: argparse.Namespace) -> int:
         store = _store(ns)
         claim = store.get(out["id"]) if out.get("id") else None
         if want_commons and claim is not None:
-            from .home import format_commons_review
+            from .home import format_commons_review, scratch_mode
 
-            print(format_commons_review(claim), file=sys.stderr)
+            if not scratch_mode():  # --scratch: the destination line below says it can't be shared
+                print(format_commons_review(claim), file=sys.stderr)
         out = ensure_online_share(
             store,
             out,
@@ -836,6 +868,7 @@ def cmd_claim(ns: argparse.Namespace) -> int:
             print(_destination_line(out.get("share") or {}, out["id"]), file=sys.stderr)
             if (out.get("commons") or {}).get("status") == "disabled":
                 print(f"# commons disabled: {out['commons']['reason']}", file=sys.stderr)
+            # status "scratch": _destination_line already said it once.
             path_b = out.get("path_b") or {}
             line = _path_b_line(path_b)
             if line:
@@ -854,16 +887,22 @@ def _stamp_counts(store, out: dict) -> None:
 
 def _path_b_line(path_b: dict) -> str:
     """One stderr line for Path B status and the next claim/share step."""
-    if not path_b:
-        return ""
+    if not path_b or path_b.get("scratch"):
+        return ""  # --scratch: the destination line already says scratch claims can't be shared
     flag = "true" if path_b.get("countable") else "false"
     why = path_b.get("why") or ""
     nxt = path_b.get("next") or ""
+    if not nxt:
+        return f"# path_b countable={flag} — {why}"
     return f"# path_b countable={flag} — {why}; next: {nxt}"
 
 
 def _destination_line(share: dict, claim_id: str) -> str:
     """Where the claim went, in one line. A network failure must not read as private."""
+    from .home import SCRATCH_NO_SHARE, scratch_mode
+
+    if scratch_mode():
+        return f"# scratch: {SCRATCH_NO_SHARE}"
     status = share.get("status")
     if status == "local":
         return f"# kept on this machine (--local): not shared; `claimidx share {claim_id} --yes` publishes it"
@@ -2328,6 +2367,9 @@ def main(argv: list[str] | None = None) -> int:
     raw = list(argv) if argv is not None else sys.argv[1:]
     raw = _glue_dashed_opt(raw, "--fix-b")
     ns = build_parser().parse_args(raw)
+    from .perms import secure_home
+
+    secure_home()  # older installs wrote ~/.claimidx 0755 and its files 0644: tighten once per process (POSIX)
     try:
         if getattr(ns, "scratch", False):
             # Process-local: restored on the way out so an in-process caller (tests, MCP) is not left switched off.

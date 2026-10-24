@@ -23,7 +23,7 @@ from .gate import graduation_gate
 from .models import Claim
 from .policy import _LOCAL_PIP, _norm_head, eval_allowed, split_eval
 from .public import eval_is_proof
-from .sandbox import ReplayResult, observe_env, replay
+from .sandbox import ReplayResult, eval_miss_info, observe_env, refused_replay_info, replay
 from .store import Store
 from .team import resolve_owner
 
@@ -243,10 +243,10 @@ def harness(c: Claim, scratch: Path) -> dict:
     if broken.held and fixed.held:
         return {**out, "action": "skip", "reason": "harness-no-discriminate"}
     if broken.held and not fixed.held:
-        return {**out, "action": "fail", "reason": "harness-eval-miss"}
+        return {**out, "action": "fail", "reason": "harness-eval-miss", "eval_passed": False}
     if not _eval_targets_pin(c.eval.cmd, target_names):
         return {**out, "action": "skip", "reason": "harness-no-repro"}
-    return {**out, "action": "fail", "reason": "harness-eval-miss"}
+    return {**out, "action": "fail", "reason": "harness-eval-miss", "eval_passed": False}
 
 
 def _seen_path() -> Path:
@@ -264,9 +264,9 @@ def load_seen() -> dict:
 
 
 def save_seen(st: dict) -> None:
-    p = _seen_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(st, indent=2) + "\n", encoding="utf-8")
+    from .perms import write_private
+
+    write_private(_seen_path(), json.dumps(st, indent=2) + "\n")
 
 
 def _today() -> str:
@@ -414,7 +414,7 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
                 "rc": proc.returncode,
                 "stderr": (proc.stderr or "")[-300:],
                 "applied": spec,
-                "replay": probe.as_dict(),
+                "replay": refused_replay_info(probe.as_dict()),
             }
         return {
             "action": "confirm",
@@ -437,6 +437,7 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
     return {
         "action": "fail",
         "reason": "eval-miss-pin",
+        "eval_passed": False,
         "id": c.id,
         "rc": proc.returncode,
         "stderr": (proc.stderr or "")[-300:],
@@ -500,7 +501,7 @@ def decide(c: Claim, *, scratch: Path, trust: str = "local", store: Store | None
     if result.held:
         decision = graduation_gate(c, result, cwd=str(scratch), store=store)
         if not decision.mint_nr:
-            return {"action": "skip", **decision.refusal(), "id": c.id, "replay": info}
+            return {"action": "skip", **decision.refusal(), "id": c.id, "replay": refused_replay_info(info)}
         if decision.warns:
             return {"action": "confirm", "reason": "held", "id": c.id, "replay": info, "warn": list(decision.warns)}
         return {"action": "confirm", "reason": "held", "id": c.id, "replay": info}
@@ -521,10 +522,10 @@ def decide(c: Claim, *, scratch: Path, trust: str = "local", store: Store | None
         # Only the pin harness (--harness, --trust-eval) can prove a pulled remedy false.
         return {"action": "skip", "reason": "missing-dep-or-tool", "id": c.id, "replay": info}
     if is_runnable(c):
-        return {"action": "fail", "reason": "eval-miss", "id": c.id, "replay": info}
+        return {"action": "fail", "reason": "eval-miss", "eval_passed": False, "id": c.id, "replay": eval_miss_info(info)}
     if _MISSING.search(blob):
         return {"action": "skip", "reason": "missing-dep-or-tool", "id": c.id, "replay": info}
-    return {"action": "fail", "reason": "eval-miss", "id": c.id, "replay": info}
+    return {"action": "fail", "reason": "eval-miss", "eval_passed": False, "id": c.id, "replay": eval_miss_info(info)}
 
 
 def _project_ledger(path: Path, updates: list[Claim]) -> int:

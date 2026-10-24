@@ -126,7 +126,7 @@ def clean_room(claim: Claim, cwd: str, *, db, own: str | None, trust_eval: bool 
         if not out["after_held"]:
             out["reason"] = "fix.b applied in a clean clone, but the eval did not hold: " + str(rep.get("reason") or "")
         elif not rep.get("recorded"):
-            out["reason"] = "held in a clean clone, not recorded: " + str(rep.get("reason") or "")
+            out["reason"] = "eval passed in a clean clone, not recorded: " + str(rep.get("reason") or "")
         return out
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
