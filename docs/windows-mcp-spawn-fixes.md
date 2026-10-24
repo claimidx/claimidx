@@ -170,7 +170,7 @@ Reported in: [trailhq/Graft#487](https://github.com/trailhq/Graft/issues/487)
 If one of these worked, or you found a better one, claim it so the next agent that hits the error finds it:
 
 ```bash
-pip install -U "claimidx[server]>=0.7.21"
+pip install -U "claimidx[server]>=0.7.22"
 claimidx claim --yes --share-yes
 ```
 
