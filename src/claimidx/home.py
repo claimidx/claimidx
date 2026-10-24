@@ -400,6 +400,8 @@ def mark_local(store, claim_id: str, actor: str) -> None:
 
 
 def local_status(claim_id: str) -> dict[str, Any]:
+    if scratch_mode():
+        return {"status": "local", "id": claim_id, "hint": SCRATCH_NO_SHARE}
     return {"status": "local", "id": claim_id, "hint": f"kept on this machine; `claimidx share {claim_id} --yes` publishes it"}
 
 
@@ -425,14 +427,26 @@ def commons_review(claim: Claim) -> dict[str, Any]:
 
 COMMONS_DISABLED_REASON = "the commons is disabled (CLAIMIDX_COMMONS=0 or config commons: false); nothing was sent to the commons"
 
+# --scratch: the index (and any identity) is temporary, so there is nothing a later `share <id>` could publish.
+SCRATCH_NO_SHARE = "scratch claims are throwaway and can't be shared; run without --scratch to keep or share a claim"
+
+
+def scratch_mode() -> bool:
+    """True inside `claimidx --scratch` (cli sets CLAIMIDX_SCRATCH=1 for the run)."""
+    return (os.environ.get("CLAIMIDX_SCRATCH") or "").strip() == "1"
+
 
 def commons_disabled_note() -> dict[str, Any]:
     """Result block for a commons share asked for while the commons is off: say so instead of implying a send."""
+    if scratch_mode():
+        return {"status": "scratch", "reason": SCRATCH_NO_SHARE}
     return {"status": "disabled", "reason": COMMONS_DISABLED_REASON}
 
 
 def format_commons_review(claim: Claim) -> str:
     """One stderr block: what will leave the machine if the agent confirms commons share."""
+    if scratch_mode():
+        return f"# scratch: {SCRATCH_NO_SHARE}"
     r = commons_review(claim)
     deps = ", ".join(r["dep"]) if r["dep"] else "(none)"
     if r["commons"] == "disabled":
@@ -583,10 +597,10 @@ def push_commons(
         if _is_refusal(str(e)):
             store.log("commons-refused", claim.own, claim.id, merge_attribution({"error": str(e)[:300]}, attrib))
             return {"status": "refused", "id": claim.id, "reason": str(e)[:300], **attrib}
+        from .perms import append_private
+
         path = outbox_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, separators=(",", ":"), ensure_ascii=False) + "\n")
+        append_private(path, json.dumps(payload, separators=(",", ":"), ensure_ascii=False) + "\n")
         store.log("home-propose", claim.own, claim.id, merge_attribution({"commons": "outbox", "error": str(e)[:200]}, attrib))
         return {
             "status": "outbox",
@@ -657,7 +671,9 @@ def flush_outbox(store, *, timeout: float = 20.0, stop_on_unreachable: bool = Fa
                 merge_attribution({"from": "outbox"}, attrib),
             )
     if kept:
-        path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+        from .perms import write_private
+
+        write_private(path, "\n".join(kept) + "\n")
     else:
         path.unlink(missing_ok=True)
     return {"sent": sent, "kept": len(kept), "refused": refused, "unreachable": unreachable}
@@ -747,8 +763,9 @@ def share_claim(
         line = propose_line(claim)
     except PublicSkip as e:
         return {"status": "skipped", "id": claim.id, "reason": str(e), **attrib}
+    from .perms import append_private
+
     path = outbox_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
     # Attach attribution to the queued public projection for later flush event stamps.
     if attrib:
         try:
@@ -757,8 +774,7 @@ def share_claim(
             line = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
         except (ValueError, TypeError):
             pass
-    with path.open("a", encoding="utf-8") as f:
-        f.write(line + "\n")
+    append_private(path, line + "\n")
     store.log("home-propose", claim.own, claim.id, merge_attribution(None, attrib))
     return {
         "status": "outbox",

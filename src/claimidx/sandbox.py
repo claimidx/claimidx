@@ -142,6 +142,32 @@ class ReplayResult:
         return r == "builtin" or r.startswith("eval-precondition") or r.startswith("eval-untrusted")
 
 
+# A replay the gate refused to record. `held` means a recorded hold, so the replay object must not say
+# "held" anywhere (flag or reason) once the gate said no; `eval_passed` keeps what the eval itself did.
+NOT_RECORDED_REASON = "eval-passed-not-recorded"
+
+
+def refused_replay_info(info: dict | None) -> dict:
+    """The replay dict for an eval that passed but was not recorded: held false, eval_passed true, no "held" reason."""
+    out = {**(info or {}), "held": False, "eval_passed": True, "recorded": False}
+    if str(out.get("reason") or "").startswith("held"):
+        out["reason"] = NOT_RECORDED_REASON
+    rerun = out.get("rerun")
+    if isinstance(rerun, dict) and (rerun.get("held") or str(rerun.get("reason") or "").startswith("held")):
+        out["rerun"] = refused_replay_info(rerun)
+    return out
+
+
+def not_recorded_info(info: dict | None, eval_passed: bool) -> dict:
+    """A refusal that recorded nothing: relabel a passing eval as not held, or mark a miss explicitly."""
+    return refused_replay_info(info) if eval_passed else eval_miss_info(info)
+
+
+def eval_miss_info(info: dict | None) -> dict:
+    """The replay dict for an eval that ran and did not pass: eval_passed is false, said explicitly."""
+    return {**(info or {}), "eval_passed": False}
+
+
 _TREE_MARKERS = {
     "npx": ("package.json", "tsconfig.json"),
     "npm": ("package.json",),

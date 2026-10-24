@@ -585,8 +585,14 @@ def confirm_lights(
     warns: list[str] | None = None,
     reason: str = "",
     contested: bool = False,
+    eval_passed: bool | None = None,
 ) -> dict[str, str]:
-    """Three independent statuses after confirm --replay (same shape as ask lights)."""
+    """Three independent statuses after confirm --replay (same shape as ask lights).
+
+    recovery: reproduced (held and recorded) | unrecorded (the eval passed, the gate recorded nothing) |
+    miss | contested. It never says "held" for a replay that is not a recorded hold.
+    """
+    passed = bool(held or eval_passed)
     integrity = "ok"
     blob = " ".join(warns or [])
     if reason:
@@ -595,14 +601,14 @@ def confirm_lights(
         integrity = "proof-artifact-drift"
     elif "digest_drift" in blob:
         integrity = "digest_drift"
-    elif not held and not recorded and reason:
+    elif not passed and not recorded and reason:
         integrity = "unchecked"
     if contested:
         recovery = "contested"
     elif recorded and held:
         recovery = "reproduced"
-    elif held and not recorded:
-        recovery = "held_unrecorded"
+    elif passed and not recorded:
+        recovery = "unrecorded"
     else:
         recovery = "miss"
     return {

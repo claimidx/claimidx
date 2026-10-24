@@ -609,8 +609,9 @@ def remember_pending_brief(text: str) -> None:
     """Grok ignores SessionStart stdout; land the brief on the next tool event."""
     path = pending_brief_path()
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"text": text, "ts": int(time.time())}), encoding="utf-8")
+        from .perms import write_private
+
+        write_private(path, json.dumps({"text": text, "ts": int(time.time())}))
     except OSError:
         pass
 
@@ -658,8 +659,9 @@ def _stop_share_nudge_due(hours: int = 6) -> bool:
     if now - last < hours * 3600:
         return False
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"ts": now}), encoding="utf-8")
+        from .perms import write_private
+
+        write_private(path, json.dumps({"ts": now}))
     except OSError:
         pass
     return True

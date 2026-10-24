@@ -391,9 +391,9 @@ def remember_failure(
         **(extra or {}),
     }
     try:
-        path = last_failure_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(rec) + "\n", encoding="utf-8")
+        from .perms import write_private
+
+        write_private(last_failure_path(), json.dumps(rec) + "\n")
     except OSError:
         pass
     return rec

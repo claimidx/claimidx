@@ -76,16 +76,10 @@ def generate_identity(path: str | os.PathLike[str], *, overwrite: bool = False) 
     private_raw = private.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption())
     public_raw = private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     payload = {"v": "claimidx-key-1", "did": did_from_public_key(public_raw), "private": _b64(private_raw)}
-    target.parent.mkdir(parents=True, exist_ok=True)
-    # Create the key file 0600 from the start (no world-readable window before a chmod).
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0)
-    fd = os.open(target, flags, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        fh.write(json.dumps(payload, indent=2) + "\n")
-    try:
-        target.chmod(0o600)
-    except OSError:
-        pass
+    from .perms import write_private
+
+    # 0600 from the start (temp file created O_EXCL 0600, then an atomic replace), in a 0700 dir.
+    write_private(target, json.dumps(payload, indent=2) + "\n")
     return {"v": payload["v"], "did": payload["did"], "path": str(target)}
 
 

@@ -37,11 +37,13 @@ def load() -> dict[str, Any]:
 
 
 def save(data: dict[str, Any]) -> Path:
+    """Merge into config.json. The dir is 0700 and the file 0600 from creation (temp file + atomic replace)."""
+    from .perms import write_private
+
     path = config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
     current = load()
     current.update({k: v for k, v in data.items() if v is not None})
-    path.write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+    write_private(path, json.dumps(current, indent=2) + "\n")
     return path
 
 

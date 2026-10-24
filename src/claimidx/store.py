@@ -38,10 +38,15 @@ def force_reset_emits(reset: dict) -> bool:
 
 class Store:
     def __init__(self, path: str | os.PathLike[str] | None = None):
+        from .perms import private_file, sqlite_sidecars
+
         self.path = Path(path) if path else DEFAULT_DB
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        # The index holds every local claim, note and event: 0600 before sqlite ever opens it (sqlite gives
+        # -wal/-shm the db file's mode), in a 0700 dir when claimidx creates the dir.
+        private_file(self.path)
         self._fts = False
         self._init()
+        sqlite_sidecars(self.path)
 
     @contextlib.contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:

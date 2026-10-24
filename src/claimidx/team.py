@@ -88,12 +88,7 @@ def auto_identity(*, quiet: bool = False) -> dict | None:
             from .identity import generate_identity
 
             data["key"] = generate_identity(key_path)["did"]
-        saved_path = config.save(data)
-        if scratch:
-            try:
-                os.chmod(saved_path, 0o600)
-            except OSError:
-                pass
+        config.save(data)  # 0600 from creation, scratch or not
         os.environ["CLAIMIDX_OWNER"] = own
         os.environ["CLAIMIDX_AGENT"] = agent
         try:

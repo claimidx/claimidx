@@ -29,9 +29,9 @@ def _load() -> dict:
 
 
 def _save(data: dict) -> None:
-    path = tokens_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    from .perms import write_private
+
+    write_private(tokens_path(), json.dumps(data, indent=2) + "\n")
 
 
 def count() -> int:
