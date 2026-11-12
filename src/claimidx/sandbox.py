@@ -15,6 +15,18 @@ from .fingerprint import runtime_proof_key
 from .policy import _LOCAL_PIP, _norm_head, eval_allowed, split_eval
 
 
+def tree_venv_python(cwd: str | os.PathLike[str] | None) -> str | None:
+    """`<cwd>/.venv` or `<cwd>/venv` only — not `$VIRTUAL_ENV`."""
+    if not cwd:
+        return None
+    root = Path(cwd)
+    for venv in (".venv", "venv"):
+        cand = root / venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        if cand.is_file():
+            return str(cand)
+    return None
+
+
 def project_python(cwd: str | os.PathLike[str] | None) -> str | None:
     """The tree's own interpreter, or the active `$VIRTUAL_ENV`.
 
@@ -25,12 +37,9 @@ def project_python(cwd: str | os.PathLike[str] | None) -> str | None:
     Replaying `python -c "import x"` under the wrong interpreter turns a real
     fix into a false miss.
     """
-    if cwd:
-        root = Path(cwd)
-        for venv in (".venv", "venv"):
-            cand = root / venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-            if cand.is_file():
-                return str(cand)
+    own = tree_venv_python(cwd)
+    if own:
+        return own
     env = (os.environ.get("VIRTUAL_ENV") or "").strip()
     if env:
         cand = Path(env) / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -300,10 +309,14 @@ def replay_records_hold(
             return False, f"hold env mismatch: captured interpreter is gone ({captured})"
         if captured:
             same = bool(used) and same_interpreter(captured, used)
-            if not same and clean_room and used and cwd:
-                used_r = os.path.realpath(used)
-                cwd_r = os.path.realpath(cwd)
-                same = used_r == cwd_r or used_r.startswith(cwd_r + os.sep)
+            if not same and used and cwd:
+                tree = tree_venv_python(cwd)
+                if tree and same_interpreter(used, tree):
+                    same = True
+                elif clean_room:
+                    used_r = os.path.realpath(used)
+                    cwd_r = os.path.realpath(cwd)
+                    same = used_r == cwd_r or used_r.startswith(cwd_r + os.sep)
             if not same:
                 return False, f"hold env mismatch: replay interpreter={used or 'unknown'} captured={captured}"
     if not _eval_needs_env(cmd):

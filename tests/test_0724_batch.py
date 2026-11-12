@@ -692,3 +692,33 @@ def test_non_python_command_does_not_record_an_interpreter(tmp_path: Path):
     assert interpreter_from_command(command=f"{cargo} test", executed=str(cargo)) == ""
     rec = remember_failure("error: nothing to do", command=f"{cargo} test", extra={"interpreter": str(cargo)})
     assert not rec.get("interpreter")
+
+
+def test_replay_prefers_tree_venv_over_captured(tmp_path: Path, monkeypatch):
+    import venv
+
+    from claimidx.env import interpreter_for_replay
+    from claimidx.sandbox import tree_venv_python
+
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    venv.create(tree / ".venv", with_pip=False)
+    tree_py = tree_venv_python(str(tree))
+    assert tree_py
+
+    nopy = tmp_path / "nopy"
+    venv.create(nopy, with_pip=False)
+    captured = nopy / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    store = Store(tmp_path / "ix.sqlite")
+    c = _claim(err="ModuleNotFoundError: No module named 'tomli'", eco="py")
+    store.put(c)
+    store.remember_interpreter(c.id, str(captured), c.own)
+
+    # A tree .venv is the apply/confirm env: do not pin the captured host python.
+    assert interpreter_for_replay(c.id, store, fp=c.fp, cwd=str(tree)) == ""
+    # No tree venv: pin captured even when VIRTUAL_ENV points at another env with extra packages.
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.setenv("VIRTUAL_ENV", str(tmp_path / "other-venv"))
+    assert Path(interpreter_for_replay(c.id, store, fp=c.fp, cwd=str(empty))).resolve() == captured.resolve()
+    assert interpreter_for_replay(c.id, store, fp=c.fp, cwd=str(tree), clean_room=True) == ""

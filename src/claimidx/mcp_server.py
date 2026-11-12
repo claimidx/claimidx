@@ -1297,7 +1297,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             from .gate import confirm_replay, flag_refusal, graduation_gate
 
             trust = eval_trust(store, current, override=bool(args.get("trust_eval")))
-            from .env import captured_interpreter_for
+            from .env import interpreter_for_replay
 
             result, second, flag = confirm_replay(
                 current,
@@ -1305,7 +1305,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                 trust,
                 net=bool(args.get("net")),
                 rerun=bool(args.get("rerun")),
-                interpreter=captured_interpreter_for(current.id, store, fp=current.fp),
+                interpreter=interpreter_for_replay(current.id, store, fp=current.fp, cwd=args.get("cwd")),
             )
             replay_body = result.as_dict()
             if second is not None:

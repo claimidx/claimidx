@@ -483,6 +483,23 @@ def last_failure(max_age_s: int = 6 * 3600) -> dict[str, Any] | None:
     return data
 
 
+def interpreter_for_replay(claim_id: str = "", store=None, *, fp: str = "", cwd: str | None = None, clean_room: bool = False) -> str:
+    """The python to pin for a replay, or empty to let resolve_argv pick the tree venv.
+
+    A clean-room or a tree `.venv` under cwd is the apply/confirm env: do not
+    override it with the captured host python. If there is no tree venv, pin
+    the failing interpreter so `$VIRTUAL_ENV` (e.g. a claimidx install with
+    extra packages) cannot mint a hold the failure env would miss.
+    """
+    if clean_room:
+        return ""
+    from .sandbox import tree_venv_python
+
+    if tree_venv_python(cwd):
+        return ""
+    return captured_interpreter_for(claim_id, store, fp=fp)
+
+
 def captured_interpreter_for(claim_id: str = "", store=None, *, fp: str = "") -> str:
     """The failing interpreter recorded for this claim, or for the last failure if it matches."""
     if store is not None and claim_id:

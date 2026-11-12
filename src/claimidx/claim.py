@@ -596,13 +596,13 @@ def _replay_now(
     c = store.get(claim_id)
     if not c:
         return {"held": False, "recorded": False, "reason": "missing"}
-    from .env import captured_interpreter_for
+    from .env import interpreter_for_replay
 
     result, second, flag = confirm_replay(
         c,
         cwd or None,
         eval_trust(store, c, override=trust_eval),
-        interpreter="" if mode == "clean-room" else captured_interpreter_for(c.id, store, fp=c.fp),
+        interpreter=interpreter_for_replay(c.id, store, fp=c.fp, cwd=cwd or None, clean_room=(mode == "clean-room")),
     )
     info = result.as_dict()
     if second is not None:

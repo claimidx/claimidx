@@ -507,7 +507,7 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
         trust = eval_trust(store, c, override=bool(getattr(ns, "trust_eval", False)))
         if getattr(ns, "trust_eval", False):
             print(f"# --trust-eval: running eval from {c.own} ({c.src}): {c.eval.cmd}", file=sys.stderr)
-        from .env import captured_interpreter_for
+        from .env import interpreter_for_replay
 
         result, second, flag = confirm_replay(
             c,
@@ -515,7 +515,7 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
             trust,
             net=bool(getattr(ns, "net", False)),
             rerun=bool(getattr(ns, "rerun", False)),
-            interpreter=captured_interpreter_for(c.id, store, fp=c.fp),
+            interpreter=interpreter_for_replay(c.id, store, fp=c.fp, cwd=getattr(ns, "cwd", None)),
         )
         replay_info = result.as_dict()
         if second is not None:
