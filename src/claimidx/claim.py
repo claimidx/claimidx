@@ -21,7 +21,7 @@ import sys
 from typing import Any
 
 from .env import infer_env, installed_version, last_failure, tree_eval
-from .fingerprint import classify, fingerprint
+from .fingerprint import classify, fingerprint, normalize_error
 from .public import eval_is_proof, ingest_warnings, refine_eval
 from .target import claim_target, suggest_eval
 
@@ -291,7 +291,8 @@ def draft_claim(
     dep = list(dep or [])
     inferred: dict[str, str] = {}
     if remembered:
-        inferred["err"] = "last failure" + (f" ({remembered.get('command')})" if remembered.get("command") else "")
+        cmd = str(remembered.get("command") or "")
+        inferred["err"] = "last failure" + (f" ({normalize_error(cmd)})" if cmd else "")
     if guess["eco"] and eco == guess["eco"]:
         inferred["eco"] = "tree/err"
     if guess["rt"] and rt == guess["rt"]:
@@ -396,7 +397,7 @@ def draft_claim(
 
 
 def _publish_argv(err: str, fix_k: str, fix_b: str, ev: str, eco: str, rt: str, dep: list[str], note: str) -> str:
-    parts = ["claimidx", "publish", "--err", err, "--fix-k", fix_k, "--fix-b", fix_b or "<fix>", "--eval", ev, "--eco", eco]
+    parts = ["claimidx", "publish", "--err", normalize_error(err) or err, "--fix-k", fix_k, "--fix-b", fix_b or "<fix>", "--eval", ev, "--eco", eco]
     if rt:
         parts += ["--rt", rt]
     for d in dep:

@@ -207,17 +207,32 @@ _TREE_MARKERS = {
 _ENV_HEADS = {"python", "python3", "node"}
 
 
+# Versioned names (python3.11, python3.13.exe, node18) must observe the same way as `python` / `node`.
+# Ask the binary for its version; do not parse the version out of the filename.
+_PY_BASE = re.compile(r"^(?:python(?:\d+(?:\.\d+)*)?|pythonw)$", re.I)
+_NODE_BASE = re.compile(r"^(?:node(?:js)?\d*)$", re.I)
+
+
+def exe_basename(exe: str) -> str:
+    base = os.path.basename(exe or "").lower()
+    if base.endswith(".exe"):
+        base = base[:-4]
+    return base
+
+
 def observe_env(argv: list[str]) -> str:
-    """Executing runtime of a resolved eval argv. Empty if not python/node."""
+    """Executing runtime of a resolved eval argv. Empty if not python/node.
+
+    Recognizes versioned interpreter names (`python3.11`, `python3.13.exe`,
+    `node18`) and asks that binary for its version.
+    """
     if not argv:
         return ""
     exe = argv[0]
-    base = os.path.basename(exe).lower()
-    if base.endswith(".exe"):
-        base = base[:-4]
-    if base in {"python", "python3", "pythonw"}:
+    base = exe_basename(exe)
+    if _PY_BASE.fullmatch(base):
         return _observe_py(exe)
-    if base == "node":
+    if _NODE_BASE.fullmatch(base):
         return _observe_node(exe)
     return ""
 
@@ -276,7 +291,8 @@ def _eval_needs_env(cmd: str) -> bool:
         return False
     if not parts:
         return False
-    return _norm_head(parts[0]) in _ENV_HEADS
+    head = _norm_head(parts[0])
+    return bool(_PY_BASE.fullmatch(head) or _NODE_BASE.fullmatch(head) or head in _ENV_HEADS)
 
 
 def replay_records_hold(

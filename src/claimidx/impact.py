@@ -554,19 +554,23 @@ def lifecycle_funnel(store: Store, *, days: int = 30) -> dict[str, Any]:
     """DID lifecycle funnel from the local event log (no network, no PII beyond DID).
 
     Stages: install -> init -> ask -> sync -> confirm -> publish -> share.
-    `countable` excludes seed/anon so Growth can see stranger drop-off before a commons share.
+    `countable` uses the same house/falsifier/operator exclude list as the commons proxy,
+    so Growth sees stranger drop-off, not weak or in-house actors.
     """
     since = datetime.now(UTC) - timedelta(days=days)
     rows = _rows(store, since)
     stages: dict[str, dict[str, Any]] = {s: {"events": 0, "actors": 0, "actor_ids": []} for s in _LIFECYCLE_ORDER}
     actors_by: dict[str, set[str]] = {s: set() for s in _LIFECYCLE_ORDER}
+    house = _proxy_excluded()
     for r in rows:
         stage = _LIFECYCLE_KINDS.get(r["kind"])
         if not stage:
             continue
         stages[stage]["events"] += 1
         actor = r["actor"]
-        if actor and actor not in _FUNNEL_EXCLUDED:
+        # Same house/falsifier/operator drop as the commons proxy, so local
+        # lifecycle countable matches proxy.countable_ids.
+        if actor and not _proxy_is_excluded(actor, house):
             actors_by[stage].add(actor)
     for stage, actors in actors_by.items():
         ordered = sorted(actors)

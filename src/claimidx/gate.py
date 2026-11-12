@@ -310,6 +310,15 @@ def graduation_gate(
     )
     if not ok:
         return GateDecision(False, why, suggest=_env_suggestion(claim, result, why))
+    tree_note: list[str] = []
+    if captured and cwd:
+        from .env import same_interpreter
+        from .sandbox import tree_venv_python
+
+        used = (result.interpreter or "").strip()
+        tree = tree_venv_python(cwd)
+        if used and tree and same_interpreter(used, tree) and not same_interpreter(captured, used):
+            tree_note.append("replay used the tree .venv, not the captured interpreter; that is the apply/confirm env")
     why_v = vacuous_reason((result.stdout or "") + "\n" + (result.stderr or ""))
     if why_v:
         return GateDecision(False, why_v)
@@ -327,7 +336,7 @@ def graduation_gate(
             if suggest
             else {"hint": f"use an eval that imports or exercises {target}"},
         )
-    warns: list[str] = []
+    warns: list[str] = list(tree_note)
     proof = store.proof_for(claim.id) if store is not None else None
     if is_tree_scoped(claim.eval.cmd):
         cwd = cwd or os.getcwd()  # the replay ran there; bind to the same place

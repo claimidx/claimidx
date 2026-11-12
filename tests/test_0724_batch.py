@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
+
+import pytest
 
 from claimidx.apply import host_rt_mismatch, plan
 from claimidx.claim import draft_claim, render_draft
@@ -678,7 +681,9 @@ def test_render_draft_redacts_venv_path():
     assert "venv-py313" not in err_line
     assert "workspace" not in err_line
     assert "<PATH>" in err_line
-    # the publish argv may still carry the raw err (ingest normalizes)
+    pub = [ln for ln in text.splitlines() if "publish with:" in ln][0]
+    assert "venv-py313" not in pub
+    assert "workspace" not in pub
 
 
 def test_non_python_command_does_not_record_an_interpreter(tmp_path: Path):
@@ -722,3 +727,146 @@ def test_replay_prefers_tree_venv_over_captured(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("VIRTUAL_ENV", str(tmp_path / "other-venv"))
     assert Path(interpreter_for_replay(c.id, store, fp=c.fp, cwd=str(empty))).resolve() == captured.resolve()
     assert interpreter_for_replay(c.id, store, fp=c.fp, cwd=str(tree), clean_room=True) == ""
+
+
+def test_observe_env_versioned_interpreter_names(tmp_path: Path):
+    from claimidx.sandbox import _NODE_BASE, _PY_BASE, exe_basename, observe_env
+
+    assert _PY_BASE.fullmatch("python")
+    assert _PY_BASE.fullmatch("python3")
+    assert _PY_BASE.fullmatch("pythonw")
+    assert _PY_BASE.fullmatch("python3.11")
+    assert _PY_BASE.fullmatch("python3.13")
+    assert _PY_BASE.fullmatch("python3.13.5")
+    assert exe_basename("python3.11.exe") == "python3.11"
+    assert exe_basename("/usr/bin/python3.13") == "python3.13"
+    assert not _PY_BASE.fullmatch("python-config")
+    assert _NODE_BASE.fullmatch("node")
+    assert _NODE_BASE.fullmatch("nodejs")
+    assert _NODE_BASE.fullmatch("node18")
+    assert not _NODE_BASE.fullmatch("npm")
+
+    expected = f"py@{sys.version_info.major}.{sys.version_info.minor}"
+    assert observe_env([sys.executable, "-c", "pass"]) == expected
+    named = tmp_path / f"python{sys.version_info.major}.{sys.version_info.minor}"
+    if os.name == "nt":
+        named = tmp_path / f"python{sys.version_info.major}.{sys.version_info.minor}.exe"
+        import shutil
+
+        shutil.copy(sys.executable, named)
+    else:
+        named.symlink_to(sys.executable)
+    assert observe_env([str(named), "-c", "pass"]) == expected
+    # The regression: a versioned realpath used to return empty.
+    assert observe_env([str(named), "-c", "pass"]) != ""
+
+
+def test_drafted_and_publish_argv_redact_venv_path(tmp_path: Path):
+    from claimidx.env import remember_failure
+
+    raw_cmd = "/workspace/firstrun-audit-0.7.22-20261112/venv-py313/bin/python -m pytest -q"
+    remember_failure(
+        "/workspace/firstrun-audit-0.7.22-20261112/venv-py313/bin/python: No module named pytest",
+        command=raw_cmd,
+        cwd=str(tmp_path),
+        eco="py",
+        rt=_py_rt(),
+        extra={"interpreter": sys.executable},
+    )
+    draft = draft_claim(cwd=str(tmp_path), use_diff=False, eval_cmd='python -c "import pytest"')
+    text = render_draft(draft)
+    drafted = [ln for ln in text.splitlines() if ln.startswith("drafted ")]
+    pub = [ln for ln in text.splitlines() if "publish with:" in ln]
+    blob = "\n".join(drafted + pub)
+    assert "venv-py313" not in blob
+    assert "workspace" not in blob or "<PATH>" in blob
+    assert "<PATH>" in blob
+
+
+def test_lifecycle_funnel_drops_house_and_falsifier_actors(tmp_path: Path):
+    from claimidx.impact import lifecycle_funnel
+
+    store = Store(tmp_path / "ix.sqlite")
+    stranger = "did:claimidx:agent-aabbcc"
+    weak = "did:claimidx:falsifier-0724b-py311-weak"
+    other = "did:claimidx:falsifier-0724b-py311-other"
+    store.log("commons-push", stranger, "cix_0000000000000001", {})
+    store.log("commons-push", weak, "cix_0000000000000002", {})
+    store.log("commons-push", other, "cix_0000000000000003", {})
+    life = lifecycle_funnel(store, days=30)
+    ids = life["countable_actor_ids"]
+    assert stranger in ids
+    assert weak not in ids
+    assert other not in ids
+    assert life["countable_actors"] == 1
+
+
+@pytest.mark.skipif(sys.platform == "win32" or not shutil.which("bwrap"), reason="needs bwrap")
+def test_fail_fix_claim_share_mints_nr_with_versioned_interpreter(tmp_path: Path, capsys, monkeypatch):
+    """Canonical Path B: fail, fix, claim --yes --share-yes must mint nr=1 with a versioned python path."""
+    from claimidx import home
+    from claimidx.env import last_failure
+    from claimidx.sandbox import observe_env
+
+    monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
+    monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
+    calls: list = []
+
+    def fake_post(url, payload, token="", timeout=20.0):
+        calls.append((url, payload))
+        return {"exists": False, "claim": {"id": payload.get("id")}}
+
+    monkeypatch.setattr(home, "_post", fake_post)
+
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    versioned = tmp_path / f"python{sys.version_info.major}.{sys.version_info.minor}"
+    versioned.symlink_to(sys.executable)
+    assert observe_env([str(versioned), "-c", "pass"]).startswith("py@")
+
+    db = str(tmp_path / "ix.sqlite")
+    rc = main(["--db", db, "run", "--cwd", str(tree), "--", str(versioned), "-c", "import cix_happy_0724"])
+    assert rc != 0
+    rec = last_failure()
+    assert rec and rec.get("interpreter")
+    (tree / "cix_happy_0724.py").write_text("ok = True\n", encoding="utf-8")
+    capsys.readouterr()
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "json",
+                "claim",
+                "--yes",
+                "--share-yes",
+                "--no-diff",
+                "--cwd",
+                str(tree),
+                "--fix",
+                "add cix_happy_0724",
+                "--eval",
+                'python -c "import cix_happy_0724"',
+            ]
+        )
+        == 0
+    )
+    captured = capsys.readouterr()
+    out = json.loads(captured.out)
+    assert out["ok"] and out.get("id")
+    store = Store(db)
+    c = store.get(out["id"])
+    assert c is not None
+    assert c.eco == "py"
+    assert int(c.nr or 0) >= 1
+    replay = out.get("replay") or {}
+    inner = replay.get("replay") if isinstance(replay.get("replay"), dict) else {}
+    env = replay.get("env") or (inner or {}).get("env") or ""
+    if isinstance(env, dict):
+        env = env.get("rt") or ""
+    assert str(env).startswith("py@"), replay
+    assert "hold requires observed env" not in json.dumps({"replay": replay, "err": captured.err})
+    cta = out.get("path_b") or {}
+    assert cta.get("countable") is True
+    assert any(u.endswith("/api/publish") for u, _ in calls)
