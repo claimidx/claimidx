@@ -133,14 +133,15 @@ def test_pulled_claim_with_wide_eval_is_skipped_not_run(tmp_path: Path, capsys):
     marker = tmp_path / "pwned.txt"
     cmd = f"python -c \"import pathlib; pathlib.Path({str(marker)!r}).write_text('x')\""
     c = _put_pulled(Store(db), cmd)
-    rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", c.id])
+    # --cwd is the bwrap work bind; without it, tmp_path under /tmp is hidden by --tmpfs /tmp.
+    rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", "--cwd", str(tmp_path), c.id])
     out = json.loads(capsys.readouterr().out)
     assert rc == 2
     assert out["recorded"] is False and out["reason"].startswith("eval-untrusted")
     assert "--trust-eval" in out["suggest"]["hint"]
     assert not marker.exists()
     # Deliberate override runs it and says so.
-    rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", "--trust-eval", c.id])
+    rc = main(["--db", db, "--fmt", "json", "confirm", "--replay", "--trust-eval", "--cwd", str(tmp_path), c.id])
     captured = capsys.readouterr()
     assert "--trust-eval: running eval from did:claimidx:someone-else" in captured.err
     assert marker.exists()
@@ -183,7 +184,7 @@ def test_locally_published_claim_keeps_the_wide_policy(tmp_path: Path, capsys):
         == 0
     )
     cid = capsys.readouterr().out.strip()
-    assert main(["--db", db, "--fmt", "json", "confirm", "--replay", cid]) == 0
+    assert main(["--db", db, "--fmt", "json", "confirm", "--replay", "--cwd", str(tmp_path), cid]) == 0
     assert marker.exists()
 
 

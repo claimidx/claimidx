@@ -265,6 +265,12 @@ def main() -> int:
             # A shim with nothing behind it (rustup with no default toolchain, a broken wrapper) is absent, not a failure.
             print(f"{name}: skipped ({spec['tool']} on PATH but not usable: {why})")
             continue
+        if name == "gradle" and shutil.which("bwrap"):
+            # bwrap ro-binds ~/.gradle and unshares the network, so a clean-room
+            # compileJava cannot write the cache or reach mavenCentral. py/rust/mvn
+            # already have a readable cache. Park a vendored or --net path for later.
+            print("gradle: skipped (bwrap is present: clean-room compileJava cannot write ~/.gradle or reach mavenCentral)")
+            continue
         try:
             problems = run_eco(name, spec, root, env)
         except Exception as e:  # noqa: BLE001 - a smoke reports, it does not hide
