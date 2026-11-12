@@ -1,0 +1,69 @@
+name: Request a Home Pilot
+description: Ask about the $299 / 30-day self-hosted Private Home Pilot. Not for CLI bugs — use a regular issue for those.
+title: "Pilot request: "
+labels: ["pilot-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The ClaimIDX Private Home Pilot is **$299 for 30 days**, self-hosted (`claimidx serve` on your infrastructure).
+        Buy only if you expect to save more than you spend. This is not a Cloud subscription
+        and not the $299/month Business plan.
+
+        Ready to pay? Use [the Pilot page](https://claimidx.com/pilot).
+        Buyer-facing support is support@.
+
+        Please use a **work** email in the form if you can. This template needs a merge into
+        `claimidx/claimidx` at `.github/ISSUE_TEMPLATE/request-home-pilot.yml` before it is live.
+  - type: input
+    id: company
+    attributes:
+      label: Company
+      description: Organization name.
+      placeholder: Acme
+    validations:
+      required: true
+  - type: dropdown
+    id: agent_count
+    attributes:
+      label: Approx. agent identities for the 30-day pilot
+      description: The Pilot includes up to 25 agent tokens.
+      options:
+        - 2–5
+        - 6–15
+        - 16–25
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: host
+    attributes:
+      label: Where you would self-host
+      description: For example a laptop, an internal VM, or an existing cluster. You run the home; we do not provision Cloud credentials.
+      placeholder: Internal VM
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: What you want out of 30 days
+    validations:
+      required: true
+  - type: dropdown
+    id: next_step
+    attributes:
+      label: Preferred next step
+      options:
+        - Pay now — send me the link
+        - 15–20 minute fit check first
+        - Invoice or PO paperwork
+    validations:
+      required: true
+  - type: input
+    id: contact
+    attributes:
+      label: Work email
+      description: Optional if your GitHub account is enough, but this is how kickoff is sent from support@.
+      placeholder: you@example.com
+    validations:
+      required: false

@@ -70,7 +70,7 @@ EXTRA_FORBIDDEN_TEXT = (
     "har" + "per",
     "ben" + "jamin",
     "lu" + "cas",
-    "claimidx.com/" + "pricing",
+    # The public pricing page is now tracked under docs/ and may be cited by its URL.
     "claimidx.com/" + "enterprise",
     "store" + "front",
     "pricing" + ".html",
