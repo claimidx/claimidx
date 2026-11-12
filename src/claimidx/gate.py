@@ -114,6 +114,20 @@ def unenforced_reason(result: ReplayResult) -> str:
     return f"{UNENFORCED_PREFIX}: offline replay is not enforced on this host (net_how={how}); install bwrap or pass --net"
 
 
+def net_is_unenforced(result: ReplayResult) -> bool:
+    """True when default replay could not keep the process tree offline.
+
+    The interpreter hook (Python/Node sitecustomize or NODE_OPTIONS) is
+    best-effort only: a child can still open the network. It is not a hold.
+    `--net` (net=open) is the explicit exception.
+    """
+    if (result.net or "") == "open":
+        return False
+    if (result.net or "") == "unenforced":
+        return True
+    return (result.net_how or "") == "interpreter"
+
+
 def net_open_detail(result: ReplayResult, base: dict | None = None) -> dict:
     """Confirm detail for a --net hold: net mode on the record, never an nr."""
     detail = dict(base or {})
@@ -273,9 +287,10 @@ def graduation_gate(
     this gate only sees holds that ran. `store` is needed for the binding and
     digest checks (they live on the v2 Proof); without it those are skipped.
     """
-    if (result.net or "") == "unenforced":
-        # Default replay asked for offline and this host could not enforce it (no bwrap): the run may have
-        # used the network. Refuse loudly; record nothing. `--net` is the explicit way to allow the network.
+    if net_is_unenforced(result):
+        # Default replay asked for offline and this host could not enforce it (no bwrap, including
+        # the best-effort interpreter hook): the run may have used the network. Refuse loudly;
+        # record nothing. `--net` is the explicit way to allow the network.
         return GateDecision(
             False,
             unenforced_reason(result),
@@ -398,7 +413,7 @@ def unenforced_miss_refusal(result: ReplayResult) -> dict | None:
     Without bwrap the eval may have reached the network, so its outcome is not evidence either way:
     no `fail`, no nf. `--net` (net=open) is the explicit way to run and record with the network.
     """
-    if result.held or not result.ran or (result.net or "") != "unenforced":
+    if result.held or not result.ran or not net_is_unenforced(result):
         return None
     return {
         "reason": unenforced_reason(result),

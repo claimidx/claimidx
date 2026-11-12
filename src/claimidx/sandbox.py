@@ -490,11 +490,14 @@ def _apply_offline(env: dict[str, str], parts: list[str], argv: list[str], *, ne
         return argv, "unenforced", "docker"
     if os.name != "nt" and shutil.which("bwrap"):
         return _bwrap_argv(argv, cwd), "offline", "bwrap"
+    # No bwrap: the interpreter hook is best-effort only (a child process can
+    # still open the network). Label the run unenforced so the gate refuses to
+    # mint nr or record a hold. The hook is still applied as a partial block.
     if head in {"python", "python3", "pytest"} and not _py_isolation(parts):
         root = _offline_dir()
         prev = env.get("PYTHONPATH", "")
         env["PYTHONPATH"] = root + (os.pathsep + prev if prev else "")
-        return argv, "offline", "interpreter"
+        return argv, "unenforced", "interpreter"
     if head in {"python", "python3"} and _py_isolation(parts):
         return argv, "unenforced", "python-flags"
     if head in {"node", "npm", "npx"}:
@@ -503,7 +506,7 @@ def _apply_offline(env: dict[str, str], parts: list[str], argv: list[str], *, ne
         existing = env.get("NODE_OPTIONS", "")
         if "block_net.js" not in existing:
             env["NODE_OPTIONS"] = (flag + " " + existing).strip()
-        return argv, "offline", "interpreter"
+        return argv, "unenforced", "interpreter"
     if head == "cargo":
         env["CARGO_NET_OFFLINE"] = "true"
         return argv, "unenforced", "cargo-net-offline"
