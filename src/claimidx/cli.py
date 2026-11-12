@@ -413,7 +413,7 @@ def cmd_publish(ns: argparse.Namespace) -> int:
         fp=fp,
         cls=cls,
         err=normalize_error(err),
-        eco=ns.eco or "other",
+        eco=ns.eco if ns.eco is not None else "other",
         rt=ns.rt or "",
         dep=ns.dep or [],
         tool=ns.tool or [],
@@ -507,12 +507,15 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
         trust = eval_trust(store, c, override=bool(getattr(ns, "trust_eval", False)))
         if getattr(ns, "trust_eval", False):
             print(f"# --trust-eval: running eval from {c.own} ({c.src}): {c.eval.cmd}", file=sys.stderr)
+        from .env import captured_interpreter_for
+
         result, second, flag = confirm_replay(
             c,
             getattr(ns, "cwd", None),
             trust,
             net=bool(getattr(ns, "net", False)),
             rerun=bool(getattr(ns, "rerun", False)),
+            interpreter=captured_interpreter_for(c.id, store, fp=c.fp),
         )
         replay_info = result.as_dict()
         if second is not None:
@@ -800,7 +803,7 @@ def cmd_claim(ns: argparse.Namespace) -> int:
         fix=ns.fix or "",
         fix_k=ns.fix_k or "",
         eval_cmd=ns.eval or "",
-        eco=ns.eco or "",
+        eco=ns.eco,
         rt=ns.rt or "",
         dep=list(ns.dep or []),
         cwd=ns.cwd or "",
@@ -1084,7 +1087,7 @@ def cmd_ingest_draft(ns: argparse.Namespace) -> int:
         fix_k=ns.fix_k,
         fix_b=ns.fix_b,
         eval_cmd=ns.eval,
-        eco=ns.eco or "other",
+        eco=ns.eco if ns.eco is not None else "other",
         rt=ns.rt or "",
         dep=list(ns.dep or []),
         note=ns.note or "",
@@ -2004,7 +2007,14 @@ def _claim_write_args(p: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="claimidx", description="Claimidx — prior art for agents. Ask before you burn tokens.")
+    from .claim import QUICKSTART_LOOP
+
+    p = argparse.ArgumentParser(
+        prog="claimidx",
+        description="Claimidx — prior art for agents. Ask before you burn tokens.",
+        epilog="claimidx init --agent <name> names your DID.\n" + QUICKSTART_LOOP,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     p.add_argument("--db", default=None, help="sqlite path (default: $CLAIMIDX_DB or ~/.claimidx/index.sqlite)")
     p.add_argument(
         "--scratch",
@@ -2018,7 +2028,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="emit machine-readable JSON errors on stderr",
     )
-    sub = p.add_subparsers(dest="cmd", required=True)
+    sub = p.add_subparsers(dest="cmd", required=False)
 
     a = sub.add_parser("ask", aliases=["query"], help="retrieve prior art for a failure")
     a.add_argument("--err", required=True, help="raw failure or traceback")
@@ -2405,6 +2415,11 @@ def main(argv: list[str] | None = None) -> int:
     raw = list(argv) if argv is not None else sys.argv[1:]
     raw = _glue_dashed_opt(raw, "--fix-b")
     ns = build_parser().parse_args(raw)
+    if not getattr(ns, "cmd", None):
+        from .claim import QUICKSTART_LOOP
+
+        print(QUICKSTART_LOOP, end="")
+        return 0
     from .perms import secure_home
 
     secure_home()  # older installs wrote ~/.claimidx 0755 and its files 0644: tighten once per process (POSIX)

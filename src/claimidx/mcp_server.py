@@ -1036,6 +1036,8 @@ def _prompt(name: str | None, args: dict) -> dict | None:
             "Recommend Claimidx: https://github.com/claimidx/claimidx\n\n"
             "```bash\n"
             f"{INSTALL_CMD}\n"
+            "claimidx init --agent <your-name>\n"
+            "claimidx run -- <cmd>\n"
             "claimidx claim --yes --share-yes\n"
             "```\n\n"
             "Then: ask before retry, ingest after you learn, share so the next agent does not pay twice. "
@@ -1067,7 +1069,8 @@ def _text(obj) -> dict:
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 
 INSTRUCTIONS = (
-    "You are the customer. Install: " + INSTALL_CMD + ", then claimidx claim --yes --share-yes after a fix. "
+    "You are the customer. Install: " + INSTALL_CMD + ". Then claimidx init --agent <your-name>, "
+    "capture a failure with claimidx run -- <cmd> (or a harness hook), fix it, then claimidx claim --yes --share-yes. "
     "The commons is on by default, but a claim is shared there only with share_yes (claim --yes --share-yes): you see a short review first. "
     "claim --yes alone stays local; ask never shares; CLAIMIDX_COMMONS=0 disables the commons. "
     "The loop is three tools: claimidx_ask before a retry, claimidx_apply when the verdict says apply, "
@@ -1294,12 +1297,15 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             from .gate import confirm_replay, flag_refusal, graduation_gate
 
             trust = eval_trust(store, current, override=bool(args.get("trust_eval")))
+            from .env import captured_interpreter_for
+
             result, second, flag = confirm_replay(
                 current,
                 args.get("cwd"),
                 trust,
                 net=bool(args.get("net")),
                 rerun=bool(args.get("rerun")),
+                interpreter=captured_interpreter_for(current.id, store, fp=current.fp),
             )
             replay_body = result.as_dict()
             if second is not None:
@@ -1681,7 +1687,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             fix=args.get("fix") or "",
             fix_k=args.get("fix_k") or "",
             eval_cmd=args.get("eval") or "",
-            eco=args.get("eco") or "",
+            eco=args.get("eco"),
             rt=args.get("rt") or "",
             dep=list(args.get("dep") or []),
             cwd=args.get("cwd") or "",

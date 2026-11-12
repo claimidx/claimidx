@@ -461,7 +461,8 @@ def format_commons_review(claim: Claim, replay: dict | None = None) -> str:
         warn = (
             "# WARN this claim is weak and will not be countable on the commons: "
             + "; ".join(weak)
-            + ". Share only if you mean to; a countable claim needs a held replay (nr) and an ecosystem.\n"
+            + ". eco=other or empty is always weak, even with a held replay (nr). "
+            "Share only if you mean to; a countable claim needs a held replay (nr>=1) and a real ecosystem.\n"
         )
     return (
         f"# commons review — destination=commons\n"

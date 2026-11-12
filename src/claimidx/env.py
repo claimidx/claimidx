@@ -29,7 +29,7 @@ _ECO_MARKERS: list[tuple[str, tuple[str, ...]]] = [
 ]
 _ECO_BY_ERR = {
     "npm": ("npm err", "cannot find module '", "node_modules", "eresolve", "typeerror: cannot read propert"),  # node quotes the module
-    "py": ("traceback (most recent call last)", "modulenotfounderror", "importerror", "pip "),
+    "py": ("traceback (most recent call last)", "modulenotfounderror", "no module named", "importerror", "pip "),
     "go": ("go: ", "go.mod", "undefined:", "no required module provides package", "cannot find package"),
     "rust": ("cargo", "error[e", "unresolved import", "can't find crate", "undeclared crate", "cannot find module or crate", "cannot find crate"),
     "java": ("error: package ", "could not find artifact", "failed to execute goal", "could not resolve dependencies", "required by:", "gradle", "maven"),
@@ -369,6 +369,66 @@ def last_failure_path() -> Path:
     return config_path().parent / "last_failure.json"
 
 
+_PY_EXE = re.compile(r"(?i)(?:^|[/\\])(?:python(?:\d+(?:\.\d+)*)?|pythonw)(?:\.exe)?$")
+
+
+def _real_exe(path: str) -> str:
+    raw = (path or "").strip()
+    if not raw:
+        return ""
+    try:
+        if os.path.isfile(raw):
+            return os.path.realpath(raw)
+    except OSError:
+        return ""
+    return ""
+
+
+def same_interpreter(a: str, b: str) -> bool:
+    """True when two python executables are the same binary or the same venv bin/."""
+    ra, rb = _real_exe(a), _real_exe(b)
+    if not ra or not rb:
+        return False
+    if ra == rb:
+        return True
+    da, db = os.path.dirname(ra), os.path.dirname(rb)
+    return bool(da and da == db and _PY_EXE.search(ra) and _PY_EXE.search(rb))
+
+
+def interpreter_from_command(command: str = "", argv: list[str] | None = None, executed: str = "", cwd: str = "") -> str:
+    """Absolute python that produced the failure, if the command names one."""
+    got = _real_exe(executed)
+    if got:
+        return got
+    tokens = list(argv) if argv else []
+    if not tokens and command:
+        import shlex
+
+        try:
+            tokens = shlex.split(command, posix=os.name != "nt")
+        except ValueError:
+            tokens = command.split()
+    if not tokens:
+        return ""
+    head = tokens[0]
+    root = cwd or os.getcwd()
+    cand = head if os.path.isabs(head) else os.path.abspath(os.path.join(root, head))
+    if _PY_EXE.search(head) and os.path.dirname(head):
+        return _real_exe(cand)
+    if _PY_EXE.search(os.path.basename(head)) and not os.path.dirname(head):
+        found = shutil.which(head)
+        return _real_exe(found or "")
+    return ""
+
+
+def interpreter_from_error(err: str) -> str:
+    """`/path/to/python: No module named pytest` names the failing interpreter."""
+    m = re.match(r"^(.+?):\s*No module named\b", err or "", re.I)
+    if not m:
+        return ""
+    return _real_exe(m.group(1).strip().strip("'\""))
+
+
 def remember_failure(
     err: str, *, command: str = "", cwd: str = "", eco: str = "", rt: str = "", event: str = "", fp: str = "", extra: dict[str, Any] | None = None
 ) -> dict[str, Any]:
@@ -390,6 +450,8 @@ def remember_failure(
         "ts": int(time.time()),
         **(extra or {}),
     }
+    if not rec.get("interpreter"):
+        rec["interpreter"] = interpreter_from_command(command, cwd=rec["cwd"]) or interpreter_from_error(rec["err"])
     try:
         from .perms import write_private
 
@@ -409,6 +471,18 @@ def last_failure(max_age_s: int = 6 * 3600) -> dict[str, Any] | None:
     if max_age_s and int(time.time()) - int(data.get("ts") or 0) > max_age_s:
         return None
     return data
+
+
+def captured_interpreter_for(claim_id: str = "", store=None, *, fp: str = "") -> str:
+    """The failing interpreter recorded for this claim, or for the last failure if it matches."""
+    if store is not None and claim_id:
+        got = store.captured_interpreter(claim_id)
+        if got:
+            return got
+    rec = last_failure() or {}
+    if rec.get("interpreter") and (not fp or rec.get("fp") == fp or not rec.get("fp")):
+        return str(rec.get("interpreter") or "")
+    return ""
 
 
 def forget_failure() -> None:

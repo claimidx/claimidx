@@ -266,7 +266,7 @@ def ingest(
         fp=fp,
         cls=cls,
         err=normalize_error(err),
-        eco=eco or "other",
+        eco=eco or "",
         rt=rt or "",
         dep=dep,
         tried=tried or [],

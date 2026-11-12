@@ -1249,6 +1249,29 @@ class Store:
             out.append(row)
         return out
 
+    def remember_interpreter(self, claim_id: str, interpreter: str, actor: str = "") -> None:
+        """Local-only: the python/node that produced this claim's failure. Never projected."""
+        path = (interpreter or "").strip()
+        if not claim_id or not path:
+            return
+        self.log("capture-env", actor or "did:claimidx:anon", claim_id, {"interpreter": path})
+
+    def captured_interpreter(self, claim_id: str) -> str:
+        if not claim_id:
+            return ""
+        with self._conn() as con:
+            row = con.execute(
+                "SELECT detail FROM events WHERE claim_id=? AND kind='capture-env' ORDER BY id DESC LIMIT 1",
+                (claim_id,),
+            ).fetchone()
+        if not row or not row["detail"]:
+            return ""
+        try:
+            detail = json.loads(row["detail"])
+        except json.JSONDecodeError:
+            return ""
+        return str((detail or {}).get("interpreter") or "").strip()
+
     def all_events(self) -> list[dict]:
         """Every audit row, oldest first, `detail` as the raw blob (or None). For impact-style scans."""
         with self._conn() as con:

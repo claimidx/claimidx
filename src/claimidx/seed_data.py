@@ -40,7 +40,7 @@ _SEEDS: list[dict] = [
         "dep": ["pydantic@2.9.0"],
         "tried": ["pip-install-pydantic"],
         "fix": ("pin", "pydantic>=2.7,<3"),
-        "eval": "python -c 'import pydantic'",
+        "eval": "python -c 'import pydantic_core'",
     },
     {
         "id": "spr_a11c000000000005",

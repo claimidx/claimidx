@@ -54,7 +54,7 @@ def stash_draft(
         "fix_k": fix_k,
         "fix_b": fix_b,
         "eval": eval_cmd or "true",
-        "eco": eco or "other",
+        "eco": eco or "",
         "rt": rt or "",
         "dep": dep,
         "note": note or "",

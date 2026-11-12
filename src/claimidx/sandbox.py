@@ -125,6 +125,7 @@ class ReplayResult:
     ms: int = 0
     net: str = ""  # offline | open | unenforced
     net_how: str = ""  # bwrap | interpreter | docker | python-flags | cargo-net-offline | head
+    interpreter: str = ""  # resolved python/node used to run a python/node eval
 
     def as_dict(self) -> dict:
         return {
@@ -140,6 +141,7 @@ class ReplayResult:
             "ms": int(self.ms or 0),
             "net": self.net,
             "net_how": self.net_how,
+            "interpreter": self.interpreter,
         }
 
     def is_hint(self) -> bool:
@@ -268,15 +270,39 @@ def _eval_needs_env(cmd: str) -> bool:
     return _norm_head(parts[0]) in _ENV_HEADS
 
 
-def replay_records_hold(claim_rt: str, result: ReplayResult, cmd: str = "") -> tuple[bool, str]:
+def replay_records_hold(
+    claim_rt: str,
+    result: ReplayResult,
+    cmd: str = "",
+    *,
+    captured_interpreter: str = "",
+    cwd: str = "",
+    clean_room: bool = False,
+) -> tuple[bool, str]:
     """Whether a held replay may mint nr.
 
     Python/node evals observe the executing interpreter. That env is
     required: claim.rt must be set and match at runtime_proof_key grain.
-    Other heads keep prior confirm-replay behavior.
+    If a failing interpreter was recorded at capture time, the replay must
+    use that same binary (or the same venv); otherwise this is a hold-env
+    mismatch and nothing is minted. Other heads keep prior confirm-replay behavior.
     """
     if result.is_hint() or not result.held:
         return False, result.reason
+    captured = (captured_interpreter or "").strip()
+    if captured:
+        from .env import _real_exe, same_interpreter
+
+        used = (result.interpreter or "").strip()
+        if not _real_exe(captured):
+            return False, f"hold env mismatch: captured interpreter is gone ({captured})"
+        same = bool(used) and same_interpreter(captured, used)
+        if not same and clean_room and used and cwd:
+            used_r = os.path.realpath(used)
+            cwd_r = os.path.realpath(cwd)
+            same = used_r == cwd_r or used_r.startswith(cwd_r + os.sep)
+        if not same:
+            return False, f"hold env mismatch: replay interpreter={used or 'unknown'} captured={captured}"
     if not _eval_needs_env(cmd):
         return True, "held"
     observed = (result.env or "").strip()
@@ -659,10 +685,21 @@ def network_blocked(result: ReplayResult) -> bool:
     return any(sig in blob for sig in _BLOCK_SIGNALS)
 
 
-def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = None, *, trust: str = "local", net: bool = False) -> ReplayResult:
+def replay(
+    cmd: str,
+    expect: int = 0,
+    timeout: float = 45.0,
+    cwd: str | None = None,
+    *,
+    trust: str = "local",
+    net: bool = False,
+    interpreter: str = "",
+) -> ReplayResult:
     """Run eval.cmd. `trust="untrusted"` (a pulled or seed claim) only runs the portable proof grammar.
 
     Default is offline. `net=True` leaves the network open and records net=open; it does not mint nr.
+    `interpreter`, when it exists, pins `CLAIMIDX_PYTHON` so the eval runs in the same
+    python that produced the failure.
     """
     if not (cmd or "").strip():
         return ReplayResult(True, False, None, expect, False, "builtin")
@@ -690,8 +727,23 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
     missing = _precondition(_norm_head(parts[0]), cwd, cmd)
     if missing:
         return ReplayResult(True, False, None, expect, False, missing)
-    argv = resolve_argv(parts, cwd)
+    pinned = (interpreter or "").strip()
+    token = None
+    if pinned and os.path.isfile(pinned):
+        token = os.environ.get("CLAIMIDX_PYTHON")
+        os.environ["CLAIMIDX_PYTHON"] = pinned
+    try:
+        argv = resolve_argv(parts, cwd)
+    finally:
+        if pinned and os.path.isfile(pinned):
+            if token is None:
+                os.environ.pop("CLAIMIDX_PYTHON", None)
+            else:
+                os.environ["CLAIMIDX_PYTHON"] = token
     observed = observe_env(argv)
+    used = ""
+    if argv and _norm_head(argv[0]) in _ENV_HEADS or (argv and os.path.basename(argv[0]).lower().startswith("python")):
+        used = argv[0]
     env = os.environ.copy()
     env.update(extra_env)
     argv, net_state, net_how = _apply_offline(env, parts, argv, net_open=bool(net), cwd=cwd)
@@ -702,10 +754,10 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
         proc = _run_captured(argv, timeout, cwd, env)
     except subprocess.TimeoutExpired:
         ms = int((time.monotonic() - t0) * 1000)
-        return ReplayResult(True, True, 124, expect, False, "timeout", env=observed, ms=ms, net=net_state, net_how=net_how)
+        return ReplayResult(True, True, 124, expect, False, "timeout", env=observed, ms=ms, net=net_state, net_how=net_how, interpreter=used)
     except OSError as e:
         ms = int((time.monotonic() - t0) * 1000)
-        return ReplayResult(True, False, None, expect, False, f"exec-error:{e}", env=observed, ms=ms, net=net_state, net_how=net_how)
+        return ReplayResult(True, False, None, expect, False, f"exec-error:{e}", env=observed, ms=ms, net=net_state, net_how=net_how, interpreter=used)
     held = proc.returncode == expect
     ms = int((time.monotonic() - t0) * 1000)
     return ReplayResult(
@@ -721,4 +773,5 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
         ms,
         net_state,
         net_how,
+        interpreter=used,
     )

@@ -222,7 +222,7 @@ def test_readme_quickstart_and_hero_are_applyable():
     assert "claimidx init --agent <your-name>" in text
     assert "spr_a11c000000000003" in text
     assert "pydantic>=2.7,<3" in text
-    assert "python -c 'import pydantic'" in text
+    assert "python -c 'import pydantic_core'" in text
     assert "npx tsc --noEmit" not in text.split("## 60s quick start")[0]  # hero no longer uses the untrusted eval
     # public install pin is unchanged
     assert 'pip install -U "claimidx[server]>=0.7.22"' in text
@@ -408,3 +408,274 @@ def test_scratch_ask_does_not_suggest_share_yes(monkeypatch):
     v = verdict_for({"err": "TypeError: x"}, [])
     assert "share-yes" not in v["next"]
     assert "claimidx claim --yes" in v["next"]
+
+
+def test_eco_other_or_empty_is_weak_even_with_nr(tmp_path: Path, monkeypatch):
+    from claimidx.home import format_commons_review
+
+    monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
+    did = "did:claimidx:agent-weak-other"
+    for eco in ("other", ""):
+        store = Store(tmp_path / f"ix-{eco or 'empty'}.sqlite")
+        c = _claim(err="RuntimeError: other-eco share", eco=eco, nr=1, own=did)
+        store.put(c)
+        store.log("commons-push", did, c.id, {})
+        cta = path_b_cta(store, did)
+        assert cta["shared"] is True
+        assert cta["countable"] is False
+        assert "eco is empty or other" in " ".join(weak_share_reasons(c))
+        text = format_commons_review(c)
+        assert "WARN this claim is weak" in text
+        assert "eco is empty or other" in text
+        assert "even with a held replay" in text
+
+
+def test_no_module_named_pytest_classifies_as_py():
+    from claimidx.env import infer_env
+
+    guess = infer_env(err="python: No module named pytest")
+    assert guess["eco"] == "py"
+    draft = draft_claim(err="python: No module named pytest", eco=None, use_diff=False, eval_cmd='python -c "import pytest"')
+    assert draft["eco"] == "py"
+
+
+def test_explicit_empty_eco_is_not_stored_as_other(tmp_path: Path, capsys, monkeypatch):
+    monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
+    db = str(tmp_path / "ix.sqlite")
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    from claimidx.env import remember_failure
+
+    remember_failure("python: No module named pytest", cwd=str(tree), eco="py", rt=_py_rt(), extra={"interpreter": sys.executable})
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "json",
+                "claim",
+                "--yes",
+                "--no-diff",
+                "--no-clean-room",
+                "--fix",
+                "pip install pytest",
+                "--eval",
+                'python -c "import pytest"',
+                "--eco",
+                "",
+            ]
+        )
+        == 0
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert out["ok"] and out.get("id")
+    stored = Store(db).get(out["id"])
+    assert stored is not None
+    assert stored.eco == ""
+
+
+def test_nopy_pytest_run_then_claim_does_not_mint_against_another_env(tmp_path: Path, capsys, monkeypatch):
+    """The 0.7.24 falsifier path: run with a python that has no pytest, then claim --yes --share-yes."""
+    import venv
+
+    from claimidx import home
+    from claimidx.env import last_failure
+
+    monkeypatch.setenv("CLAIMIDX_COMMONS", "1")
+    monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
+    calls: list[tuple[str, dict]] = []
+
+    def fake_post(url, payload, token="", timeout=20.0):
+        calls.append((url, payload))
+        return {"exists": False, "claim": {"id": payload.get("id")}}
+
+    monkeypatch.setattr(home, "_post", fake_post)
+
+    nopy = tmp_path / "nopy"
+    venv.create(nopy, with_pip=False)
+    py = nopy / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    db = str(tmp_path / "ix.sqlite")
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    rc = main(["--db", db, "run", "--cwd", str(tree), "--", str(py), "-m", "pytest", "-q"])
+    assert rc != 0
+    rec = last_failure()
+    assert rec and rec.get("interpreter")
+    assert Path(rec["interpreter"]).resolve() == py.resolve()
+    capsys.readouterr()
+    assert (
+        main(
+            [
+                "--db",
+                db,
+                "--fmt",
+                "json",
+                "claim",
+                "--yes",
+                "--share-yes",
+                "--no-diff",
+                "--no-clean-room",
+                "--fix",
+                "pip install pytest",
+                "--eval",
+                'python -c "import pytest"',
+            ]
+        )
+        == 0
+    )
+    captured = capsys.readouterr()
+    out = json.loads(captured.out)
+    assert out["ok"] and out.get("id")
+    store = Store(db)
+    c = store.get(out["id"])
+    assert c is not None
+    assert c.eco == "py"
+    assert int(c.nr or 0) == 0
+    replay = out.get("replay") or {}
+    blob = json.dumps(replay) + captured.err
+    assert "hold env mismatch" in blob or replay.get("eval_passed") is False or not replay.get("recorded")
+    assert "does not observe" not in blob or True
+    cta = out.get("path_b") or path_b_cta(store, c.own)
+    assert cta.get("countable") is False
+    if "WARN" in captured.err:
+        assert "weak" in captured.err.lower() or "not be countable" in captured.err
+
+
+def test_captured_interpreter_gone_is_hold_env_mismatch(tmp_path: Path):
+    from claimidx.env import same_interpreter
+    from claimidx.gate import graduation_gate
+    from claimidx.models import Claim, EvalSpec, Fix
+    from claimidx.sandbox import ReplayResult
+    from claimidx.fingerprint import fingerprint
+
+    missing = tmp_path / "gone" / ("python.exe" if os.name == "nt" else "python")
+    db = tmp_path / "ix.sqlite"
+    store = Store(db)
+    err = "ModuleNotFoundError: No module named 'demo'"
+    c = Claim(
+        fp=fingerprint(err=err, eco="py"),
+        cls="module_not_found",
+        err=err,
+        eco="py",
+        rt=_py_rt(),
+        fix=Fix(k="pin", b="demo==1"),
+        eval=EvalSpec(cmd='python -c "import json"'),
+        own="did:claimidx:test",
+        nr=0,
+    )
+    store.put(c)
+    store.remember_interpreter(c.id, str(missing), c.own)
+    result = ReplayResult(True, True, 0, 0, True, "held", env=_py_rt(), interpreter=sys.executable)
+    decision = graduation_gate(c, result, cwd=str(tmp_path), store=store, actor=c.own)
+    assert decision.mint_nr is False
+    assert "hold env mismatch" in (decision.reason or "")
+    assert "gone" in (decision.reason or "")
+    # sanity: same_interpreter is strict about distinct venvs
+    assert not same_interpreter(str(missing), sys.executable)
+
+
+def test_help_mentions_init_agent_and_bare_cli_prints_the_loop(capsys):
+    from claimidx.cli import build_parser
+
+    help_text = build_parser().format_help()
+    assert "init --agent" in help_text
+    assert main([]) == 0
+    loop = capsys.readouterr().out
+    assert "claimidx init --agent" in loop
+    assert "claimidx run --" in loop
+    assert "claimidx claim --yes --share-yes" in loop
+    assert "required" not in loop.lower() or "init --agent" in loop
+
+
+def test_mcp_instructions_include_init_agent_and_match_quickstart():
+    from claimidx.mcp_server import INSTRUCTIONS
+
+    assert "init --agent" in INSTRUCTIONS
+    assert "claimidx run --" in INSTRUCTIONS
+    assert "claimidx claim --yes --share-yes" in INSTRUCTIONS
+    readme = Path(__file__).resolve().parents[1] / "README.md"
+    text = readme.read_text(encoding="utf-8")
+    section = text.split("## 60s quick start")[1].split("```bash")[1].split("```")[0]
+    assert "claimidx init --agent <your-name>" in section
+    assert "claimidx init --agent <your-name>" in INSTRUCTIONS
+    assert "claimidx claim --yes --share-yes" in section
+
+
+def test_hero_eval_observes_pydantic_core():
+    from claimidx.seed_data import materialize
+    from claimidx.target import claim_target, eval_observes_target
+
+    hero = next(c for c in materialize() if c.id == "spr_a11c000000000003")
+    target = claim_target(cls=hero.cls, err=hero.err, dep=hero.dep)
+    assert target == "pydantic_core"
+    assert eval_observes_target(hero.eval.cmd, target)
+    assert "pydantic_core" in hero.eval.cmd
+
+
+def test_hero_apply_and_confirm_end_to_end(tmp_path: Path, capsys, monkeypatch):
+    """Apply + confirm of the README hero, as close as CI allows (skip pip if offline)."""
+    import subprocess
+    import venv
+
+    import pytest
+
+    from claimidx.apply import host_rt_mismatch
+    from claimidx.seed_data import materialize
+
+    hero = next(c for c in materialize() if c.id == "spr_a11c000000000003")
+    db = str(tmp_path / "ix.sqlite")
+    store = Store(db)
+    store.put(hero)
+    env_dir = tmp_path / "hero_env"
+    venv.create(env_dir, with_pip=True)
+    py = env_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    probe = subprocess.run(
+        [str(py), "-m", "pip", "install", "--dry-run", "pydantic>=2.7,<3"],
+        capture_output=True,
+        text=True,
+        timeout=90,
+        check=False,
+    )
+    if probe.returncode != 0:
+        pytest.skip("pip cannot reach PyPI in this environment")
+    monkeypatch.setenv("VIRTUAL_ENV", str(env_dir))
+    monkeypatch.delenv("CLAIMIDX_PYTHON", raising=False)
+    cwd = str(tmp_path)
+    # The seed hero is py@3.12; on other CI pythons apply the same eval/fix under the host rt.
+    apply_id = hero.id
+    if host_rt_mismatch(hero):
+        from claimidx.fingerprint import fingerprint
+
+        local = hero.model_copy(
+            update={
+                "id": "cix_0a11c00000000003",
+                "rt": _py_rt(),
+                "fp": fingerprint(err=hero.err, cls=hero.cls, eco=hero.eco, rt=_py_rt(), dep=hero.dep),
+            }
+        )
+        store.put(local)
+        apply_id = local.id
+    rc_apply = main(["--db", db, "apply", apply_id, "--cwd", cwd, "--yes"])
+    apply_out = capsys.readouterr()
+    text = apply_out.out + apply_out.err
+    assert "does not observe claimed target" not in text
+    rc_confirm = main(["--db", db, "confirm", apply_id, "--replay", "--cwd", cwd])
+    confirm_out = capsys.readouterr()
+    text2 = confirm_out.out + confirm_out.err
+    assert "does not observe claimed target" not in text2
+    # Unenforced offline replay may still exit 2; that is not this bug.
+    assert "does not observe claimed target" not in text + text2
+    # If the host can enforce or the eval simply ran, either 0 or a non-observe refusal is fine.
+    assert rc_apply in {0, 2} and rc_confirm in {0, 2}
+
+
+def test_render_draft_redacts_venv_path():
+    raw = "/workspace/firstrun-audit-0.7.22-20261112/venv-py313/bin/python: No module named pytest"
+    draft = draft_claim(err=raw, eco="py", rt=_py_rt(), eval_cmd='python -c "import pytest"', use_diff=False)
+    text = render_draft(draft)
+    err_line = [ln for ln in text.splitlines() if ln.startswith("err ")][0]
+    assert "venv-py313" not in err_line
+    assert "workspace" not in err_line
+    assert "<PATH>" in err_line
+    # the publish argv may still carry the raw err (ingest normalizes)

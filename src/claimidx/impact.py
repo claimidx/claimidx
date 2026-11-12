@@ -400,9 +400,9 @@ _PUBLISH_KINDS = frozenset({"publish"})
 def weak_share_reasons(claim: object, replay: dict | None = None) -> list[str]:
     """Why a claim should not count as a commons DID even if it was shared."""
     reasons: list[str] = []
-    eco = str(getattr(claim, "eco", "") or "").strip()
-    if not eco:
-        reasons.append("eco is empty")
+    eco = str(getattr(claim, "eco", "") or "").strip().lower()
+    if not eco or eco == "other":
+        reasons.append("eco is empty or other")
     try:
         nr = int(getattr(claim, "nr", 0) or 0)
     except (TypeError, ValueError):
@@ -491,7 +491,7 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
     }
     if not countable:
         if shared:
-            out["why"] = "shared claim is not countable: it has no held replay (nr) or no ecosystem"
+            out["why"] = "shared claim is not countable: it has no held replay (nr) or no ecosystem (empty or other)"
             out["next"] = f"after a fix that holds: {SHARE_CMD}"
         elif published and not shared:
             out["why"] = "publish_no_share: local claim is not a countable commons DID until share <id> --yes"

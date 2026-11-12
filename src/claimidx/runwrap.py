@@ -120,7 +120,12 @@ def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None =
         q: dict[str, Any] = {"err": err, "cls": cls, "eco": guess["eco"], "rt": guess["rt"], "dep": dep, "fp": fp}
         hits, _cands = retrieve(store, q, k=k, kind="hook")
         v = verdict_for(q, hits)
-        remember_failure(err, command=cmd, cwd=root, eco=guess["eco"], rt=guess["rt"], event="run", fp=fp)
+        executed = argv[0] if argv else ""
+        if executed and not os.path.dirname(executed):
+            from .sandbox import _which
+
+            executed = _which(executed) or executed
+        remember_failure(err, command=cmd, cwd=root, eco=guess["eco"], rt=guess["rt"], event="run", fp=fp, extra={"interpreter": executed})
         line = (
             f"CLAIMIDX verdict {v['action']} {v['id']} — {v['why']}; next: {v['next']}"
             if v.get("id")
@@ -151,7 +156,7 @@ def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None =
         rt=str(rec.get("rt") or ""),
         event="fixed",
         fp=str(rec.get("fp") or ""),
-        extra={"nudged": True},
+        extra={"nudged": True, "interpreter": str(rec.get("interpreter") or "")},
     )
     from .hook import _record_claim_hint
 

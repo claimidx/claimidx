@@ -236,6 +236,9 @@ GETTING_STARTED_HINT = (
 )
 
 
+QUICKSTART_LOOP = "The loop, short form:\n  claimidx init --agent <your-name>\n  claimidx run -- <cmd>\n  claimidx claim --yes --share-yes\n"
+
+
 def getting_started() -> dict[str, Any]:
     """Empty claim: a short getting-started, not a bare error. CLI exits 0."""
     return {
@@ -253,7 +256,7 @@ def draft_claim(
     fix: str = "",
     fix_k: str = "",
     eval_cmd: str = "",
-    eco: str = "",
+    eco: str | None = None,
     rt: str = "",
     dep: list[str] | None = None,
     cwd: str = "",
@@ -262,18 +265,26 @@ def draft_claim(
 ) -> dict[str, Any]:
     """Assemble a publish-ready claim from as little as the agent gave us. Never writes."""
     remembered = None
+    interpreter = ""
+    eco_given = eco is not None
     if not (err or "").strip():
         remembered = last_failure()
         if not remembered:
             return getting_started()
         err = str(remembered["err"])
         cwd = cwd or str(remembered.get("cwd") or "")
-        eco = eco or str(remembered.get("eco") or "")
+        if not eco_given:
+            eco = str(remembered.get("eco") or "")
         rt = rt or str(remembered.get("rt") or "")
+        interpreter = str(remembered.get("interpreter") or "")
     err = re.sub(r"^E\s+", "", err.strip())  # pytest's E-prefix is not part of the error
     cwd = cwd or os.getcwd()
     guess = infer_env(cwd, err=err)
-    eco = eco or guess["eco"] or "other"
+    # None = omitted (infer, including from an empty remembered eco). Explicit empty stays empty.
+    if not eco_given:
+        eco = (eco or "") or guess["eco"] or ""
+    else:
+        eco = eco or ""
     rt = rt or (guess["rt"] if guess["eco"] in ("", eco) else "")
     cls = classify(err)
     target = claim_target(cls=cls, err=err, dep=dep)
@@ -349,6 +360,10 @@ def draft_claim(
             if rt:
                 inferred["rt"] = "eval interpreter"
 
+    if not interpreter:
+        rec = remembered or last_failure()
+        if rec:
+            interpreter = str(rec.get("interpreter") or "")
     warns = ingest_warnings(err, ev, cls=cls, dep=dep, eco=eco)
     if not ev:
         warns.insert(
@@ -375,6 +390,7 @@ def draft_claim(
         "inferred": inferred,
         "warn": warns,
         "publish_argv": _publish_argv(err, fix_k, fix_b, ev, eco, rt, dep, note),
+        "interpreter": interpreter,
     }
     return draft
 
@@ -418,7 +434,7 @@ def publish_draft(
         fix_k=str(draft["fix_k"]),
         fix_b=str(draft["fix_b"]),
         eval=str(draft["eval"]),
-        eco=str(draft.get("eco") or "other"),
+        eco=str(draft["eco"]) if "eco" in draft else "other",
         rt=str(draft.get("rt") or ""),
         dep=list(draft.get("dep") or []),
         note=str(draft.get("note") or ""),
@@ -436,7 +452,7 @@ def publish_draft(
             fix_k=str(draft["fix_k"]),
             fix_b=str(draft["fix_b"]),
             eval=str(draft["eval"]),
-            eco=str(draft.get("eco") or "other"),
+            eco=str(draft["eco"]) if "eco" in draft else "other",
             rt=str(draft.get("rt") or ""),
             dep=list(draft.get("dep") or []),
             note=str(draft.get("note") or ""),
@@ -453,6 +469,14 @@ def publish_draft(
     out["ok"] = True
     if out.get("exists"):
         return out
+    interp = str(draft.get("interpreter") or "")
+    if not interp:
+        interp = str((last_failure() or {}).get("interpreter") or "")
+    if interp and out.get("id"):
+        from .store import DEFAULT_DB
+        from .store import Store as _Store
+
+        _Store(db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)).remember_interpreter(str(out["id"]), interp, own or "")
     # Published is shared (ingest did it): the private home when one is configured, the commons unless it is off.
     # `--local` / CLAIMIDX_SHARE=0 is the opt-out; a hint eval never leaves the machine anyway.
     if replay and draft.get("eval_proof"):
@@ -572,7 +596,14 @@ def _replay_now(
     c = store.get(claim_id)
     if not c:
         return {"held": False, "recorded": False, "reason": "missing"}
-    result, second, flag = confirm_replay(c, cwd or None, eval_trust(store, c, override=trust_eval))
+    from .env import captured_interpreter_for
+
+    result, second, flag = confirm_replay(
+        c,
+        cwd or None,
+        eval_trust(store, c, override=trust_eval),
+        interpreter=captured_interpreter_for(c.id, store, fp=c.fp),
+    )
     info = result.as_dict()
     if second is not None:
         info["rerun"] = second.as_dict()
@@ -596,7 +627,7 @@ def _replay_now(
             "reason": "eval-miss: the fix did not hold under this eval",
             "replay": info,
         }
-    decision = graduation_gate(c, result, cwd=cwd or None, store=store, actor=resolve_owner(own))
+    decision = graduation_gate(c, result, cwd=cwd or None, store=store, actor=resolve_owner(own), clean_room=(mode == "clean-room"))
     if not decision.mint_nr:
         if decision.unenforced:
             from .gate import UNENFORCED_MESSAGE
@@ -650,8 +681,11 @@ def render_draft(draft: dict[str, Any]) -> str:
         return "# getting started\n# " + hint.replace("\n", "\n# ")
     if not draft.get("ok"):
         return f"error: {draft.get('error')}"
+    from .fingerprint import normalize_error
+
+    shown_err = normalize_error(str(draft.get("err") or ""))
     lines = [
-        f"err     {draft['err']}",
+        f"err     {shown_err}",
         f"cls     {draft['cls']}   eco {draft['eco']}   rt {draft['rt'] or '-'}   dep {','.join(draft['dep']) or '-'}",
         f"fix.k   {draft['fix_k']}",
         "fix.b   " + (draft["fix_b"].splitlines()[0] if draft["fix_b"] else "<empty>") + ("  ..." if draft["fix_b"].count("\n") else ""),
@@ -665,4 +699,4 @@ def render_draft(draft: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-__all__ = ["draft_claim", "getting_started", "GETTING_STARTED_HINT", "publish_draft", "render_draft", "infer_fix_kind"]
+__all__ = ["draft_claim", "getting_started", "GETTING_STARTED_HINT", "QUICKSTART_LOOP", "publish_draft", "render_draft", "infer_fix_kind"]
