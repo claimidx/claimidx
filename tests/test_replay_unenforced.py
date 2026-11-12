@@ -158,13 +158,20 @@ def test_batch_verify_unenforced_exits_nonzero_and_mints_no_nr(tmp_path: Path, c
     assert c.nr == 0 and c.nc == 0
 
 
-def test_interpreter_offline_without_bwrap_still_mints(tmp_path: Path, capsys, no_bwrap):
+def test_interpreter_hook_without_bwrap_is_unenforced_and_mints_no_nr(tmp_path: Path, capsys, no_bwrap):
+    """CLI confirm --replay: python -c uses the interpreter hook; without bwrap it must not mint."""
     db = str(tmp_path / "ix.sqlite")
-    cid = _publish(db, capsys, err="TypeError: interpreter hook path still mints", eval_cmd='python -c "import json"')
-    rc, out, _err = _confirm(db, capsys, cid)
-    assert rc == 0, out
-    assert out["replay"]["net"] == "offline" and out["replay"]["net_how"] == "interpreter"
-    assert Store(db).get(cid).nr == 1
+    cid = _publish(db, capsys, err="TypeError: interpreter hook must not mint", eval_cmd='python -c "import json"')
+    rc, out, err = _confirm(db, capsys, cid)
+    assert rc == 2, out
+    assert out["recorded"] is False and out["held"] is False and out["eval_passed"] is True, out
+    assert out["replay"]["net"] == "unenforced" and out["replay"]["net_how"] == "interpreter", out
+    assert str(out.get("reason") or "").startswith("replay-net-unenforced")
+    assert "held" not in str(out.get("reason") or "")
+    assert "OFFLINE REPLAY IS NOT ENFORCED" in err
+    c = Store(db).get(cid)
+    assert c.nr == 0 and c.nc == 0 and c.st != "confirmed"
+    assert "confirm-replay" not in _kinds(db, cid) and "confirm" not in _kinds(db, cid)
 
 
 def test_bwrap_argv_keeps_cwd_and_dev_null_usable(tmp_path: Path):
@@ -299,8 +306,8 @@ def test_clean_room_skipped_claim_unenforced_never_says_nr_minted(tmp_path: Path
     _assert_claim_replay_refused(db, rc, out, err)
 
 
-def test_onboarding_without_bwrap_claim_and_apply_still_hold(tmp_path: Path, capsys, no_bwrap):
-    """Hook-covered `python -c` evals still mint nr=1 and exit 0 on hosts without bwrap."""
+def test_onboarding_without_bwrap_apply_does_not_mint(tmp_path: Path, capsys, no_bwrap):
+    """Hook-covered `python -c` evals apply the fix but do not mint nr without bwrap."""
     import subprocess
 
     tree = _git_tree(tmp_path)
@@ -311,10 +318,16 @@ def test_onboarding_without_bwrap_claim_and_apply_still_hold(tmp_path: Path, cap
     cid = out["id"]
     other = tmp_path / "other"
     subprocess.run(["git", "clone", "-q", str(tree), str(other)], check=True)
-    assert main(["--db", db, "--fmt", "json", "apply", cid, "--cwd", str(other), "--yes"]) == 0
+    rc = main(["--db", db, "--fmt", "json", "apply", cid, "--cwd", str(other), "--yes"])
     applied = json.loads(capsys.readouterr().out)
-    assert applied["applied"] is True and applied["replay"]["recorded"] is True and applied["replay"]["nr"] == 1
-    assert applied["replay"]["replay"]["net_how"] == "interpreter"
+    assert rc == 2, applied  # fix applied; unenforced replay not recorded
+    assert applied["applied"] is True, applied
+    rep = applied["replay"]
+    assert rep["recorded"] is False and rep["held"] is False, rep
+    assert "replay-net-unenforced" in str(rep.get("reason") or "") or "replay-net-unenforced" in str((rep.get("replay") or {}).get("reason") or ""), rep
+    how = rep.get("net_how") or (rep.get("replay") or {}).get("net_how")
+    assert how == "interpreter", rep
+    assert Store(db).get(cid).nr == 0
 
 
 def test_claim_share_yes_without_bwrap_still_reaches_commons(tmp_path: Path, capsys, no_bwrap, monkeypatch):
@@ -333,4 +346,161 @@ def test_claim_share_yes_without_bwrap_still_reaches_commons(tmp_path: Path, cap
     out = json.loads(capsys.readouterr().out)
     assert out["ok"] and out.get("share", {}).get("status") == "commons"
     assert any(u.endswith("/api/publish") for u in calls)
-    assert out["replay"]["recorded"] is True and Store(db).get(out["id"]).nr == 1
+    # The claim can still be shared; the unenforced replay must not mint nr.
+    assert out["replay"]["recorded"] is False and Store(db).get(out["id"]).nr == 0
+    assert "replay-net-unenforced" in str(out["replay"].get("reason") or "") or "replay-net-unenforced" in str(
+        (out["replay"].get("replay") or {}).get("reason") or ""
+    )
+
+
+# --- 0.7.23: interpreter hook (python -c / python -m pytest) is unenforced without bwrap ---
+
+
+def _pytest_tree(tmp_path: Path, *, passing: bool) -> Path:
+    tree = tmp_path / ("pytest-ok" if passing else "pytest-miss")
+    tree.mkdir()
+    (tree / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
+    src = "def test_ok():\n    assert True\n" if passing else "def test_ok():\n    assert False\n"
+    (tree / "test_ok.py").write_text(src, encoding="utf-8")
+    return tree
+
+
+def test_apply_offline_labels_interpreter_hook_unenforced(tmp_path: Path, no_bwrap):
+    env: dict[str, str] = {}
+    argv, net, how = sandbox._apply_offline(env, ["python", "-c", "import json"], ["python", "-c", "import json"], net_open=False, cwd=str(tmp_path))
+    assert net == "unenforced" and how == "interpreter"
+    argv, net, how = sandbox._apply_offline(env, ["python", "-m", "pytest", "-q"], ["python", "-m", "pytest", "-q"], net_open=False, cwd=str(tmp_path))
+    assert net == "unenforced" and how == "interpreter"
+    argv, net, how = sandbox._apply_offline(env, ["python", "-c", "import json"], ["python", "-c", "import json"], net_open=True, cwd=str(tmp_path))
+    assert net == "open"
+
+
+def test_gate_refuses_interpreter_hook_even_if_labeled_offline():
+    """Defense in depth: a result still tagged net=offline, net_how=interpreter must not mint."""
+    from claimidx.gate import UNENFORCED_PREFIX, graduation_gate, unenforced_miss_refusal
+    from claimidx.models import Claim, EvalSpec, Fix
+    from claimidx.fingerprint import fingerprint
+
+    err = "TypeError: interpreter labeled offline must still refuse"
+    claim = Claim(
+        fp=fingerprint(err=err, eco="py", rt=_py_rt()),
+        cls="type_error",
+        err=err,
+        eco="py",
+        rt=_py_rt(),
+        fix=Fix(k="constraint", b="ok"),
+        eval=EvalSpec(cmd='python -c "import json"'),
+    )
+    held = sandbox.ReplayResult(True, True, 0, 0, True, "held", env=_py_rt(), net="offline", net_how="interpreter")
+    decision = graduation_gate(claim, held)
+    assert decision.mint_nr is False and decision.reason.startswith(UNENFORCED_PREFIX)
+    miss = sandbox.ReplayResult(True, True, 1, 0, False, "eval-miss", env=_py_rt(), net="offline", net_how="interpreter")
+    refusal = unenforced_miss_refusal(miss)
+    assert refusal is not None and refusal["reason"].startswith(UNENFORCED_PREFIX)
+
+
+def test_cli_confirm_pytest_eval_without_bwrap_exits_2_and_mints_no_nr(tmp_path: Path, capsys, no_bwrap):
+    tree = _pytest_tree(tmp_path, passing=True)
+    db = str(tmp_path / "ix.sqlite")
+    cid = _publish(db, capsys, err="AssertionError: pytest interpreter hook hold", eval_cmd="python -m pytest -q")
+    rc, out, err = _confirm(db, capsys, cid, "--cwd", str(tree))
+    assert rc == 2, out
+    assert out["recorded"] is False and out["held"] is False, out
+    assert str(out.get("reason") or "").startswith("replay-net-unenforced")
+    assert out["replay"]["net_how"] == "interpreter" and out["replay"]["net"] == "unenforced"
+    assert "held" not in str(out.get("reason") or "").split(":")[0]
+    c = Store(db).get(cid)
+    assert c.nr == 0 and c.nc == 0
+    assert "confirm-replay" not in _kinds(db, cid)
+
+
+def test_cli_confirm_pytest_miss_without_bwrap_is_unenforced_not_eval_miss(tmp_path: Path, capsys, no_bwrap):
+    tree = _pytest_tree(tmp_path, passing=False)
+    db = str(tmp_path / "ix.sqlite")
+    cid = _publish(db, capsys, err="AssertionError: pytest interpreter hook miss", eval_cmd="python -m pytest -q")
+    rc, out, err = _confirm(db, capsys, cid, "--cwd", str(tree))
+    assert rc == 2, out
+    assert out["recorded"] is False and out["held"] is False, out
+    assert str(out.get("reason") or "").startswith("replay-net-unenforced"), out
+    assert "eval-miss" not in str(out.get("reason") or "")
+    assert "fix-not-applied" not in json.dumps(out)
+    c = Store(db).get(cid)
+    assert c.nr == 0 and c.nf == 0
+    assert "fail" not in _kinds(db, cid)
+
+
+def test_mcp_confirm_pytest_eval_without_bwrap_is_error_and_records_nothing(tmp_path: Path, capsys, no_bwrap):
+    from claimidx.mcp_server import handle
+
+    tree = _pytest_tree(tmp_path, passing=True)
+    db = str(tmp_path / "ix.sqlite")
+    cid = _publish(db, capsys, err="AssertionError: mcp pytest interpreter hook", eval_cmd="python -m pytest -q")
+    store = Store(db)
+    msg = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "claimidx_confirm", "arguments": {"id": cid, "replay": True, "cwd": str(tree)}},
+    }
+    resp = handle(msg, store)
+    result = resp["result"]
+    assert result.get("isError") is True
+    body = result["structuredContent"]
+    assert body["recorded"] is False and body["held"] is False, body
+    assert str(body.get("reason") or "").startswith("replay-net-unenforced")
+    assert body["replay"]["net_how"] == "interpreter"
+    c = store.get(cid)
+    assert c.nr == 0 and c.nc == 0
+    assert "confirm-replay" not in _kinds(db, cid)
+
+
+def test_mcp_confirm_pytest_miss_without_bwrap_is_unenforced_not_eval_miss(tmp_path: Path, capsys, no_bwrap):
+    from claimidx.mcp_server import handle
+
+    tree = _pytest_tree(tmp_path, passing=False)
+    db = str(tmp_path / "ix.sqlite")
+    cid = _publish(db, capsys, err="AssertionError: mcp pytest miss", eval_cmd="python -m pytest -q")
+    store = Store(db)
+    msg = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "claimidx_confirm", "arguments": {"id": cid, "replay": True, "cwd": str(tree)}},
+    }
+    resp = handle(msg, store)
+    result = resp["result"]
+    assert result.get("isError") is True
+    body = result["structuredContent"]
+    assert str(body.get("reason") or "").startswith("replay-net-unenforced"), body
+    assert "eval-miss" not in str(body.get("reason") or "")
+    assert store.get(cid).nf == 0
+    assert "fail" not in _kinds(db, cid)
+
+
+def test_claim_yes_pytest_eval_without_bwrap_publishes_but_mints_no_nr(tmp_path: Path, capsys, no_bwrap):
+    tree = _pytest_tree(tmp_path, passing=True)
+    db = str(tmp_path / "ix.sqlite")
+    rc, out, err = _claim_cli(
+        db,
+        capsys,
+        "--err",
+        "AssertionError: claim pytest interpreter hook",
+        "--cwd",
+        str(tree),
+        "--eval",
+        "python -m pytest -q",
+        "--no-diff",
+        "--no-clean-room",
+        "--fix",
+        "pytest",
+    )
+    assert rc == 0 and out["ok"] is True and out["id"], out  # the claim is published
+    rep = out["replay"]
+    assert rep["recorded"] is False and rep["held"] is False, rep
+    reason = str(rep.get("reason") or "") + " " + str((rep.get("replay") or {}).get("reason") or "")
+    assert "replay-net-unenforced" in reason, out
+    assert "held" not in str(rep.get("reason") or "").split(":")[0]
+    c = Store(db).get(out["id"])
+    assert c.nr == 0 and c.nc == 0
+    assert "confirm-replay" not in _kinds(db, out["id"])
+    assert "OFFLINE REPLAY IS NOT ENFORCED" in err or "replay skipped" in " | ".join(out.get("warn") or [])

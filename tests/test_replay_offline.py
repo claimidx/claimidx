@@ -105,7 +105,7 @@ def test_reruns_refuse_before_target():
     err = "ModuleNotFoundError: No module named 'bind_target'"
     claim = _claim(err, "python -m pytest --reruns 2")
     claim.cls = "module_not_found"
-    held = ReplayResult(True, True, 0, 0, True, "held", env=_py_rt(), net="offline", net_how="interpreter")
+    held = ReplayResult(True, True, 0, 0, True, "held", env=_py_rt(), net="offline", net_how="bwrap")
     decision = graduation_gate(claim, held)
     assert decision.mint_nr is False
     assert decision.reason.startswith("reruns")
