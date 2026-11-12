@@ -9,6 +9,7 @@ from .fingerprint import (
     normalization_risk,
     normalize_error,
     runtime_proof_key,
+    same_fingerprint,
 )
 from .models import Claim
 from .public import eval_is_proof
@@ -291,11 +292,17 @@ def verdict_for(query: Claim | dict, hits: list[tuple[Claim, float]]) -> dict:
     Advice only; the per-hit disposition underneath carries the full reasoning.
     """
     if not hits:
+        from .home import SCRATCH_NO_SHARE, scratch_mode
+
+        if scratch_mode():
+            nxt = f"fix it, then `claimidx claim --yes` ({SCRATCH_NO_SHARE})"
+        else:
+            nxt = "fix it, then `claimidx claim --yes --share-yes` to share it so the next agent skips this (`claim --yes` alone stays local)"
         return {
             "action": "solve",
             "id": "",
             "why": "no prior art for this fingerprint",
-            "next": "fix it, then `claimidx claim --yes --share-yes` to share it so the next agent skips this (`claim --yes` alone stays local)",
+            "next": nxt,
         }
     claim, sim = hits[0]
     ann = annotate(query, claim, sim)
@@ -349,13 +356,39 @@ def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
     # A pulled row's nr is another machine's replay count: hearsay until this consumer replays it.
     if getattr(claim, "src", "local") != "local":
         nr = 0
-    exact = _query_fp(query) == claim.fp
+    qcls = query.cls if isinstance(query, Claim) else (query.get("cls") or classify(qerr))
+    qeco = query.eco if isinstance(query, Claim) else (query.get("eco") or "")
+    exact = same_fingerprint(
+        query_fp=_query_fp(query),
+        query_err=qerr,
+        query_cls=qcls,
+        query_eco=qeco,
+        query_rt=qrt,
+        query_dep=list(qdep or []),
+        claim_fp=claim.fp,
+        claim_err=claim.err,
+        claim_cls=claim.cls,
+        claim_eco=claim.eco,
+        claim_rt=claim.rt,
+        claim_dep=list(claim.dep or []),
+    )
     match = "exact" if exact else "similar"
     if not exact and not qdep and claim.dep and not isinstance(query, Claim):
         # The asker did not know the dependency; the claim does. Same error, class, eco and rt
         # under the claim's own dep is the same failure, not a lookalike.
-        qcls = query.get("cls") or classify(qerr)
-        if fingerprint(err=qerr, cls=qcls, eco=query.get("eco") or "", rt=qrt, dep=claim.dep) == claim.fp:
+        if same_fingerprint(
+            query_err=qerr,
+            query_cls=qcls,
+            query_eco=qeco,
+            query_rt=qrt,
+            query_dep=list(claim.dep or []),
+            claim_fp=claim.fp,
+            claim_err=claim.err,
+            claim_cls=claim.cls,
+            claim_eco=claim.eco,
+            claim_rt=claim.rt,
+            claim_dep=list(claim.dep or []),
+        ):
             match = "family"
     evidence = "reproduced" if nr > 0 else "retrieved"
     untrusted_codes = untrusted(query, claim, nr=nr)
@@ -480,7 +513,20 @@ def similarity(query: Claim | dict, cand: Claim) -> float:
         qdep = query.get("dep") or []
         qrt = query.get("rt") or ""
         qfp = query.get("fp") or fingerprint(err=qerr, cls=qcls, eco=qeco, rt=qrt, dep=qdep)
-    if qfp == cand.fp:
+    if same_fingerprint(
+        query_fp=qfp,
+        query_err=qerr,
+        query_cls=qcls,
+        query_eco=qeco,
+        query_rt=qrt,
+        query_dep=list(qdep or []),
+        claim_fp=cand.fp,
+        claim_err=cand.err,
+        claim_cls=cand.cls,
+        claim_eco=cand.eco,
+        claim_rt=cand.rt,
+        claim_dep=list(cand.dep or []),
+    ):
         s = 1.0
     else:
         err = _err_sim(qerr, cand.err)

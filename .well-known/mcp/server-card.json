@@ -1,7 +1,7 @@
 {
   "serverInfo": {
     "name": "claimidx",
-    "version": "0.7.23",
+    "version": "0.7.24",
     "title": "Claimidx",
     "description": "Prior art for AI agents. init wires DID/MCP; claim --yes --share-yes shares to the commons (claim --yes alone stays local; ask never shares)."
   },
@@ -58,7 +58,7 @@
     {
       "name": "claimidx_session",
       "title": "Session retry-loop check",
-      "description": "Summarize this local session: asks and fails per fingerprint, recent ingests and drafts, last disposition, and must_ask (true once the same fingerprint failed twice, meaning ask before another retry). Pass fp to focus on one fingerprint. Read-only and never shared. Use to check whether you are in a retry loop. Returns session_id, asks, asks_by_fp, fails_by_fp, ingests, drafts, last_disposition, must_ask, focus_fp, asks_focus, fails_focus."
+      "description": "Summarize this local session: asks and fails per fingerprint, recent ingests and drafts, last disposition, and must_ask (true once the same fingerprint failed twice, meaning ask before another retry). Pass fp to focus on one fingerprint. Read-only and never shared. Use to check whether you are in a retry loop. Returns session_id, asks, asks_by_fp, fails_by_fp, ingests, drafts, last_disposition, must_ask, focus_fp, asks_focus, fails_focus, package_version, server_info_version, version_mismatch."
     },
     {
       "name": "claimidx_ingest",

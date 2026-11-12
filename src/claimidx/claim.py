@@ -21,7 +21,7 @@ import sys
 from typing import Any
 
 from .env import infer_env, installed_version, last_failure, tree_eval
-from .fingerprint import classify, fingerprint
+from .fingerprint import classify, fingerprint, normalize_error
 from .public import eval_is_proof, ingest_warnings, refine_eval
 from .target import claim_target, suggest_eval
 
@@ -228,13 +228,35 @@ def _install_fix(target: str, eco: str, dep: list[str], installed: str = "") -> 
     return ("pin", f"{name}=={ver}") if ver else ("constraint", name)
 
 
+GETTING_STARTED_HINT = (
+    "no failure is remembered yet, so there is nothing to claim.\n"
+    "1. claimidx init --agent <your-name>   # name your DID (skip if you already did)\n"
+    "2. claimidx run -- <command>           # capture a failure (a hook also remembers it)\n"
+    "3. fix it, then: claimidx claim --yes --share-yes"
+)
+
+
+QUICKSTART_LOOP = "The loop, short form:\n  claimidx init --agent <your-name>\n  claimidx run -- <cmd>\n  claimidx claim --yes --share-yes\n"
+
+
+def getting_started() -> dict[str, Any]:
+    """Empty claim: a short getting-started, not a bare error. CLI exits 0."""
+    return {
+        "ok": True,
+        "getting_started": True,
+        "reason": "no-failure",
+        "hint": GETTING_STARTED_HINT,
+        "error": "no failure to claim: pass --err, or run with the hook installed so the last failure is remembered",
+    }
+
+
 def draft_claim(
     *,
     err: str = "",
     fix: str = "",
     fix_k: str = "",
     eval_cmd: str = "",
-    eco: str = "",
+    eco: str | None = None,
     rt: str = "",
     dep: list[str] | None = None,
     cwd: str = "",
@@ -243,28 +265,34 @@ def draft_claim(
 ) -> dict[str, Any]:
     """Assemble a publish-ready claim from as little as the agent gave us. Never writes."""
     remembered = None
+    interpreter = ""
+    eco_given = eco is not None
     if not (err or "").strip():
         remembered = last_failure()
         if not remembered:
-            return {
-                "ok": False,
-                "error": "no failure to claim: pass --err, or run with the hook installed so the last failure is remembered",
-            }
+            return getting_started()
         err = str(remembered["err"])
         cwd = cwd or str(remembered.get("cwd") or "")
-        eco = eco or str(remembered.get("eco") or "")
+        if not eco_given:
+            eco = str(remembered.get("eco") or "")
         rt = rt or str(remembered.get("rt") or "")
+        interpreter = str(remembered.get("interpreter") or "")
     err = re.sub(r"^E\s+", "", err.strip())  # pytest's E-prefix is not part of the error
     cwd = cwd or os.getcwd()
     guess = infer_env(cwd, err=err)
-    eco = eco or guess["eco"] or "other"
+    # None = omitted (infer, including from an empty remembered eco). Explicit empty stays empty.
+    if not eco_given:
+        eco = (eco or "") or guess["eco"] or ""
+    else:
+        eco = eco or ""
     rt = rt or (guess["rt"] if guess["eco"] in ("", eco) else "")
     cls = classify(err)
     target = claim_target(cls=cls, err=err, dep=dep)
     dep = list(dep or [])
     inferred: dict[str, str] = {}
     if remembered:
-        inferred["err"] = "last failure" + (f" ({remembered.get('command')})" if remembered.get("command") else "")
+        cmd = str(remembered.get("command") or "")
+        inferred["err"] = "last failure" + (f" ({normalize_error(cmd)})" if cmd else "")
     if guess["eco"] and eco == guess["eco"]:
         inferred["eco"] = "tree/err"
     if guess["rt"] and rt == guess["rt"]:
@@ -310,12 +338,15 @@ def draft_claim(
         ev = tree_eval(cwd, eco)
         if ev:
             inferred["eval"] = "tree recipe"
-    if not ev and fix_k in {"pin", "constraint"}:
-        # Only a pin fix is proven by a version check; for a patch that would be a tautology.
+    if not ev and fix_k in {"pin", "constraint"} and (fix_b or dep):
+        # Only a pin/constraint with a spec is proven by a version check.
         ev = refine_eval("true", fix_k=fix_k, fix_b=fix_b, dep=dep, eco=eco)
         if ev != "true":
             inferred["eval"] = "dependency pin"
-    ev = ev or "true"
+        else:
+            ev = ""  # refine could not produce a version check; do not draft a tautology
+    # Never invent a tautology. `true` is a hint and must be passed explicitly.
+    ev = ev or ""
     if not rt:
         # The eval's own head decides the runtime a hold is keyed to, whatever the tree looked like.
         from .env import _node_rt, _py_rt
@@ -330,7 +361,16 @@ def draft_claim(
             if rt:
                 inferred["rt"] = "eval interpreter"
 
+    if not interpreter:
+        rec = remembered or last_failure()
+        if rec:
+            interpreter = str(rec.get("interpreter") or "")
     warns = ingest_warnings(err, ev, cls=cls, dep=dep, eco=eco)
+    if not ev:
+        warns.insert(
+            0,
+            "eval empty: pass --eval '<a command that fails before the fix and holds after>'; a tautology like `true` is not drafted",
+        )
     if not fix_b:
         warns.insert(0, "fix.b empty: pass --fix '<what you changed>'")
     draft = {
@@ -351,12 +391,13 @@ def draft_claim(
         "inferred": inferred,
         "warn": warns,
         "publish_argv": _publish_argv(err, fix_k, fix_b, ev, eco, rt, dep, note),
+        "interpreter": interpreter,
     }
     return draft
 
 
 def _publish_argv(err: str, fix_k: str, fix_b: str, ev: str, eco: str, rt: str, dep: list[str], note: str) -> str:
-    parts = ["claimidx", "publish", "--err", err, "--fix-k", fix_k, "--fix-b", fix_b or "<fix>", "--eval", ev, "--eco", eco]
+    parts = ["claimidx", "publish", "--err", normalize_error(err) or err, "--fix-k", fix_k, "--fix-b", fix_b or "<fix>", "--eval", ev, "--eco", eco]
     if rt:
         parts += ["--rt", rt]
     for d in dep:
@@ -394,7 +435,7 @@ def publish_draft(
         fix_k=str(draft["fix_k"]),
         fix_b=str(draft["fix_b"]),
         eval=str(draft["eval"]),
-        eco=str(draft.get("eco") or "other"),
+        eco=str(draft["eco"]) if "eco" in draft else "other",
         rt=str(draft.get("rt") or ""),
         dep=list(draft.get("dep") or []),
         note=str(draft.get("note") or ""),
@@ -412,7 +453,7 @@ def publish_draft(
             fix_k=str(draft["fix_k"]),
             fix_b=str(draft["fix_b"]),
             eval=str(draft["eval"]),
-            eco=str(draft.get("eco") or "other"),
+            eco=str(draft["eco"]) if "eco" in draft else "other",
             rt=str(draft.get("rt") or ""),
             dep=list(draft.get("dep") or []),
             note=str(draft.get("note") or ""),
@@ -429,6 +470,14 @@ def publish_draft(
     out["ok"] = True
     if out.get("exists"):
         return out
+    interp = str(draft.get("interpreter") or "")
+    if not interp:
+        interp = str((last_failure() or {}).get("interpreter") or "")
+    if interp and out.get("id"):
+        from .store import DEFAULT_DB
+        from .store import Store as _Store
+
+        _Store(db or os.environ.get("CLAIMIDX_DB") or str(DEFAULT_DB)).remember_interpreter(str(out["id"]), interp, own or "")
     # Published is shared (ingest did it): the private home when one is configured, the commons unless it is off.
     # `--local` / CLAIMIDX_SHARE=0 is the opt-out; a hint eval never leaves the machine anyway.
     if replay and draft.get("eval_proof"):
@@ -447,13 +496,24 @@ def publish_draft(
             if room.get("recorded"):
                 out["replay"] = room.get("after") or {}
             else:
-                out["replay"] = {"held": False, "recorded": False, "eval_passed": bool(room.get("after_held")), "reason": room.get("reason")}
+                from .sandbox import NOT_RECORDED_REASON
+
+                room_rep: dict[str, Any] = {
+                    "held": False,
+                    "recorded": False,
+                    "eval_passed": bool(room.get("after_held")),
+                    "reason": room.get("reason"),
+                }
+                if room_rep["eval_passed"]:
+                    room_rep["refusal"] = room.get("reason")
+                    room_rep["reason"] = NOT_RECORDED_REASON
+                out["replay"] = room_rep
                 if _replay_unenforced(out["replay"]):
                     warns.append(claim_unenforced_warning(out["id"]))
                 else:
                     warns.append("clean clone: " + str(room.get("reason")) + "; nothing minted")
         else:
-            out["replay"] = _replay_now(out["id"], db=db, own=own, cwd=cwd)
+            out["replay"] = _flatten_claim_replay(_replay_now(out["id"], db=db, own=own, cwd=cwd))
             if _replay_unenforced(out["replay"]):
                 # The claim is published (exit 0); only the replay was refused. Never say nr was minted.
                 warns.append(claim_unenforced_warning(out["id"]))
@@ -481,10 +541,34 @@ def publish_draft(
     return out
 
 
+def _flatten_claim_replay(rep: dict[str, Any] | None) -> dict[str, Any]:
+    """Agents read replay.reason. A passing eval the gate did not record uses the stable token there.
+
+    The gate refusal moves to `refusal` so it is not lost. Nested replay.replay is dropped
+    once its fields have been copied up.
+    """
+    from .sandbox import NOT_RECORDED_REASON
+
+    if not isinstance(rep, dict):
+        return {}
+    inner = rep.get("replay") if isinstance(rep.get("replay"), dict) else None
+    if not (rep.get("eval_passed") and not rep.get("recorded") and isinstance(inner, dict) and inner.get("reason") == NOT_RECORDED_REASON):
+        return rep
+    refusal = str(rep.get("reason") or "")
+    merged = {**inner, "held": False, "recorded": False, "eval_passed": True, "reason": NOT_RECORDED_REASON}
+    if refusal and refusal != NOT_RECORDED_REASON:
+        merged["refusal"] = refusal
+    for key, val in rep.items():
+        if key not in {"replay", "reason", "held", "recorded", "eval_passed"}:
+            merged[key] = val
+    return merged
+
+
 def _replay_unenforced(rep: dict | None) -> bool:
     from .gate import UNENFORCED_PREFIX
 
-    return UNENFORCED_PREFIX in str((rep or {}).get("reason") or "")
+    blob = " ".join(str((rep or {}).get(k) or "") for k in ("reason", "refusal"))
+    return UNENFORCED_PREFIX in blob
 
 
 def claim_unenforced_warning(claim_id: str) -> str:
@@ -513,7 +597,14 @@ def _replay_now(
     c = store.get(claim_id)
     if not c:
         return {"held": False, "recorded": False, "reason": "missing"}
-    result, second, flag = confirm_replay(c, cwd or None, eval_trust(store, c, override=trust_eval))
+    from .env import interpreter_for_replay
+
+    result, second, flag = confirm_replay(
+        c,
+        cwd or None,
+        eval_trust(store, c, override=trust_eval),
+        interpreter=interpreter_for_replay(c.id, store, fp=c.fp, cwd=cwd or None, clean_room=(mode == "clean-room")),
+    )
     info = result.as_dict()
     if second is not None:
         info["rerun"] = second.as_dict()
@@ -537,7 +628,7 @@ def _replay_now(
             "reason": "eval-miss: the fix did not hold under this eval",
             "replay": info,
         }
-    decision = graduation_gate(c, result, cwd=cwd or None, store=store, actor=resolve_owner(own))
+    decision = graduation_gate(c, result, cwd=cwd or None, store=store, actor=resolve_owner(own), clean_room=(mode == "clean-room"))
     if not decision.mint_nr:
         if decision.unenforced:
             from .gate import UNENFORCED_MESSAGE
@@ -586,10 +677,16 @@ def stamp_counts(store, out: dict[str, Any]) -> None:
 
 
 def render_draft(draft: dict[str, Any]) -> str:
+    if draft.get("getting_started"):
+        hint = str(draft.get("hint") or GETTING_STARTED_HINT)
+        return "# getting started\n# " + hint.replace("\n", "\n# ")
     if not draft.get("ok"):
         return f"error: {draft.get('error')}"
+    from .fingerprint import normalize_error
+
+    shown_err = normalize_error(str(draft.get("err") or ""))
     lines = [
-        f"err     {draft['err']}",
+        f"err     {shown_err}",
         f"cls     {draft['cls']}   eco {draft['eco']}   rt {draft['rt'] or '-'}   dep {','.join(draft['dep']) or '-'}",
         f"fix.k   {draft['fix_k']}",
         "fix.b   " + (draft["fix_b"].splitlines()[0] if draft["fix_b"] else "<empty>") + ("  ..." if draft["fix_b"].count("\n") else ""),
@@ -599,8 +696,8 @@ def render_draft(draft: dict[str, Any]) -> str:
         lines.append("drafted " + ", ".join(f"{k}<-{v}" for k, v in draft["inferred"].items()))
     for w in draft.get("warn") or []:
         lines.append(f"warn    {w}")
-    lines.append("publish with: claimidx claim --yes   (or edit: " + draft["publish_argv"][:160] + ")")
+    lines.append("publish with: claimidx claim --yes   (or edit: " + draft["publish_argv"] + ")")
     return "\n".join(lines)
 
 
-__all__ = ["draft_claim", "publish_draft", "render_draft", "infer_fix_kind"]
+__all__ = ["draft_claim", "getting_started", "GETTING_STARTED_HINT", "QUICKSTART_LOOP", "publish_draft", "render_draft", "infer_fix_kind"]

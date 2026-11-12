@@ -22,7 +22,7 @@ from .dense import encode
 from .discovery import ROUTES
 from .discovery import link_header as discovery_link_header
 from .discovery import resolve as resolve_discovery
-from .fingerprint import classify, fingerprint, normalize_error
+from .fingerprint import classify, fingerprint, fingerprints, normalize_error
 from .graph import Bundle, ProtocolEvent
 from .match import hit_row
 from .models import Claim, EvalSpec, Fix
@@ -299,7 +299,7 @@ def create_app(db: str | None = None) -> FastAPI:
         else:
             cls = payload.cls or classify(payload.err)
             fp = fingerprint(err=payload.err, cls=cls, eco=payload.eco, rt=payload.rt, dep=payload.dep)
-            existing = store.by_fp(fp)
+            existing = store.by_fingerprints(fingerprints(err=payload.err, cls=cls, eco=payload.eco, rt=payload.rt, dep=payload.dep))
         if existing and not payload.force and not payload.alternative:
             return {"exists": True, "claim": existing[0].model_dump(mode="json")}
         extra: dict[str, Any] = {}

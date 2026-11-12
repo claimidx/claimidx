@@ -109,7 +109,11 @@ def auto_identity(*, quiet: bool = False) -> dict | None:
                 file=sys.stderr,
             )
         else:
-            print(f"claimidx: identity created {own} (claimidx init --agent <name> to rename)", file=sys.stderr)
+            print(
+                f"claimidx: identity created {own} — this is a bare auto-minted agent-<hex> name; "
+                "claimidx init --agent <name> to choose one before you share to the commons",
+                file=sys.stderr,
+            )
     return data
 
 

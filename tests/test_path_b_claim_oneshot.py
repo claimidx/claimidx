@@ -49,9 +49,12 @@ def test_path_b_cta_after_hold_requires_share_yes(tmp_path: Path):
 
 def test_claim_without_failure_still_loud(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
-    assert main(["--db", db, "claim", "--yes"]) == 2
-    err = capsys.readouterr().err
-    assert "pass --err" in err or "no failure" in err
+    assert main(["--db", db, "claim", "--yes"]) == 0
+    captured = capsys.readouterr()
+    text = captured.out + captured.err
+    assert "getting started" in text
+    assert "init --agent" in text
+    assert "no failure" in text
 
 
 def test_claim_yes_alone_stays_local_not_countable(tmp_path: Path, commons, capsys, monkeypatch):

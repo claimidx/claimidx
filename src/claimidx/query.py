@@ -10,7 +10,7 @@ import os
 import time
 from typing import Any
 
-from .fingerprint import classify, fingerprint, normalize_error
+from .fingerprint import classify, fingerprint, fingerprints, normalize_error, same_fingerprint
 from .match import dead_end_claims, hit_compact, hit_row, rank, rank_near, similarity, verdict_for
 from .models import Claim, EvalSpec, Fix
 from .store import DEFAULT_DB, Store, force_reset_emits, force_reset_from
@@ -20,10 +20,20 @@ from .team import resolve_owner
 def retrieve(store: Store, q: dict[str, Any], *, k: int = 5, actor: str | None = None, kind: str = "ask"):
     """Rank and log hit/n/ms. Does not store the raw err. Returns (hits, candidates)."""
     t0 = time.monotonic()
+    extra = list(
+        fingerprints(
+            err=str(q.get("err") or ""),
+            cls=str(q.get("cls") or ""),
+            eco=str(q.get("eco") or ""),
+            rt=str(q.get("rt") or ""),
+            dep=list(q.get("dep") or []),
+        )
+    )
     candidates = store.candidates(
         fp=str(q.get("fp") or ""),
         err=str(q.get("err") or ""),
         cls=str(q.get("cls") or ""),
+        extra_fps=extra,
     )
     hits = rank(q, candidates, k=k)
     ms = int((time.monotonic() - t0) * 1000)
@@ -61,7 +71,19 @@ def gate_explain(
             "claim_only": sorted(c_payload - q_payload)[:12],
         }
         if not qdep and claim.dep:
-            if fingerprint(err=qerr, cls=qcls or classify(qerr), eco=qeco, rt=qrt, dep=list(claim.dep)) == claim.fp:
+            if same_fingerprint(
+                query_err=qerr,
+                query_cls=qcls or classify(qerr),
+                query_eco=qeco,
+                query_rt=qrt,
+                query_dep=list(claim.dep),
+                claim_fp=claim.fp,
+                claim_err=claim.err,
+                claim_cls=claim.cls,
+                claim_eco=claim.eco,
+                claim_rt=claim.rt,
+                claim_dep=list(claim.dep or []),
+            ):
                 row["family_dep"] = list(claim.dep)
         if cwd and store is not None:
             proof = store.proof_for(claim.id)
@@ -98,7 +120,17 @@ def miss_enrichment(
     near_hits = rank_near(q, candidates, k=min(3, k))
     pool: list[Claim] = []
     seen: set[str] = set()
-    for c in list(candidates) + (store.by_fp(str(q.get("fp") or "")) if q.get("fp") else []):
+    extra = store.by_fingerprints(
+        fingerprints(
+            err=str(q.get("err") or ""),
+            cls=str(q.get("cls") or ""),
+            eco=str(q.get("eco") or ""),
+            rt=str(q.get("rt") or ""),
+            dep=list(q.get("dep") or []),
+        )
+    )
+    fp_hits = store.by_fp(str(q.get("fp") or "")) if q.get("fp") else []
+    for c in list(candidates) + extra + fp_hits:
         if c.id in seen:
             continue
         seen.add(c.id)
@@ -221,7 +253,7 @@ def ingest(
     else:
         cls = classify(err)
         fp = fingerprint(err=err, cls=cls, eco=eco or "", rt=rt or "", dep=dep)
-        existing = store.by_fp(fp)
+        existing = store.by_fingerprints(fingerprints(err=err, cls=cls, eco=eco or "", rt=rt or "", dep=dep))
     if existing and not force and not alternative:
         c = existing[0]
         return {"exists": True, "id": c.id, "st": c.st, "fp": c.fp}
@@ -234,7 +266,7 @@ def ingest(
         fp=fp,
         cls=cls,
         err=normalize_error(err),
-        eco=eco or "other",
+        eco=eco or "",
         rt=rt or "",
         dep=dep,
         tried=tried or [],

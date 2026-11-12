@@ -432,14 +432,14 @@ class Store:
         row to a new class (new fp, new id). Prefer the stored cls when the
         rest of the slice matches.
         """
-        from .fingerprint import classify, fingerprint, normalize_error
+        from .fingerprint import classify, fingerprint, fingerprints, normalize_error
 
         eco_fp = eco or ""
         eco_store = eco or "other"
         dep = list(dep or [])
         chosen = cls or classify(err)
         fp = fingerprint(err=err, cls=chosen, eco=eco_fp, rt=rt or "", dep=dep)
-        existing = self.by_fp(fp)
+        existing = self.by_fingerprints(fingerprints(err=err, cls=chosen, eco=eco_fp, rt=rt or "", dep=dep))
         if existing or cls:
             return chosen, fp, existing
         nerr = normalize_error(err)
@@ -453,14 +453,27 @@ class Store:
             rows = con.execute("SELECT json FROM claims WHERE fp=?", (fp,)).fetchall()
         return [c for r in rows if (c := self._claim_from_json(r["json"]))]
 
+    def by_fingerprints(self, fps: tuple[str, ...] | list[str]) -> list[Claim]:
+        """Rows whose stored fp is any of the current or legacy hashes."""
+        found: list[Claim] = []
+        seen: set[str] = set()
+        for fp in fps:
+            if not fp:
+                continue
+            for c in self.by_fp(fp):
+                if c.id not in seen:
+                    seen.add(c.id)
+                    found.append(c)
+        return found
+
     def all(self) -> list[Claim]:
         with self._conn() as con:
             rows = con.execute("SELECT json FROM claims").fetchall()
         return [c for r in rows if (c := self._claim_from_json(r["json"]))]
 
-    def candidates(self, *, fp: str, err: str, cls: str = "", limit: int = 256) -> list[Claim]:
+    def candidates(self, *, fp: str, err: str, cls: str = "", limit: int = 256, extra_fps: list[str] | None = None) -> list[Claim]:
         """Bounded candidate retrieval for v2-scale ledgers; exact fp always wins."""
-        exact = self.by_fp(fp)
+        exact = self.by_fingerprints([fp, *(extra_fps or [])])
         if not self._fts:
             return exact or self.all()
         tokens = [t for t in re.findall(r"[A-Za-z0-9_@.-]{3,}", err) if t.lower() not in {"error", "exception", "traceback"}]
@@ -607,7 +620,7 @@ class Store:
             )
 
     def publish_bundle(self, bundle) -> None:
-        from .fingerprint import family_fingerprint, fingerprint
+        from .fingerprint import family_fingerprint, fingerprint_accepted
         from .graph import canonical_hash, stable_id
         from .identity import verify_record
         from .policy import inspect_claim
@@ -615,14 +628,14 @@ class Store:
 
         if bundle.failure.id != stable_id("flr_", bundle.failure.fp_v1):
             raise ValueError("failure id does not match fp_v1")
-        expected_fp = fingerprint(
+        if not fingerprint_accepted(
+            bundle.failure.fp_v1,
             err=bundle.failure.err,
             cls=bundle.failure.cls,
             eco=bundle.failure.eco,
             rt=bundle.failure.rt,
             dep=bundle.failure.dep,
-        )
-        if bundle.failure.fp_v1 != expected_fp:
+        ):
             raise ValueError("failure fp_v1 does not match failure fields")
         expected_family = family_fingerprint(err=bundle.failure.err, cls=bundle.failure.cls, eco=bundle.failure.eco)
         if bundle.failure.family_id != expected_family:
@@ -1160,6 +1173,8 @@ class Store:
         asks_focus = asks_by_fp.get(focus, 0) if focus else 0
         # Soft gate: same fp failed twice this session — ask before a third try.
         must_ask = bool(focus and fails_focus >= 2) or (not focus and any(v >= 2 for v in fails_by_fp.values()))
+        from .session import version_fields
+
         return {
             "session_id": sid,
             "asks": asks,
@@ -1172,6 +1187,7 @@ class Store:
             "focus_fp": focus or None,
             "asks_focus": asks_focus,
             "fails_focus": fails_focus,
+            **version_fields(),
         }
 
     def log(self, kind: str, actor: str, claim_id: str = "", detail: dict | None = None) -> None:
@@ -1232,6 +1248,33 @@ class Store:
                     row["detail"] = raw
             out.append(row)
         return out
+
+    def remember_interpreter(self, claim_id: str, interpreter: str, actor: str = "") -> None:
+        """Local-only: the python/node that produced this claim's failure. Never projected."""
+        path = (interpreter or "").strip()
+        if not claim_id or not path:
+            return
+        from .env import is_lang_interpreter
+
+        if not is_lang_interpreter(path):
+            return
+        self.log("capture-env", actor or "did:claimidx:anon", claim_id, {"interpreter": path})
+
+    def captured_interpreter(self, claim_id: str) -> str:
+        if not claim_id:
+            return ""
+        with self._conn() as con:
+            row = con.execute(
+                "SELECT detail FROM events WHERE claim_id=? AND kind='capture-env' ORDER BY id DESC LIMIT 1",
+                (claim_id,),
+            ).fetchone()
+        if not row or not row["detail"]:
+            return ""
+        try:
+            detail = json.loads(row["detail"])
+        except json.JSONDecodeError:
+            return ""
+        return str((detail or {}).get("interpreter") or "").strip()
 
     def all_events(self) -> list[dict]:
         """Every audit row, oldest first, `detail` as the raw blob (or None). For impact-style scans."""

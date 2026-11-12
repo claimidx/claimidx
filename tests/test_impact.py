@@ -248,7 +248,7 @@ def test_funnel_cli_scoreboard(tmp_path: Path, capsys):
     out = capsys.readouterr().out
     assert "local home event log only" in out
     assert "countable DIDs (excl. seed/anon): 2" in out
-    assert "COO path actors:" in out and "hold 1" in out and "claim 1" in out
+    assert "lifecycle path actors:" in out and "hold 1" in out and "claim 1" in out
     assert "init_no_ask" in out
 
     assert main(["--db", db, "--fmt", "json", "funnel", "--days", "30"]) == 0
@@ -280,7 +280,7 @@ def test_render_funnel_scoreboard_aliases():
     text = render_funnel_scoreboard(life)
     assert "confirm (≈hold)" in text
     assert "publish (≈claim)" in text
-    assert "COO path actors: install 1 → init 2 → ask 1 → hold 1 → claim 1" in text
+    assert "lifecycle path actors: install 1 → init 2 → ask 1 → hold 1 → claim 1" in text
 
 
 def test_commons_owner_proxy_counts_and_excludes():

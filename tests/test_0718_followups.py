@@ -49,13 +49,21 @@ def _kinds(db: str) -> list[str]:
 # --- 1 ---------------------------------------------------------------------------------
 
 
-def test_nudges_point_at_the_sharing_command():
+def test_nudges_point_at_the_sharing_command(monkeypatch):
     from claimidx import board, hook, match, runwrap
+    from claimidx.hook import _record_claim_hint
 
-    for mod in (hook, runwrap, match, board):
+    for mod in (hook, match, board):
         src = Path(mod.__file__).read_text(encoding="utf-8")
         assert "claim --yes --share-yes" in src, mod.__name__
         assert "claim --yes so the next agent skips this" not in src, mod.__name__
+    # runwrap uses the shared helper; non-scratch still names the sharing command.
+    src = Path(runwrap.__file__).read_text(encoding="utf-8")
+    assert "claim --yes so the next agent skips this" not in src
+    monkeypatch.delenv("CLAIMIDX_SCRATCH", raising=False)
+    assert "claim --yes --share-yes" in _record_claim_hint()
+    monkeypatch.setenv("CLAIMIDX_SCRATCH", "1")
+    assert "share-yes" not in _record_claim_hint()
 
 
 # --- 2 ---------------------------------------------------------------------------------

@@ -16,6 +16,28 @@ from claimidx.store import Store
 HELD_ID = "cix_0000000000000001"
 
 
+def _strong_claim(store, did: str, cid: str = "cix_deadbeef00000000"):
+    from claimidx.fingerprint import fingerprint
+    from claimidx.models import Claim, EvalSpec, Fix
+
+    err = "RuntimeError: countable share probe " + cid
+    c = Claim(
+        fp=fingerprint(err=err, eco="py"),
+        cls="other",
+        err=err,
+        eco="py",
+        rt="py@3.12",
+        fix=Fix(k="pin", b="x==1"),
+        eval=EvalSpec(cmd='python -c "import json"'),
+        own=did,
+        id=cid,
+        nr=1,
+        st="confirmed",
+    )
+    store.put(c)
+    return c
+
+
 def _assert_clean(cta: dict) -> None:
     text = json.dumps(cta)
     assert "cix_bdc" not in text
@@ -44,7 +66,8 @@ def test_path_b_cta_uncountable_until_share(tmp_path: Path):
     assert cta_pub["claim_id"] == "cix_localonly"
     assert "publish_no_share" in cta_pub["why"]
     _assert_clean(cta_pub)
-    store.log("commons-push", did, "cix_deadbeef", {"exists": False})
+    _strong_claim(store, did, "cix_deadbeef00000000")
+    store.log("commons-push", did, "cix_deadbeef00000000", {"exists": False})
     cta2 = path_b_cta(store, did)
     assert cta2["countable"] is True
     assert cta2["shared"] is True
@@ -114,7 +137,8 @@ def test_path_b_cta_after_countable_is_not_an_invite(tmp_path: Path):
     """After a countable share, next is the user's own next claim — never a growth invite."""
     store = Store(tmp_path / "ix.sqlite")
     did = "did:claimidx:agent-countable01"
-    store.log("commons-push", did, "cix_deadbeef", {"exists": False})
+    _strong_claim(store, did, "cix_deadbeef00000000")
+    store.log("commons-push", did, "cix_deadbeef00000000", {"exists": False})
     cta = path_b_cta(store, did)
     assert cta["countable"] is True
     _assert_clean(cta)

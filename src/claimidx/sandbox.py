@@ -15,19 +15,34 @@ from .fingerprint import runtime_proof_key
 from .policy import _LOCAL_PIP, _norm_head, eval_allowed, split_eval
 
 
-def project_python(cwd: str | os.PathLike[str] | None) -> str | None:
-    """The tree's own interpreter (`.venv`/`venv` under cwd), when it has one.
-
-    A claim about a project is about that project's environment: an agent's
-    shell PATH rarely has the venv active when a hook fires, and replaying
-    `python -c "import x"` under the wrong interpreter turns a real fix into
-    a false miss.
-    """
+def tree_venv_python(cwd: str | os.PathLike[str] | None) -> str | None:
+    """`<cwd>/.venv` or `<cwd>/venv` only — not `$VIRTUAL_ENV`."""
     if not cwd:
         return None
     root = Path(cwd)
     for venv in (".venv", "venv"):
         cand = root / venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        if cand.is_file():
+            return str(cand)
+    return None
+
+
+def project_python(cwd: str | os.PathLike[str] | None) -> str | None:
+    """The tree's own interpreter, or the active `$VIRTUAL_ENV`.
+
+    Prefer `<cwd>/.venv` or `<cwd>/venv` when that tree has one: a claim about
+    a project is about that project's environment, and an agent's shell PATH
+    rarely has the venv active when a hook fires. If the tree has no venv,
+    honor `$VIRTUAL_ENV` so `apply` can install into a named environment.
+    Replaying `python -c "import x"` under the wrong interpreter turns a real
+    fix into a false miss.
+    """
+    own = tree_venv_python(cwd)
+    if own:
+        return own
+    env = (os.environ.get("VIRTUAL_ENV") or "").strip()
+    if env:
+        cand = Path(env) / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         if cand.is_file():
             return str(cand)
     return None
@@ -119,6 +134,7 @@ class ReplayResult:
     ms: int = 0
     net: str = ""  # offline | open | unenforced
     net_how: str = ""  # bwrap | interpreter | docker | python-flags | cargo-net-offline | head
+    interpreter: str = ""  # resolved python/node used to run a python/node eval
 
     def as_dict(self) -> dict:
         return {
@@ -134,6 +150,7 @@ class ReplayResult:
             "ms": int(self.ms or 0),
             "net": self.net,
             "net_how": self.net_how,
+            "interpreter": self.interpreter,
         }
 
     def is_hint(self) -> bool:
@@ -190,17 +207,32 @@ _TREE_MARKERS = {
 _ENV_HEADS = {"python", "python3", "node"}
 
 
+# Versioned names (python3.11, python3.13.exe, node18) must observe the same way as `python` / `node`.
+# Ask the binary for its version; do not parse the version out of the filename.
+_PY_BASE = re.compile(r"^(?:python(?:\d+(?:\.\d+)*)?|pythonw)$", re.I)
+_NODE_BASE = re.compile(r"^(?:node(?:js)?\d*)$", re.I)
+
+
+def exe_basename(exe: str) -> str:
+    base = os.path.basename(exe or "").lower()
+    if base.endswith(".exe"):
+        base = base[:-4]
+    return base
+
+
 def observe_env(argv: list[str]) -> str:
-    """Executing runtime of a resolved eval argv. Empty if not python/node."""
+    """Executing runtime of a resolved eval argv. Empty if not python/node.
+
+    Recognizes versioned interpreter names (`python3.11`, `python3.13.exe`,
+    `node18`) and asks that binary for its version.
+    """
     if not argv:
         return ""
     exe = argv[0]
-    base = os.path.basename(exe).lower()
-    if base.endswith(".exe"):
-        base = base[:-4]
-    if base in {"python", "python3", "pythonw"}:
+    base = exe_basename(exe)
+    if _PY_BASE.fullmatch(base):
         return _observe_py(exe)
-    if base == "node":
+    if _NODE_BASE.fullmatch(base):
         return _observe_node(exe)
     return ""
 
@@ -259,18 +291,50 @@ def _eval_needs_env(cmd: str) -> bool:
         return False
     if not parts:
         return False
-    return _norm_head(parts[0]) in _ENV_HEADS
+    head = _norm_head(parts[0])
+    return bool(_PY_BASE.fullmatch(head) or _NODE_BASE.fullmatch(head) or head in _ENV_HEADS)
 
 
-def replay_records_hold(claim_rt: str, result: ReplayResult, cmd: str = "") -> tuple[bool, str]:
+def replay_records_hold(
+    claim_rt: str,
+    result: ReplayResult,
+    cmd: str = "",
+    *,
+    captured_interpreter: str = "",
+    cwd: str = "",
+    clean_room: bool = False,
+) -> tuple[bool, str]:
     """Whether a held replay may mint nr.
 
     Python/node evals observe the executing interpreter. That env is
     required: claim.rt must be set and match at runtime_proof_key grain.
-    Other heads keep prior confirm-replay behavior.
+    If a failing interpreter was recorded at capture time, the replay must
+    use that same binary (or the same venv); otherwise this is a hold-env
+    mismatch and nothing is minted. Other heads keep prior confirm-replay behavior.
     """
     if result.is_hint() or not result.held:
         return False, result.reason
+    captured = (captured_interpreter or "").strip()
+    if captured:
+        from .env import _real_exe, is_lang_interpreter, same_interpreter
+
+        if not is_lang_interpreter(captured):
+            captured = ""
+        used = (result.interpreter or "").strip()
+        if captured and not _real_exe(captured):
+            return False, f"hold env mismatch: captured interpreter is gone ({captured})"
+        if captured:
+            same = bool(used) and same_interpreter(captured, used)
+            if not same and used and cwd:
+                tree = tree_venv_python(cwd)
+                if tree and same_interpreter(used, tree):
+                    same = True
+                elif clean_room:
+                    used_r = os.path.realpath(used)
+                    cwd_r = os.path.realpath(cwd)
+                    same = used_r == cwd_r or used_r.startswith(cwd_r + os.sep)
+            if not same:
+                return False, f"hold env mismatch: replay interpreter={used or 'unknown'} captured={captured}"
     if not _eval_needs_env(cmd):
         return True, "held"
     observed = (result.env or "").strip()
@@ -653,10 +717,21 @@ def network_blocked(result: ReplayResult) -> bool:
     return any(sig in blob for sig in _BLOCK_SIGNALS)
 
 
-def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = None, *, trust: str = "local", net: bool = False) -> ReplayResult:
+def replay(
+    cmd: str,
+    expect: int = 0,
+    timeout: float = 45.0,
+    cwd: str | None = None,
+    *,
+    trust: str = "local",
+    net: bool = False,
+    interpreter: str = "",
+) -> ReplayResult:
     """Run eval.cmd. `trust="untrusted"` (a pulled or seed claim) only runs the portable proof grammar.
 
     Default is offline. `net=True` leaves the network open and records net=open; it does not mint nr.
+    `interpreter`, when it exists, pins `CLAIMIDX_PYTHON` so the eval runs in the same
+    python that produced the failure.
     """
     if not (cmd or "").strip():
         return ReplayResult(True, False, None, expect, False, "builtin")
@@ -684,8 +759,23 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
     missing = _precondition(_norm_head(parts[0]), cwd, cmd)
     if missing:
         return ReplayResult(True, False, None, expect, False, missing)
-    argv = resolve_argv(parts, cwd)
+    pinned = (interpreter or "").strip()
+    token = None
+    if pinned and os.path.isfile(pinned):
+        token = os.environ.get("CLAIMIDX_PYTHON")
+        os.environ["CLAIMIDX_PYTHON"] = pinned
+    try:
+        argv = resolve_argv(parts, cwd)
+    finally:
+        if pinned and os.path.isfile(pinned):
+            if token is None:
+                os.environ.pop("CLAIMIDX_PYTHON", None)
+            else:
+                os.environ["CLAIMIDX_PYTHON"] = token
     observed = observe_env(argv)
+    used = ""
+    if argv and _norm_head(argv[0]) in _ENV_HEADS or (argv and os.path.basename(argv[0]).lower().startswith("python")):
+        used = argv[0]
     env = os.environ.copy()
     env.update(extra_env)
     argv, net_state, net_how = _apply_offline(env, parts, argv, net_open=bool(net), cwd=cwd)
@@ -696,10 +786,10 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
         proc = _run_captured(argv, timeout, cwd, env)
     except subprocess.TimeoutExpired:
         ms = int((time.monotonic() - t0) * 1000)
-        return ReplayResult(True, True, 124, expect, False, "timeout", env=observed, ms=ms, net=net_state, net_how=net_how)
+        return ReplayResult(True, True, 124, expect, False, "timeout", env=observed, ms=ms, net=net_state, net_how=net_how, interpreter=used)
     except OSError as e:
         ms = int((time.monotonic() - t0) * 1000)
-        return ReplayResult(True, False, None, expect, False, f"exec-error:{e}", env=observed, ms=ms, net=net_state, net_how=net_how)
+        return ReplayResult(True, False, None, expect, False, f"exec-error:{e}", env=observed, ms=ms, net=net_state, net_how=net_how, interpreter=used)
     held = proc.returncode == expect
     ms = int((time.monotonic() - t0) * 1000)
     return ReplayResult(
@@ -715,4 +805,5 @@ def replay(cmd: str, expect: int = 0, timeout: float = 45.0, cwd: str | None = N
         ms,
         net_state,
         net_how,
+        interpreter=used,
     )

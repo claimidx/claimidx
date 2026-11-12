@@ -90,8 +90,11 @@ def test_claim_yes_publishes_and_mints_nr(tmp_path: Path, capsys):
 
 def test_claim_without_failure_says_what_to_do(tmp_path: Path, capsys):
     db = str(tmp_path / "ix.sqlite")
-    assert main(["--db", db, "claim"]) == 2
-    assert "pass --err" in capsys.readouterr().err
+    assert main(["--db", db, "claim"]) == 0
+    text = capsys.readouterr().out
+    assert "getting started" in text
+    assert "init --agent" in text
+    assert "pass --err" in text or "no failure" in text
 
 
 def test_claim_fix_from_git_diff(tmp_path: Path, capsys):
@@ -108,8 +111,8 @@ def test_claim_fix_from_git_diff(tmp_path: Path, capsys):
     assert draft["fix_k"] == "patch"
     assert "a.py" in draft["fix_b"] and "+x = 2" in draft["fix_b"]
     assert draft["inferred"]["fix_b"] == "git diff"
-    assert draft["eval"] == "true" and draft["eval_proof"] is False
-    assert any("hint" in w for w in draft["warn"])
+    assert draft["eval"] == "" and draft["eval_proof"] is False
+    assert any("eval empty" in w or "hint" in w for w in draft["warn"])
 
 
 def test_infer_fix_kind():

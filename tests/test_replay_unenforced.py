@@ -243,7 +243,8 @@ def _assert_claim_replay_refused(db: str, rc: int, out: dict, err: str) -> None:
     assert rc == 0, out  # the claim itself succeeded; agents must not read Path B as failed
     assert out["ok"] is True and out["id"]
     assert out["replay"]["recorded"] is False
-    assert "replay-net-unenforced" in str(out["replay"]["reason"])
+    assert out["replay"]["reason"] == "eval-passed-not-recorded"
+    assert "replay-net-unenforced" in str(out["replay"].get("refusal") or "")
     warns = " | ".join(out.get("warn") or [])
     assert "replay skipped" in warns and "not enforced" in warns and "no nr was minted" in warns
     assert "bwrap" in warns and "--net" in warns
@@ -348,9 +349,8 @@ def test_claim_share_yes_without_bwrap_still_reaches_commons(tmp_path: Path, cap
     assert any(u.endswith("/api/publish") for u in calls)
     # The claim can still be shared; the unenforced replay must not mint nr.
     assert out["replay"]["recorded"] is False and Store(db).get(out["id"]).nr == 0
-    assert "replay-net-unenforced" in str(out["replay"].get("reason") or "") or "replay-net-unenforced" in str(
-        (out["replay"].get("replay") or {}).get("reason") or ""
-    )
+    assert out["replay"]["reason"] == "eval-passed-not-recorded"
+    assert "replay-net-unenforced" in str(out["replay"].get("refusal") or "")
 
 
 # --- 0.7.23: interpreter hook (python -c / python -m pytest) is unenforced without bwrap ---
@@ -497,8 +497,8 @@ def test_claim_yes_pytest_eval_without_bwrap_publishes_but_mints_no_nr(tmp_path:
     assert rc == 0 and out["ok"] is True and out["id"], out  # the claim is published
     rep = out["replay"]
     assert rep["recorded"] is False and rep["held"] is False, rep
-    reason = str(rep.get("reason") or "") + " " + str((rep.get("replay") or {}).get("reason") or "")
-    assert "replay-net-unenforced" in reason, out
+    assert rep.get("reason") == "eval-passed-not-recorded", rep
+    assert "replay-net-unenforced" in str(rep.get("refusal") or ""), out
     assert "held" not in str(rep.get("reason") or "").split(":")[0]
     c = Store(db).get(out["id"])
     assert c.nr == 0 and c.nc == 0

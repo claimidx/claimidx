@@ -397,6 +397,37 @@ _HOLD_KINDS = frozenset({"confirm", "confirm-replay", "commons-hold"})
 _PUBLISH_KINDS = frozenset({"publish"})
 
 
+def weak_share_reasons(claim: object, replay: dict | None = None) -> list[str]:
+    """Why a claim should not count as a commons DID even if it was shared."""
+    reasons: list[str] = []
+    eco = str(getattr(claim, "eco", "") or "").strip().lower()
+    if not eco or eco == "other":
+        reasons.append("eco is empty or other")
+    try:
+        nr = int(getattr(claim, "nr", 0) or 0)
+    except (TypeError, ValueError):
+        nr = 0
+    if nr < 1:
+        reasons.append("no held replay (nr=0)")
+    reason = ""
+    if isinstance(replay, dict):
+        reason = str(replay.get("reason") or "")
+        nested = replay.get("replay")
+        if not reason and isinstance(nested, dict):
+            reason = str(nested.get("reason") or "")
+    if reason.startswith("fix-not-applied"):
+        reasons.append("fix-not-applied: the eval cannot hold yet")
+    return reasons
+
+
+def claim_share_countable(claim: object | None) -> bool:
+    """A shared claim is countable only with an ecosystem and a held replay (nr>=1)."""
+    if claim is None:
+        return False
+    # fix-not-applied is already nr=0; countable looks at eco + nr only.
+    return not any(r.startswith(("eco is empty", "no held replay")) for r in weak_share_reasons(claim))
+
+
 def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
     """Path B conversion status for ask / home-ask / post-hold / claim envelopes.
 
@@ -426,7 +457,15 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
                     last_published = str(ev.get("claim_id") or "")
             if shared and held and published:
                 break
-    countable = bool(minted and shared)
+    strong_share = False
+    if minted and shared and store is not None:
+        for ev in store.events(limit=500, actor=did):
+            if (ev.get("kind") or "") in _SHARE_KINDS:
+                row = store.get(str(ev.get("claim_id") or "")) if ev.get("claim_id") else None
+                if claim_share_countable(row):
+                    strong_share = True
+                    break
+    countable = bool(minted and strong_share)
     from .home import SCRATCH_NO_SHARE, scratch_mode
 
     if scratch_mode():
@@ -451,7 +490,10 @@ def path_b_cta(store: Store | None, actor: str | None = None) -> dict[str, Any]:
         "shared": bool(minted and shared),
     }
     if not countable:
-        if published and not shared:
+        if shared:
+            out["why"] = "shared claim is not countable: it has no held replay (nr) or no ecosystem (empty or other)"
+            out["next"] = f"after a fix that holds: {SHARE_CMD}"
+        elif published and not shared:
             out["why"] = "publish_no_share: local claim is not a countable commons DID until share <id> --yes"
             if last_published:
                 out["claim_id"] = last_published
@@ -512,19 +554,23 @@ def lifecycle_funnel(store: Store, *, days: int = 30) -> dict[str, Any]:
     """DID lifecycle funnel from the local event log (no network, no PII beyond DID).
 
     Stages: install -> init -> ask -> sync -> confirm -> publish -> share.
-    `countable` excludes seed/anon so Growth can see stranger drop-off before a commons share.
+    `countable` uses the same house/falsifier/operator exclude list as the commons proxy,
+    so Growth sees stranger drop-off, not weak or in-house actors.
     """
     since = datetime.now(UTC) - timedelta(days=days)
     rows = _rows(store, since)
     stages: dict[str, dict[str, Any]] = {s: {"events": 0, "actors": 0, "actor_ids": []} for s in _LIFECYCLE_ORDER}
     actors_by: dict[str, set[str]] = {s: set() for s in _LIFECYCLE_ORDER}
+    house = _proxy_excluded()
     for r in rows:
         stage = _LIFECYCLE_KINDS.get(r["kind"])
         if not stage:
             continue
         stages[stage]["events"] += 1
         actor = r["actor"]
-        if actor and actor not in _FUNNEL_EXCLUDED:
+        # Same house/falsifier/operator drop as the commons proxy, so local
+        # lifecycle countable matches proxy.countable_ids.
+        if actor and not _proxy_is_excluded(actor, house):
             actors_by[stage].add(actor)
     for stage, actors in actors_by.items():
         ordered = sorted(actors)
@@ -586,7 +632,7 @@ def render_funnel_scoreboard(life: dict[str, Any], *, commons: dict[str, Any] | 
             nxt = order[order.index(s) + 1]
             key = f"{s}_no_{nxt}"
             lines.append(f"  {key:<24} {drop.get(key, 0)}")
-    # COO path shorthand line: install→init→ask→hold→claim using aliases where present
+    # Lifecycle path shorthand line: install→init→ask→hold→claim using aliases where present
     path_bits = []
     for s in ("install", "init", "ask", "confirm", "publish"):
         if s not in order:
@@ -595,7 +641,7 @@ def render_funnel_scoreboard(life: dict[str, Any], *, commons: dict[str, Any] | 
         n = (stages.get(s) or {}).get("actors", 0)
         path_bits.append(f"{name} {n}")
     if path_bits:
-        lines.append("COO path actors: " + " → ".join(path_bits))
+        lines.append("lifecycle path actors: " + " → ".join(path_bits))
     if commons and not commons.get("error"):
         pushes = commons.get("pushes") or {}
         push_n = pushes.get("count", 0) if isinstance(pushes, dict) else 0

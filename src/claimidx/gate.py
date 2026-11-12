@@ -280,6 +280,7 @@ def graduation_gate(
     store: Store | None = None,
     strict_digest: bool | None = None,
     actor: str = "did:claimidx:anon",
+    clean_room: bool = False,
 ) -> GateDecision:
     """Decide whether `result` (a replay of `claim.eval`) may mint `nr`.
 
@@ -296,9 +297,28 @@ def graduation_gate(
             unenforced_reason(result),
             suggest={"hint": "install bubblewrap (bwrap) so default replay is offline, or re-run confirm --replay --net"},
         )
-    ok, why = replay_records_hold(claim.rt, result, claim.eval.cmd)
+    captured = ""
+    if store is not None:
+        captured = store.captured_interpreter(claim.id)
+    ok, why = replay_records_hold(
+        claim.rt,
+        result,
+        claim.eval.cmd,
+        captured_interpreter=captured,
+        cwd=cwd or "",
+        clean_room=clean_room,
+    )
     if not ok:
         return GateDecision(False, why, suggest=_env_suggestion(claim, result, why))
+    tree_note: list[str] = []
+    if captured and cwd:
+        from .env import same_interpreter
+        from .sandbox import tree_venv_python
+
+        used = (result.interpreter or "").strip()
+        tree = tree_venv_python(cwd)
+        if used and tree and same_interpreter(used, tree) and not same_interpreter(captured, used):
+            tree_note.append("replay used the tree .venv, not the captured interpreter; that is the apply/confirm env")
     why_v = vacuous_reason((result.stdout or "") + "\n" + (result.stderr or ""))
     if why_v:
         return GateDecision(False, why_v)
@@ -316,7 +336,7 @@ def graduation_gate(
             if suggest
             else {"hint": f"use an eval that imports or exercises {target}"},
         )
-    warns: list[str] = []
+    warns: list[str] = list(tree_note)
     proof = store.proof_for(claim.id) if store is not None else None
     if is_tree_scoped(claim.eval.cmd):
         cwd = cwd or os.getcwd()  # the replay ran there; bind to the same place
@@ -369,20 +389,22 @@ def confirm_replay(
     *,
     net: bool = False,
     rerun: bool = False,
+    interpreter: str = "",
 ) -> tuple[ReplayResult, ReplayResult | None, str]:
     """Replay once, or twice when rerun. Flag is '', 'offline-block', or 'flaky'.
 
     Imports replay inside so a monkeypatch of claimidx.sandbox.replay is the one that runs.
+    `interpreter` is the python that produced the failure; replay uses it when present.
     """
     from .sandbox import network_blocked, replay
 
-    result = replay(claim.eval.cmd, claim.eval.expect, cwd=cwd, trust=trust, net=net)
+    result = replay(claim.eval.cmd, claim.eval.expect, cwd=cwd, trust=trust, net=net, interpreter=interpreter)
     if not (rerun and result.ran and not result.is_hint() and not network_blocked(result)):
         return result, None, "offline-block" if network_blocked(result) else ""
     cmd2 = claim.eval.cmd
     if re.search(r"\bpytest\b", cmd2 or "") and "--cache-clear" not in (cmd2 or ""):
         cmd2 = cmd2 + " --cache-clear"
-    second = replay(cmd2, claim.eval.expect, cwd=cwd, trust=trust, net=net)
+    second = replay(cmd2, claim.eval.expect, cwd=cwd, trust=trust, net=net, interpreter=interpreter)
     if network_blocked(second):
         return result, second, "flaky" if result.held else "offline-block"
     if bool(result.held) != bool(second.held):
