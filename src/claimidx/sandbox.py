@@ -291,18 +291,21 @@ def replay_records_hold(
         return False, result.reason
     captured = (captured_interpreter or "").strip()
     if captured:
-        from .env import _real_exe, same_interpreter
+        from .env import _real_exe, is_lang_interpreter, same_interpreter
 
+        if not is_lang_interpreter(captured):
+            captured = ""
         used = (result.interpreter or "").strip()
-        if not _real_exe(captured):
+        if captured and not _real_exe(captured):
             return False, f"hold env mismatch: captured interpreter is gone ({captured})"
-        same = bool(used) and same_interpreter(captured, used)
-        if not same and clean_room and used and cwd:
-            used_r = os.path.realpath(used)
-            cwd_r = os.path.realpath(cwd)
-            same = used_r == cwd_r or used_r.startswith(cwd_r + os.sep)
-        if not same:
-            return False, f"hold env mismatch: replay interpreter={used or 'unknown'} captured={captured}"
+        if captured:
+            same = bool(used) and same_interpreter(captured, used)
+            if not same and clean_room and used and cwd:
+                used_r = os.path.realpath(used)
+                cwd_r = os.path.realpath(cwd)
+                same = used_r == cwd_r or used_r.startswith(cwd_r + os.sep)
+            if not same:
+                return False, f"hold env mismatch: replay interpreter={used or 'unknown'} captured={captured}"
     if not _eval_needs_env(cmd):
         return True, "held"
     observed = (result.env or "").strip()

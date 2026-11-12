@@ -1254,6 +1254,10 @@ class Store:
         path = (interpreter or "").strip()
         if not claim_id or not path:
             return
+        from .env import is_lang_interpreter
+
+        if not is_lang_interpreter(path):
+            return
         self.log("capture-env", actor or "did:claimidx:anon", claim_id, {"interpreter": path})
 
     def captured_interpreter(self, claim_id: str) -> str:

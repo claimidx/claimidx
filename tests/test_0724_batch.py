@@ -679,3 +679,16 @@ def test_render_draft_redacts_venv_path():
     assert "workspace" not in err_line
     assert "<PATH>" in err_line
     # the publish argv may still carry the raw err (ingest normalizes)
+
+
+def test_non_python_command_does_not_record_an_interpreter(tmp_path: Path):
+    from claimidx.env import interpreter_from_command, is_lang_interpreter, remember_failure
+
+    cargo = tmp_path / "cargo"
+    cargo.write_text("", encoding="utf-8")
+    cargo.chmod(0o755)
+    assert not is_lang_interpreter(str(cargo))
+    assert not is_lang_interpreter("/usr/bin/mvn")
+    assert interpreter_from_command(command=f"{cargo} test", executed=str(cargo)) == ""
+    rec = remember_failure("error: nothing to do", command=f"{cargo} test", extra={"interpreter": str(cargo)})
+    assert not rec.get("interpreter")

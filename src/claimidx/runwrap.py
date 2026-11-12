@@ -120,12 +120,16 @@ def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None =
         q: dict[str, Any] = {"err": err, "cls": cls, "eco": guess["eco"], "rt": guess["rt"], "dep": dep, "fp": fp}
         hits, _cands = retrieve(store, q, k=k, kind="hook")
         v = verdict_for(q, hits)
+        from .env import interpreter_from_command
+
         executed = argv[0] if argv else ""
         if executed and not os.path.dirname(executed):
             from .sandbox import _which
 
             executed = _which(executed) or executed
-        remember_failure(err, command=cmd, cwd=root, eco=guess["eco"], rt=guess["rt"], event="run", fp=fp, extra={"interpreter": executed})
+        interp = interpreter_from_command(cmd, argv=argv, executed=executed, cwd=root)
+        extra = {"interpreter": interp} if interp else None
+        remember_failure(err, command=cmd, cwd=root, eco=guess["eco"], rt=guess["rt"], event="run", fp=fp, extra=extra)
         line = (
             f"CLAIMIDX verdict {v['action']} {v['id']} — {v['why']}; next: {v['next']}"
             if v.get("id")

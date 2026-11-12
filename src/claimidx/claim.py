@@ -602,7 +602,7 @@ def _replay_now(
         c,
         cwd or None,
         eval_trust(store, c, override=trust_eval),
-        interpreter=captured_interpreter_for(c.id, store, fp=c.fp),
+        interpreter="" if mode == "clean-room" else captured_interpreter_for(c.id, store, fp=c.fp),
     )
     info = result.as_dict()
     if second is not None:

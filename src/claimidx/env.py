@@ -372,6 +372,15 @@ def last_failure_path() -> Path:
 _PY_EXE = re.compile(r"(?i)(?:^|[/\\])(?:python(?:\d+(?:\.\d+)*)?|pythonw)(?:\.exe)?$")
 
 
+def is_lang_interpreter(path: str) -> bool:
+    """True when `path` is a python or node executable, not cargo/mvn/etc."""
+    raw = (path or "").strip()
+    if not raw:
+        return False
+    base = os.path.basename(raw).lower()
+    return bool(_PY_EXE.search(raw) or base.startswith("python") or base in {"node", "node.exe", "nodejs"})
+
+
 def _real_exe(path: str) -> str:
     raw = (path or "").strip()
     if not raw:
@@ -398,7 +407,7 @@ def same_interpreter(a: str, b: str) -> bool:
 def interpreter_from_command(command: str = "", argv: list[str] | None = None, executed: str = "", cwd: str = "") -> str:
     """Absolute python that produced the failure, if the command names one."""
     got = _real_exe(executed)
-    if got:
+    if got and is_lang_interpreter(got):
         return got
     tokens = list(argv) if argv else []
     if not tokens and command:
@@ -450,8 +459,9 @@ def remember_failure(
         "ts": int(time.time()),
         **(extra or {}),
     }
-    if not rec.get("interpreter"):
-        rec["interpreter"] = interpreter_from_command(command, cwd=rec["cwd"]) or interpreter_from_error(rec["err"])
+    interp = str(rec.get("interpreter") or "")
+    if not is_lang_interpreter(interp):
+        rec["interpreter"] = interpreter_from_command(command, cwd=rec["cwd"], executed=interp) or interpreter_from_error(rec["err"])
     try:
         from .perms import write_private
 
