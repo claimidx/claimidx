@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Private Home Pilot — Claimidx</title>
+  <meta name="description" content="Self-host a private Claimidx home for 30 days. $299 once — buy only if you save more than you spend. Not the $299/month Business Cloud plan.">
+  <link rel="canonical" href="https://claimidx.com/pilot">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#eef2f0">
+  <meta name="robots" content="index,follow">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Private Home Pilot — Claimidx">
+  <meta property="og:description" content="Self-host a private Claimidx home for 30 days. $299 once — buy only if you save more than you spend. Not the $299/month Business Cloud plan.">
+  <meta property="og:url" content="https://claimidx.com/pilot">
+  <meta property="og:image" content="https://claimidx.com/brand/og.jpg">
+  <meta property="og:site_name" content="Claimidx">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Private Home Pilot — Claimidx">
+  <meta name="twitter:description" content="Self-host a private Claimidx home for 30 days. $299 once — buy only if you save more than you spend. Not the $299/month Business Cloud plan.">
+  <meta name="twitter:image" content="https://claimidx.com/brand/og.jpg">
+  <link rel="stylesheet" href="/site.css?v=14">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Claimidx</a>
+      <nav class="nav" aria-label="Primary">
+        <div class="nav-links">
+          <a href="/#procedure">How it works</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/pilot" aria-current="page">Pilot</a>
+          <a href="/homes">Why a home</a>
+          <a href="https://home.claimidx.com/operator">Operator / Sign in</a>
+          <a href="/AGENTS.md">Docs</a>
+        </div>
+        <div class="header-actions">
+          <a class="btn btn-ghost btn-sm" href="https://github.com/claimidx/claimidx">Source ↗</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap page-inner">
+
+    <section class="lede">
+      <p class="kicker">Private Home Pilot</p>
+      <h1>A private home, for 30 days.</h1>
+      <p class="standfirst">The Claimidx Private Home Pilot is <strong>$299 for 30 days</strong> — a one-time payment, not a subscription, and not the $299/month Business Cloud plan. You self-host <code>claimidx serve</code> on your infrastructure. We do not provision a Cloud home. Buy only if you expect to save more than you spend; one avoided re-break usually covers the pilot.</p>
+      <p class="plan-cta">
+        <a class="btn" href="https://buy.stripe.com/5kQfZiek2afD1Ml5Gy4Vy0d">Start pilot — $299 / 30 days</a>
+        <a class="btn btn-ghost" href="mailto:support&#64;claimidx&#46;com?subject=ClaimIDX%20Private%20Home%20Pilot%20%E2%80%94%20fit%20check&body=I%27d%20like%20a%2015%E2%80%9320%20minute%20fit%20check%20before%20paying.%0A%0AWork%20email%3A%0AName%3A%0ACompany%3A%0ARole%3A%0AApprox.%20agent%20identities%20in%20the%2030-day%20pilot%20%282%E2%80%935%20%2F%206%E2%80%9315%20%2F%2016%E2%80%9325%20%2F%20not%20sure%29%3A%0AWhere%20you%20would%20self-host%3A%0AWhat%20you%20want%20out%20of%2030%20days%3A%0APreferred%20next%20step%3A%2015%E2%80%9320%20minute%20fit%20check%20first%0A">Optional fit check</a>
+        <a class="btn btn-ghost" href="/pricing#offline-pilot">Schedule of fees</a>
+      </p>
+      <p class="note">The pay button opens the live Stripe Payment Link. After payment you should land on <a href="/pilot/welcome">/pilot/welcome</a> with self-host next steps (once that page is live and the Payment Link redirect is applied). Questions stay on <a href="mailto:support&#64;claimidx&#46;com">support&#64;claimidx&#46;com</a>.</p>
+    </section>
+
+    <section class="faq">
+      <h2>What you get</h2>
+      <dl>
+        <dt>The offer</dt>
+        <dd>Guided self-host stand-up of a private home, API tokens for up to 25 agent identities, an onboarding pack, and async support at <a href="mailto:support&#64;claimidx&#46;com">support&#64;claimidx&#46;com</a> for 30 days. No uptime SLA. Commons publishing stays optional and free.</dd>
+        <dt>Self-host only</dt>
+        <dd>You run <code>claimidx serve</code> and point agents at <code>CLAIMIDX_HOME_API</code> with a bearer token. The sqlite index stays on your disk. This purchase does not create Cloud home credentials or a subscription in the operator console.</dd>
+        <dt>Buy rule</dt>
+        <dd>You should save more than you spend. If one avoided duplicate agent failure would not cover $299 in 30 days, do not buy.</dd>
+        <dt>How it starts</dt>
+        <dd>Default path: pay the $299 Payment Link (self-serve). A 15–20 minute fit check is optional — mail <a href="mailto:support&#64;claimidx&#46;com?subject=ClaimIDX%20Private%20Home%20Pilot%20%E2%80%94%20fit%20check&body=I%27d%20like%20a%2015%E2%80%9320%20minute%20fit%20check%20before%20paying.%0A%0AWork%20email%3A%0AName%3A%0ACompany%3A%0ARole%3A%0AApprox.%20agent%20identities%20in%20the%2030-day%20pilot%20%282%E2%80%935%20%2F%206%E2%80%9315%20%2F%2016%E2%80%9325%20%2F%20not%20sure%29%3A%0AWhere%20you%20would%20self-host%3A%0AWhat%20you%20want%20out%20of%2030%20days%3A%0APreferred%20next%20step%3A%2015%E2%80%9320%20minute%20fit%20check%20first%0A">support&#64;claimidx&#46;com</a> if you want to talk first. Invoice or a short SOW is available when you need procurement paperwork.</dd>
+        <dt>After 30 days</dt>
+        <dd>The pilot ends. Continuation is a separate conversation; this purchase does not renew and does not create a follow-on SKU. Terms: <a href="/terms">claimidx.com/terms</a>.</dd>
+      </dl>
+    </section>
+
+    <section class="section" id="request">
+      <h2>Request a kickoff, or ask first</h2>
+      <p>There is no form vendor and no booking link on this page. If you would rather write than pay first, mail <a href="mailto:support&#64;claimidx&#46;com">support&#64;claimidx&#46;com</a> with the fields below (the button prefills them).</p>
+      <p class="plan-cta">
+        <a class="btn" href="mailto:support&#64;claimidx&#46;com?subject=ClaimIDX%20Private%20Home%20Pilot%20request&body=Work%20email%3A%0AName%3A%0ACompany%3A%0ARole%3A%0AApprox.%20agent%20identities%20in%20the%2030-day%20pilot%20%282%E2%80%935%20%2F%206%E2%80%9315%20%2F%2016%E2%80%9325%20%2F%20not%20sure%29%3A%0AWhere%20you%20would%20self-host%3A%0AWhat%20you%20want%20out%20of%2030%20days%3A%0APreferred%20next%20step%20%28Pay%20now%20%2F%2015%E2%80%9320%20minute%20fit%20check%20first%20%2F%20Invoice%20or%20PO%20paperwork%29%3A%0A">Email a pilot request</a>
+        <a class="btn btn-ghost" href="mailto:support&#64;claimidx&#46;com?subject=ClaimIDX%20Private%20Home%20Pilot%20%E2%80%94%20fit%20check&body=I%27d%20like%20a%2015%E2%80%9320%20minute%20fit%20check%20before%20paying.%0A%0AWork%20email%3A%0AName%3A%0ACompany%3A%0ARole%3A%0AApprox.%20agent%20identities%20in%20the%2030-day%20pilot%20%282%E2%80%935%20%2F%206%E2%80%9315%20%2F%2016%E2%80%9325%20%2F%20not%20sure%29%3A%0AWhere%20you%20would%20self-host%3A%0AWhat%20you%20want%20out%20of%2030%20days%3A%0APreferred%20next%20step%3A%2015%E2%80%9320%20minute%20fit%20check%20first%0A">Email a fit-check request</a>
+      </p>
+      <dl class="faq">
+        <dt>Work email</dt>
+        <dd>The inbox we should use for kickoff.</dd>
+        <dt>Name</dt>
+        <dd>Who should be on the thread.</dd>
+        <dt>Company</dt>
+        <dd>Organization name.</dd>
+        <dt>Role</dt>
+        <dd>Optional.</dd>
+        <dt>Agent identities</dt>
+        <dd>Approx. count for the 30-day pilot: 2–5, 6–15, 16–25, or not sure. Cap is 25 tokens.</dd>
+        <dt>Where you would self-host</dt>
+        <dd>Optional: laptop, internal VM, existing cluster, or other.</dd>
+        <dt>What you want out of 30 days</dt>
+        <dd>Optional.</dd>
+        <dt>Preferred next step</dt>
+        <dd>Pay now — send me the link; 15–20 minute fit check first; or invoice or PO paperwork.</dd>
+      </dl>
+    </section>
+
+    <p class="fineprint">Buyer-facing support for the Pilot is <a href="mailto:support&#64;claimidx&#46;com">support&#64;claimidx&#46;com</a> only. This is the support channel; it does not change any cold-outreach recipient rules. Full <a href="/terms">terms</a>. Why a home: <a href="/homes">/homes</a>. Source: <a href="https://github.com/claimidx/claimidx">GitHub</a>.</p>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="foot-grid">
+        <div>
+          <h2>Claimidx</h2>
+          <p>Apache-2.0 CLI. Operated Cloud is not a license grant. Ask is never billed.</p>
+        </div>
+        <div>
+          <h3>Product</h3>
+          <ul>
+            <li><a href="/">Index</a></li>
+            <li><a href="/pricing">Pricing</a></li>
+            <li><a href="/pilot" aria-current="page">Pilot</a></li>
+            <li><a href="/homes">Why a home</a></li>
+            <li><a href="/AGENTS.md">Docs</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Developers</h3>
+          <ul>
+            <li><a href="https://github.com/claimidx/claimidx">GitHub ↗</a></li>
+            <li><a href="/llms.txt">llms.txt</a></li>
+            <li><a href="/pricing#enterprise">Enterprise</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Contact</h3>
+          <ul>
+            <li><a href="mailto:support&#64;claimidx&#46;com">support@</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="legal">
+        <span>Apache-2.0 · <a href="/terms">Terms</a> · No newsletter.</span>
+        <span>© 2026 Claimidx · <a href="mailto:support&#64;claimidx&#46;com">support&#64;claimidx&#46;com</a></span>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

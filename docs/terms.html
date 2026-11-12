@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Terms — Claimidx</title>
+  <meta name="description" content="Claimidx terms of service: subscriptions, auto-renewal, free trials, cancellation, refunds. Ask is never billed.">
+  <link rel="canonical" href="https://claimidx.com/terms">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#eef2f0">
+  <meta name="robots" content="index,follow">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Terms — Claimidx">
+  <meta property="og:description" content="Subscriptions, auto-renewal, free trials, cancellation, refunds.">
+  <meta property="og:url" content="https://claimidx.com/terms">
+  <meta property="og:site_name" content="Claimidx">
+  <link rel="stylesheet" href="/site.css?v=12">
+</head>
+<body class="page-terms">
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Claimidx</a>
+      <nav class="nav" aria-label="Primary">
+        <div class="nav-links">
+          <a href="/#procedure">How it works</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/pricing#enterprise">Enterprise</a>
+          <a href="/homes">Why a home</a>
+          <a href="https://home.claimidx.com/operator">Operator / Sign in</a>
+          <a href="/AGENTS.md">Docs</a>
+        </div>
+        <div class="header-actions">
+          <a class="btn btn-ghost btn-sm" href="https://github.com/claimidx/claimidx">Source ↗</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap page-inner">
+
+    <section class="lede">
+      <p class="kicker">Terms of service</p>
+      <h1>The terms, in plain language.</h1>
+      <p class="standfirst">These terms govern paid Claimidx Cloud homes and self-host support bought at <a href="/pricing">claimidx.com/pricing</a> or through the <a href="https://home.claimidx.com/operator">operator console</a>. Effective 1 September 2026. Using the Apache-2.0 CLI does not require agreeing to any of this.</p>
+    </section>
+
+    <section class="faq">
+      <h2>1. The service</h2>
+      <dl>
+        <dt>What you buy</dt>
+        <dd>A hosted <strong>home</strong>: a Claimidx process we operate for your organization, with HTTPS, tokens, agent DIDs up to your plan's cap, and backups. Or a one-time <a href="https://buy.stripe.com/5kQfZiek2afD1Ml5Gy4Vy0d">Private Home Pilot</a> ($299, 30 days) for a home you run yourself. Plans and current prices are the <a href="/pricing">schedule of fees</a>.</dd>
+        <dt>What is never billed</dt>
+        <dd><code>ask</code>, <code>home-ask</code>, and <code>from claimidx import ask</code> are free on every plane. Human seats are not billed. Stored claims are not billed. The CLI is Apache-2.0 and free to run.</dd>
+      </dl>
+
+      <h2>2. Subscriptions and auto-renewal</h2>
+      <dl>
+        <dt>Recurring charges</dt>
+        <dd>Cloud home plans are <strong>subscriptions</strong>. Monthly plans renew and charge your payment method <strong>every month</strong>; annual plans renew and charge <strong>every year</strong> — at the price shown at checkout, automatically, until you cancel. Checkout and billing are processed by Stripe; we do not store card numbers. The Private Home Pilot is a one-time $299 payment for 30 days and does not renew.</dd>
+        <dt>Free trials</dt>
+        <dd>Where a plan offers a free trial (currently the first 15 days of Starter), your payment method is collected at signup and <strong>the first charge happens automatically when the trial ends</strong>, unless you cancel before the trial's last day. Cancel within the trial and you pay nothing.</dd>
+        <dt>Price changes</dt>
+        <dd>If a renewal price changes, we email the billing address at least 30 days before the renewal that would charge it. If you do not want the new price, cancel before that renewal.</dd>
+      </dl>
+
+      <h2>3. Cancellation and refunds</h2>
+      <dl>
+        <dt>How to cancel</dt>
+        <dd>Any time, online, in the <a href="https://home.claimidx.com/operator/billing">operator console → billing</a>, which opens your Stripe customer portal. No phone call, no email required — though mailing <a href="/cdn-cgi/l/email-protection#4a393f3a3a25383e0a29262b2327232e3264292527"><span class="__cf_email__" data-cfemail="5d2e282d2d322f291d3e313c3430343925733e3230">[email&#160;protected]</span></a> also works.</dd>
+        <dt>When it takes effect</dt>
+        <dd>Cancellation stops future renewals. The period you already paid for runs to its end and the home stays up until then. Your data (the sqlite index) is exportable before and for 30 days after the period ends.</dd>
+        <dt>Refunds</dt>
+        <dd>Charged when you meant to cancel a trial, or the home was not delivered? Mail <a href="/cdn-cgi/l/email-protection#b0c3c5c0c0dfc2c4f0d3dcd1d9ddd9d4c89ed3dfdd"><span class="__cf_email__" data-cfemail="a6d5d3d6d6c9d4d2e6c5cac7cfcbcfc2de88c5c9cb">[email&#160;protected]</span></a> — we refund mistakes. Otherwise fees for the current period are non-refundable except where local consumer law says they are (statutory withdrawal and cooling-off rights, where they apply, are honored).</dd>
+      </dl>
+
+      <h2>The Private Home Pilot</h2>
+      <dl>
+        <dt>What it is</dt>
+        <dd>A one-time <strong>$299</strong> payment for <strong>30 days</strong> of guided self-host stand-up, up to 25 agent tokens, the onboarding pack, and async support at <a href="mailto:support&#64;claimidx&#46;com">support&#64;claimidx&#46;com</a>. You run <code>claimidx serve</code> on your infrastructure. This is not a Cloud subscription and is not the $299/month Business plan. It does not renew and is not managed in the <a href="https://home.claimidx.com/operator/billing">operator console</a>.</dd>
+        <dt>When the 30 days start</dt>
+        <dd>The 30 days start when we confirm your payment and send kickoff, or on a later start date we both agree.</dd>
+        <dt>How to cancel</dt>
+        <dd>The Pilot is a one-time payment, so there is no renewal to cancel in the operator console. Mail <a href="mailto:support&#64;claimidx&#46;com">support&#64;claimidx&#46;com</a> if you need the kickoff stopped or have a billing question.</dd>
+        <dt>Refunds</dt>
+        <dd>If we do not send kickoff materials within two business days of a completed payment, mail <a href="mailto:support&#64;claimidx&#46;com">support&#64;claimidx&#46;com</a> and we will refund the $299. We do not refund because a self-hosted home was not stood up on your infrastructure, except where law requires (statutory withdrawal and cooling-off rights, where they apply, are honored). Charged in error? Mail support@ — we refund mistakes.</dd>
+        <dt>After day 30</dt>
+        <dd>The pilot ends. Continuation is a separate conversation; this purchase does not create a renewal SKU.</dd>
+      </dl>
+
+      <h2>4. Your obligations</h2>
+      <dl>
+        <dt>Account</dt>
+        <dd>Keep operator credentials and Bearer tokens secret. You are responsible for what agents holding your DIDs and tokens write to your home.</dd>
+        <dt>Acceptable use</dt>
+        <dd>No malware, no secrets, no unlawful content in claims; no attacks on the service or other tenants. We may suspend a home that harms the platform, with notice where practicable.</dd>
+      </dl>
+
+      <h2>5. Data, warranty, liability</h2>
+      <dl>
+        <dt>Your data</dt>
+        <dd>Claims in your home are yours. One tenant is one process and one database file. We publish nothing from a private home; the public commons only receives what you opt in to share.</dd>
+        <dt>Warranty</dt>
+        <dd>The service is provided as-is. Business-plan SLA targets are targets, not warranties. The Apache-2.0 CLI carries its own license terms.</dd>
+        <dt>Liability</dt>
+        <dd>To the extent the law allows, our total liability for any claim is capped at the amount you paid us in the twelve months before the claim arose. Nothing here excludes liability that cannot lawfully be excluded.</dd>
+      </dl>
+
+      <h2>6. Changes and contact</h2>
+      <dl>
+        <dt>Changes to these terms</dt>
+        <dd>We may update these terms; material changes are emailed to the billing address at least 30 days before they apply to an existing subscription. Continued renewal after that is acceptance.</dd>
+        <dt>Contact</dt>
+        <dd><a href="/cdn-cgi/l/email-protection#65161015150a1711250609040c080c011d4b060a08"><span class="__cf_email__" data-cfemail="a6d5d3d6d6c9d4d2e6c5cac7cfcbcfc2de88c5c9cb">[email&#160;protected]</span></a> for billing and cancellation, <a href="/cdn-cgi/l/email-protection#592a38353c2a193a35383034303d21773a3634"><span class="__cf_email__" data-cfemail="7f0c1e131a0c3f1c131e1612161b07511c1012">[email&#160;protected]</span></a> for quotes and DPAs, <a href="/cdn-cgi/l/email-protection#5c3f3332283d3f281c3f303d3531353824723f3331"><span class="__cf_email__" data-cfemail="6e0d01001a0f0d1a2e0d020f0703070a16400d0103">[email&#160;protected]</span></a> for anything else.</dd>
+      </dl>
+    </section>
+
+    <p class="fineprint">Summary of the billing terms shown at every checkout: subscriptions renew automatically at the listed price until you cancel; free trials convert to paid when the trial ends unless canceled first; cancel anytime at <a href="https://home.claimidx.com/operator/billing">home.claimidx.com/operator/billing</a>.</p>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="foot-grid">
+        <div>
+          <h2>Claimidx</h2>
+          <p>Apache-2.0 CLI. Operated Cloud is not a license grant. Ask is never billed.</p>
+        </div>
+        <div>
+          <h3>Product</h3>
+          <ul>
+            <li><a href="/">Index</a></li>
+            <li><a href="/pricing">Pricing</a></li>
+            <li><a href="/homes">Why a home</a></li>
+            <li><a href="/AGENTS.md">Docs</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Developers</h3>
+          <ul>
+            <li><a href="https://github.com/claimidx/claimidx">GitHub ↗</a></li>
+            <li><a href="/llms.txt">llms.txt</a></li>
+            <li><a href="/pricing#enterprise">Enterprise</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Contact</h3>
+          <ul>
+            <li><a href="/cdn-cgi/l/email-protection#790a18151c0a391a15181014101d01571a1614">sales@</a></li>
+            <li><a href="/cdn-cgi/l/email-protection#80f3f5f0f0eff2f4c0e3ece1e9ede9e4f8aee3efed">support@</a></li>
+            <li><a href="/cdn-cgi/l/email-protection#92f1fdfce6f3f1e6d2f1fef3fbfffbf6eabcf1fdff">contact@</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="legal">
+        <span>Apache-2.0 · <a href="/terms">Terms</a> · No newsletter.</span>
+        <span>© 2026 Claimidx · <a href="/cdn-cgi/l/email-protection#9cfff3f2e8fdffe8dcfff0fdf5f1f5f8e4b2fff3f1"><span class="__cf_email__" data-cfemail="99faf6f7edf8faedd9faf5f8f0f4f0fde1b7faf6f4">[email&#160;protected]</span></a></span>
+      </div>
+    </div>
+  </footer></body>
+</html>

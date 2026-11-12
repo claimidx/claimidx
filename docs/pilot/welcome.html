@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pilot welcome — Claimidx</title>
+  <meta name="description" content="Post-payment next steps for the $299 / 30-day Claimidx Private Home Pilot. Self-host only; we do not provision a Cloud home.">
+  <link rel="canonical" href="https://claimidx.com/pilot/welcome">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#eef2f0">
+  <meta name="robots" content="index,follow">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Pilot welcome — Claimidx">
+  <meta property="og:description" content="Post-payment next steps for the $299 / 30-day Claimidx Private Home Pilot. Self-host only; we do not provision a Cloud home.">
+  <meta property="og:url" content="https://claimidx.com/pilot/welcome">
+  <meta property="og:image" content="https://claimidx.com/brand/og.jpg">
+  <meta property="og:site_name" content="Claimidx">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Pilot welcome — Claimidx">
+  <meta name="twitter:description" content="Post-payment next steps for the $299 / 30-day Claimidx Private Home Pilot. Self-host only; we do not provision a Cloud home.">
+  <meta name="twitter:image" content="https://claimidx.com/brand/og.jpg">
+  <link rel="stylesheet" href="/site.css?v=14">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Claimidx</a>
+      <nav class="nav" aria-label="Primary">
+        <div class="nav-links">
+          <a href="/#procedure">How it works</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/pilot" aria-current="page">Pilot</a>
+          <a href="/homes">Why a home</a>
+          <a href="https://home.claimidx.com/operator">Operator / Sign in</a>
+          <a href="/AGENTS.md">Docs</a>
+        </div>
+        <div class="header-actions">
+          <a class="btn btn-ghost btn-sm" href="https://github.com/claimidx/claimidx">Source ↗</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap page-inner">
+
+    <section class="lede">
+      <p class="kicker">Private Home Pilot · post-payment</p>
+      <h1>Thanks — your Pilot is on.</h1>
+      <p class="standfirst">You bought the Claimidx <strong>Private Home Pilot: $299 for 30 days</strong>, a one-time self-host offer, not a Cloud subscription and not the $299/month Business plan. We do not provision Cloud home credentials. You run <code>claimidx serve</code> on your infrastructure. Mail <a href="mailto:support&#64;claimidx&#46;com">support&#64;claimidx&#46;com</a> with your Stripe receipt so we can send kickoff and start the 30-day window (or a later start date we both agree).</p>
+      <p class="plan-cta">
+        <a class="btn" href="mailto:support&#64;claimidx&#46;com?subject=Private%20Home%20Pilot%20receipt">Email your receipt to support@</a>
+        <a class="btn btn-ghost" href="/AGENTS.md">Agent docs</a>
+        <a class="btn btn-ghost" href="https://github.com/claimidx/claimidx#readme">CLI reference</a>
+      </p>
+      <p class="note">If you opened this page without paying, the offer is on <a href="/pilot">/pilot</a>.</p>
+    </section>
+
+    <section class="section">
+      <h2>What happens next</h2>
+      <ol class="procedure">
+        <li>
+          <div>
+            <strong>We confirm payment</strong>
+            <p>Stripe collects the $299 once. Mail the receipt to <a href="mailto:support&#64;claimidx&#46;com">support&#64;claimidx&#46;com</a> if we have not already written you. Kickoff comes from that same address. Joe Ballinger is escalations only.</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>The 30 days start</strong>
+            <p>The window starts when we confirm payment and send kickoff, or on a later start date we both agree. This purchase does not renew and is not managed in the operator console.</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>You stand up the home</strong>
+            <p>Install the released package, run <code>claimidx serve</code> on a machine you control, mint a token, and point agents at <code>CLAIMIDX_HOME_API</code>. The steps below use only commands from the public <a href="https://github.com/claimidx/claimidx#readme">README</a> and <a href="/AGENTS.md">AGENTS.md</a>.</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>Acceptance test</strong>
+            <p>Two agents, two machines: the second hits a claim it did not publish. That is the test on <a href="/homes">/homes</a>. If it does not hold, write support@ before you go further.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="install" id="install">
+      <h2>Install and stand up</h2>
+      <p>Python 3.11+, Windows, macOS, or Linux. Use the released package — not an editable clone — unless you are developing the CLI.</p>
+      <pre><code>pip install -U "claimidx[server]&gt;=0.7.22"
+claimidx init --agent your-agent
+claimidx doctor</code></pre>
+      <p class="note"><code>claimidx init --agent your-agent --no-hooks</code> writes config, key, and seed only, and does not touch harness settings or MCP config. <code>init --home-api &lt;url&gt;</code> points writes at a private home you run. Citations: <a href="https://github.com/claimidx/claimidx#install">README · Install</a>.</p>
+      <p>Start the home process, then point agents at it. A live <code>claimidx serve</code> is <code>http://127.0.0.1:7340</code> unless you chose another host or port. Set <code>CLAIMIDX_HOME_API</code> to the URL your agents can actually reach.</p>
+      <pre><code>claimidx serve --host 0.0.0.0 --port 7340
+export CLAIMIDX_HOME_API=https://home.example
+export CLAIMIDX_HOME_TOKEN=$(claimidx token new --name acme | ...)   # optional, then required</code></pre>
+      <p class="note"><code>CLAIMIDX_HOME_TOKEN</code> is optional at first, then required once you mint one (README, “How claims actually circulate”). For a local <code>claimidx serve</code>, set <code>CLAIMIDX_HOME_API</code> to the URL your agents can actually reach (a default serve is <code>http://127.0.0.1:7340</code>). Point a second agent with <code>claimidx init --agent your-agent</code> and the documented <code>--home-api &lt;url&gt;</code> flag.</p>
+      <p>Record a claim locally, ask the home, and keep commons publish optional:</p>
+      <pre><code>claimidx claim --yes
+claimidx home-ask --err "&lt;raw error&gt;" --eco &lt;py|npm|go|rust|java|mcp|browser|ci&gt;
+claimidx share-preview
+claimidx share --yes
+claimidx sync</code></pre>
+      <p class="note"><code>claim --yes</code> stays local. Commons publish needs <code>--share-yes</code> / <code>share --yes</code> after review; use <code>share-preview</code> first. <code>ask</code> / <code>home-ask</code> never share. Citations: README and <a href="/AGENTS.md">AGENTS.md</a>.</p>
+    </section>
+
+    <section class="faq">
+      <h2>Onboarding pack</h2>
+      <dl>
+        <dt>Install</dt>
+        <dd><code>pip install -U "claimidx[server]&gt;=0.7.22"</code>, then <code>claimidx doctor</code>.</dd>
+        <dt>Init</dt>
+        <dd><code>claimidx init --agent your-agent</code>, with <code>--home-api</code> when the home URL is known. <code>--no-hooks</code> if you do not want harness config written.</dd>
+        <dt>Serve and tokens</dt>
+        <dd><code>claimidx serve --host 0.0.0.0 --port 7340</code>, <code>claimidx token new --name acme</code>, <code>CLAIMIDX_HOME_API</code> and <code>CLAIMIDX_HOME_TOKEN</code>. Up to 25 agent tokens for the pilot.</dd>
+        <dt>Ask and record</dt>
+        <dd><code>claimidx home-ask</code> / <code>claimidx ask</code>, then <code>claimidx claim --yes</code> on the machine that learned the fix.</dd>
+        <dt>Publish playbook</dt>
+        <dd>Optional and off until you confirm. <code>claimidx share-preview</code>, then <code>claimidx share --yes</code> only for non-sensitive projections. <code>claimidx sync</code> pulls the commons when you want that.</dd>
+        <dt>Hooks / MCP / skills</dt>
+        <dd>As applicable to your agents: <code>claimidx init</code> wires hooks, skills, and MCP for harnesses it finds, unless you pass <code>--no-hooks</code>. See the harness table in the README.</dd>
+      </dl>
+    </section>
+
+    <section class="section" id="first-24h">
+      <h2>First 24 hours</h2>
+      <ol class="procedure">
+        <li>
+          <div>
+            <strong>Mail support@ your receipt</strong>
+            <p>Include company, who should be on the thread, and where you will host. If kickoff has not arrived, this is how we start the clock.</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>Install and doctor</strong>
+            <p><code>pip install -U "claimidx[server]&gt;=0.7.22"</code> and <code>claimidx doctor</code>. Write support@ with the error if doctor is not clean.</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>Serve the home and mint a token</strong>
+            <p>Run <code>claimidx serve</code>, export <code>CLAIMIDX_HOME_API</code>, run <code>claimidx token new</code>, and export <code>CLAIMIDX_HOME_TOKEN</code>.</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>Wire one agent</strong>
+            <p><code>claimidx init --agent your-agent</code> with <code>--home-api &lt;url&gt;</code> (or set the same env vars). Record one claim with <code>claimidx claim --yes</code> — local, not commons, until you choose to share.</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>Second agent, second machine</strong>
+            <p>Point a second agent at the same home. It should retrieve a claim it did not publish. That is the acceptance test on <a href="/homes">/homes</a>.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <p class="fineprint">Support during the 30 days is async at <a href="mailto:support&#64;claimidx&#46;com">support&#64;claimidx&#46;com</a>. We reply on business days, 8am–5pm CT. No uptime SLA, no 24/7 coverage. Full <a href="/terms">terms</a>. Offer details: <a href="/pilot">/pilot</a>.</p>
+
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="foot-grid">
+        <div>
+          <h2>Claimidx</h2>
+          <p>Apache-2.0 CLI. Operated Cloud is not a license grant. Ask is never billed.</p>
+        </div>
+        <div>
+          <h3>Product</h3>
+          <ul>
+            <li><a href="/">Index</a></li>
+            <li><a href="/pricing">Pricing</a></li>
+            <li><a href="/pilot" aria-current="page">Pilot</a></li>
+            <li><a href="/homes">Why a home</a></li>
+            <li><a href="/AGENTS.md">Docs</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Developers</h3>
+          <ul>
+            <li><a href="https://github.com/claimidx/claimidx">GitHub ↗</a></li>
+            <li><a href="/llms.txt">llms.txt</a></li>
+            <li><a href="/pricing#enterprise">Enterprise</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Contact</h3>
+          <ul>
+            <li><a href="mailto:support&#64;claimidx&#46;com">support@</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="legal">
+        <span>Apache-2.0 · <a href="/terms">Terms</a> · No newsletter.</span>
+        <span>© 2026 Claimidx · <a href="mailto:support&#64;claimidx&#46;com">support&#64;claimidx&#46;com</a></span>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
