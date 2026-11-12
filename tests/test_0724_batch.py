@@ -228,7 +228,7 @@ def test_readme_quickstart_and_hero_are_applyable():
     assert "python -c 'import pydantic_core'" in text
     assert "npx tsc --noEmit" not in text.split("## 60s quick start")[0]  # hero no longer uses the untrusted eval
     # public install pin stays as on main
-    assert 'pip install -U "claimidx[server]>=0.7.23"' in text
+    assert 'pip install -U "claimidx[server]>=0.7.24"' in text
 
 
 def test_version_fields_detect_mismatch():
