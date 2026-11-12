@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
-from .fingerprint import fingerprint
+from .fingerprint import fingerprint_accepted
 from .match import hit_compact, rank
 from .models import Claim
 from .policy import PolicyError
@@ -179,8 +179,7 @@ def parse_ledger(text: str) -> tuple[list[Claim], list[str]]:
             raw = json.loads(line)
             raw["src"] = "home"
             claim = Claim.model_validate(raw)
-            got = fingerprint(err=claim.err, cls=claim.cls, eco=claim.eco, rt=claim.rt, dep=claim.dep)
-            if claim.fp != got:
+            if not fingerprint_accepted(claim.fp, err=claim.err, cls=claim.cls, eco=claim.eco, rt=claim.rt, dep=claim.dep):
                 skipped.append(f"L{i}: fp mismatch")
                 continue
             accepted.append(claim)
@@ -443,7 +442,7 @@ def commons_disabled_note() -> dict[str, Any]:
     return {"status": "disabled", "reason": COMMONS_DISABLED_REASON}
 
 
-def format_commons_review(claim: Claim) -> str:
+def format_commons_review(claim: Claim, replay: dict | None = None) -> str:
     """One stderr block: what will leave the machine if the agent confirms commons share."""
     if scratch_mode():
         return f"# scratch: {SCRATCH_NO_SHARE}"
@@ -454,8 +453,19 @@ def format_commons_review(claim: Claim) -> str:
             "# commons review — commons disabled (CLAIMIDX_COMMONS=0 or config commons: false): nothing will be sent to the commons\n"
             f"#   id={r['id']} stays local/private; unset CLAIMIDX_COMMONS (or set it to 1) and run `claimidx share {r['id']} --yes` to share it"
         )
+    from .impact import weak_share_reasons
+
+    weak = weak_share_reasons(claim, replay)
+    warn = ""
+    if weak:
+        warn = (
+            "# WARN this claim is weak and will not be countable on the commons: "
+            + "; ".join(weak)
+            + ". Share only if you mean to; a countable claim needs a held replay (nr) and an ecosystem.\n"
+        )
     return (
         f"# commons review — destination=commons\n"
+        f"{warn}"
         f"#   id={r['id']} eco={r['eco'] or '-'} rt={r['rt'] or '-'}\n"
         f"#   err={r['err'] or '-'}\n"
         f"#   dep={deps}\n"

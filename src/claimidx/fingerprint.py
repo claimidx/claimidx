@@ -4,7 +4,10 @@ import hashlib
 import re
 from typing import Any
 
-_PATH = re.compile(r"(?:[A-Za-z]:\\|\\\\|~[/\\]|/(?:home|Users|usr|var|tmp|opt|root|etc|app|src|private|opt)|(?:\./|\.\./))[^\s:'\"]+")
+_PATH = re.compile(
+    r"(?:[A-Za-z]:\\|\\\\|~[/\\]|/(?:home|Users|usr|var|tmp|opt|root|etc|app|src|private|workspace)|(?:\./|\.\./))[^\s:\'\"]+"
+    r"|(?:(?<=\s)|^)/(?:[^\s:\'\"]+/)+(?:bin/python[\w.]*|bin/node|Scripts/python(?:\.exe)?)"
+)
 _URL = re.compile(r"https?://[^\s]+")
 # Contractions (`Can't`) are not quotes. Single quotes only when not mid-word.
 _QUOTED = re.compile(r"(?:(?<![A-Za-z])'([^']{1,200})'(?![A-Za-z])|\"([^\"]{1,200})\")")
@@ -57,6 +60,16 @@ _PLACEHOLDER_RISK = {
     "<N>": "int",
 }
 
+# Closed catalog of known rule/error ID shapes. Adding a pattern requires a test
+# in the same commit. Bare integers (exit 1, HTTP 200) never match.
+_ID_SPECS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("ts", re.compile(r"\b(TS\d{3,5})\b")),
+    ("ruff", re.compile(r"\b(RUF\d{3})\b")),
+    ("rustc", re.compile(r"\berror\[(E\d{4})\]", re.I)),
+    ("lint4", re.compile(r"\b([CRWEF]\d{4})\b")),
+    ("lint3", re.compile(r"\b([EWF]\d{3})\b")),
+)
+
 
 def _quote_token(m: re.Match[str]) -> str:
     inner = m.group(1) if m.group(1) is not None else m.group(2)
@@ -70,6 +83,7 @@ def normalization_risk(raw: str) -> list[str]:
 
     Content-based: already-canonical queries that contain PLACEHOLDERS
     carry the same flags as a raw query that would produce them.
+    Independent of canonical_error_id: an ID in the text does not drop these flags.
     """
     s = raw or ""
     flags: list[str] = []
@@ -112,6 +126,32 @@ def normalize_error(raw: str) -> str:
     return s[:280]
 
 
+def canonical_error_id(raw: str) -> str | None:
+    """If a known rule or error ID appears in the text, return that canonical ID.
+
+    The leftmost match wins. A reworded message that still carries the ID
+    maps to the same fingerprint material.
+    """
+    s = raw or ""
+    best: tuple[int, str] | None = None
+    for _name, pat in _ID_SPECS:
+        m = pat.search(s)
+        if not m:
+            continue
+        token = m.group(1).upper()
+        start = m.start()
+        if best is None or start < best[0]:
+            best = (start, token)
+    return best[1] if best else None
+
+
+def _error_material(raw: str) -> str:
+    cid = canonical_error_id(raw)
+    if cid:
+        return f"id={cid}"
+    return normalize_error(raw)
+
+
 def classify(raw: str) -> str:
     for name, pat in _CLASS_RULES:
         if pat.search(raw):
@@ -144,9 +184,10 @@ def runtime_proof_key(rt: str) -> str:
     return s
 
 
-def fingerprint_material(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> str:
-    nerr = normalize_error(err)
-    cls = cls or classify(err)
+def _join_material(*, nerr: str, cls: str, eco: str, rt: str, dep: list[str] | None, raw: str) -> str:
+    # A known ID is the identity of the failure: class is taken from the wording
+    # and would split a reworded message, so it is not part of the hash.
+    cls = "id" if nerr.startswith("id=") else (cls or classify(raw))
     rt_major = re.sub(r"(\d+)\.\d+.*", r"\1", rt or "")
     deps = _canon_list(dep)
     # An absent ecosystem hashes as "other": that is what the store and the ledger write, so a row
@@ -154,9 +195,66 @@ def fingerprint_material(*, err: str, cls: str = "", eco: str = "", rt: str = ""
     return "\n".join([f"cls={cls}", f"err={nerr}", f"eco={(eco or 'other').lower()}", f"rt={rt_major.lower()}", f"dep={deps}"])
 
 
-def fingerprint(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> str:
-    material = fingerprint_material(err=err, cls=cls, eco=eco, rt=rt, dep=dep)
+def fingerprint_material(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> str:
+    return _join_material(nerr=_error_material(err), cls=cls, eco=eco, rt=rt, dep=dep, raw=err)
+
+
+def legacy_fingerprint_material(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> str:
+    """Pre-0.7.24 material: the normalized wording, even when a rule/error ID is present."""
+    return _join_material(nerr=normalize_error(err), cls=cls, eco=eco, rt=rt, dep=dep, raw=err)
+
+
+def _hash_material(material: str) -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def fingerprint(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> str:
+    """Current hash. New writes use this. When a known ID is in the text, the hash is the ID."""
+    return _hash_material(fingerprint_material(err=err, cls=cls, eco=eco, rt=rt, dep=dep))
+
+
+def fingerprints(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> tuple[str, ...]:
+    """Current fingerprint first, then the pre-0.7.24 wording hash if it differs.
+
+    Pull and exact-match accept either, so existing ledger rows are not skipped
+    when a known ID is in the text. New writes use fingerprint() (the first value).
+    """
+    current = fingerprint(err=err, cls=cls, eco=eco, rt=rt, dep=dep)
+    legacy = _hash_material(legacy_fingerprint_material(err=err, cls=cls, eco=eco, rt=rt, dep=dep))
+    if legacy != current:
+        return (current, legacy)
+    return (current,)
+
+
+def fingerprint_accepted(fp: str, *, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> bool:
+    """True when `fp` is the current hash or the pre-0.7.24 wording hash of these fields."""
+    return (fp or "") in fingerprints(err=err, cls=cls, eco=eco, rt=rt, dep=dep)
+
+
+def same_fingerprint(
+    *,
+    query_fp: str = "",
+    query_err: str = "",
+    query_cls: str = "",
+    query_eco: str = "",
+    query_rt: str = "",
+    query_dep: list[str] | None = None,
+    claim_fp: str = "",
+    claim_err: str = "",
+    claim_cls: str = "",
+    claim_eco: str = "",
+    claim_rt: str = "",
+    claim_dep: list[str] | None = None,
+) -> bool:
+    """Exact match under the current or legacy algorithm, including a reworded ID."""
+    q_fps = fingerprints(err=query_err, cls=query_cls, eco=query_eco, rt=query_rt, dep=query_dep)
+    if query_fp and query_fp not in q_fps:
+        q_fps = (query_fp, *q_fps)
+    if claim_fp and claim_fp in q_fps:
+        return True
+    c_current = fingerprint(err=claim_err, cls=claim_cls, eco=claim_eco, rt=claim_rt, dep=claim_dep)
+    q_current = fingerprint(err=query_err, cls=query_cls, eco=query_eco, rt=query_rt, dep=query_dep)
+    return c_current == q_current
 
 
 _SYMBOL = re.compile(r"\b[A-Za-z_][A-Za-z0-9_.]{2,79}\b")
@@ -171,12 +269,16 @@ def error_features(raw: str) -> dict[str, Any]:
     symbols = sorted(
         {token.lower() for token in _SYMBOL.findall(normalized) if token.lower() not in {"error", "exception", "traceback", "typeerror", "runtimeerror"}}
     )[:24]
-    return {
+    cid = canonical_error_id(raw)
+    out: dict[str, Any] = {
         "codes": list(dict.fromkeys(codes))[:8],
         "packages": list(dict.fromkeys(packages))[:8],
         "symbols": symbols,
         "normalization_risk": normalization_risk(raw),
     }
+    if cid:
+        out["error_id"] = cid
+    return out
 
 
 def family_fingerprint(*, err: str, cls: str = "", eco: str = "") -> str:

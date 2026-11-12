@@ -2,7 +2,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from claimidx.fingerprint import fingerprint
+from claimidx.fingerprint import fingerprint_accepted
 from claimidx.models import Claim
 from claimidx.public import public_eval
 
@@ -29,7 +29,7 @@ def test_self_ledger_is_valid_and_disjoint():
         assert not ({c.id for c in pub} & {c.id for c in own}), side
         assert not ({c.fp for c in pub} & {c.fp for c in own}), side
         for c in own:
-            assert c.fp == fingerprint(err=c.err, cls=c.cls, eco=c.eco, rt=c.rt, dep=c.dep), c.id
+            assert fingerprint_accepted(c.fp, err=c.err, cls=c.cls, eco=c.eco, rt=c.rt, dep=c.dep), c.id
 
 
 def test_public_ledger_ids_and_fingerprints_are_unique_and_current():
@@ -40,8 +40,7 @@ def test_public_ledger_ids_and_fingerprints_are_unique_and_current():
     assert len(ids) == len(set(ids))
     assert len(fps) == len(set(fps))
     for c in rows:
-        got = fingerprint(err=c.err, cls=c.cls, eco=c.eco, rt=c.rt, dep=c.dep)
-        assert c.fp == got, c.id
+        assert fingerprint_accepted(c.fp, err=c.err, cls=c.cls, eco=c.eco, rt=c.rt, dep=c.dep), c.id
 
 
 def test_public_ledger_is_projected():

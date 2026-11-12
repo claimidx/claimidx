@@ -345,14 +345,27 @@ TOOLS: list[dict[str, Any]] = [
             "Summarize this local session: asks and fails per fingerprint, recent ingests and drafts, last disposition, and "
             "must_ask (true once the same fingerprint failed twice, meaning ask before another retry). Pass fp to focus on one "
             "fingerprint. Read-only and never shared. Use to check whether you are in a retry loop. "
-            "Returns session_id, asks, asks_by_fp, fails_by_fp, ingests, drafts, last_disposition, must_ask, focus_fp, asks_focus, fails_focus."
+            "Returns session_id, asks, asks_by_fp, fails_by_fp, ingests, drafts, last_disposition, must_ask, focus_fp, asks_focus, fails_focus, "
+            "package_version, server_info_version, version_mismatch."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {"fp": {"type": "string", "description": "Fingerprint to focus on (from claimidx_ask). Omit for the whole session."}},
         },
         "outputSchema": _out(
-            session_id=_S, asks=_I, asks_by_fp=_O, fails_by_fp=_O, ingests=_A, drafts=_A, must_ask=_B, focus_fp=_NS, asks_focus=_I, fails_focus=_I
+            session_id=_S,
+            asks=_I,
+            asks_by_fp=_O,
+            fails_by_fp=_O,
+            ingests=_A,
+            drafts=_A,
+            must_ask=_B,
+            focus_fp=_NS,
+            asks_focus=_I,
+            fails_focus=_I,
+            package_version=_S,
+            server_info_version=_NS,
+            version_mismatch=_B,
         ),
         "annotations": _ann(read_only=True, idempotent=True),
     },
@@ -1079,7 +1092,9 @@ def handle(msg: dict, store: Store) -> dict:
     params = msg.get("params") or {}
     if method == "initialize":
         from . import __version__
+        from .session import set_server_info_version, version_fields
 
+        set_server_info_version(__version__)
         return _ok(
             mid,
             {
@@ -1087,6 +1102,7 @@ def handle(msg: dict, store: Store) -> dict:
                 "capabilities": {"tools": {}, "prompts": {}, "resources": {}},
                 "serverInfo": {"name": "claimidx", "version": __version__, "title": "Claimidx — prior art for agents"},
                 "instructions": INSTRUCTIONS,
+                **version_fields(__version__),
             },
         )
     if method == "notifications/initialized":
@@ -1204,9 +1220,11 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                 dep=dep,
             )
         else:
+            from .fingerprint import fingerprints
+
             cls = classify(err)
             fp = fingerprint(err=err, cls=cls, eco=args.get("eco") or "", rt=args.get("rt") or "", dep=dep)
-            existing = store.by_fp(fp)
+            existing = store.by_fingerprints(fingerprints(err=err, cls=cls, eco=args.get("eco") or "", rt=args.get("rt") or "", dep=dep))
         if existing and not args.get("force") and not args.get("alternative"):
             return {"exists": True, "id": existing[0].id, "st": existing[0].st}
         extra: dict[str, Any] = {"id": existing[0].id} if existing and args.get("force") else {}
@@ -1670,7 +1688,11 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             note=args.get("note") or "",
             use_diff=not args.get("no_diff"),
         )
-        if not draft.get("ok") or not args.get("yes"):
+        if draft.get("getting_started") or not draft.get("ok") or not args.get("yes"):
+            return draft
+        if not str(draft.get("eval") or "").strip():
+            draft["ok"] = False
+            draft["error"] = "eval empty: pass eval '<a command that fails before the fix and holds after>'; a tautology like `true` is not drafted"
             return draft
         local = bool(args.get("local"))
         # yes = local claim; commons only with share_yes (or legacy share=true explicit).

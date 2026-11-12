@@ -554,15 +554,19 @@ def success_nudge(raw: str, store) -> str | None:
     )
     line = f"CLAIMIDX fixed: `{cmd}` now passes after failing with: {rec['err'][:120]}"
     if draft.get("ok"):
-        line += (
-            f"\nRecord it: claimidx claim --yes --share-yes shares it so the next agent skips this (claim --yes alone stays local)"
-            f"   (drafted: fix.k={draft['fix_k']} eval={draft['eval']} proof={str(draft['eval_proof']).lower()})"
-        )
+        line += f"\n{_record_claim_hint()}   (drafted: fix.k={draft['fix_k']} eval={draft['eval']} proof={str(draft['eval_proof']).lower()})"
     else:
-        line += (
-            "\nRecord it: claimidx claim --yes --share-yes --fix '<what you changed>' shares it so the next agent skips this (claim --yes alone stays local)"
-        )
+        line += "\n" + _record_claim_hint(with_fix=True)
     return line
+
+
+def _record_claim_hint(*, with_fix: bool = False) -> str:
+    from .home import SCRATCH_NO_SHARE, scratch_mode
+
+    fix = " --fix '<what you changed>'" if with_fix else ""
+    if scratch_mode():
+        return f"Record it: claimidx claim --yes{fix} ({SCRATCH_NO_SHARE})"
+    return f"Record it: claimidx claim --yes --share-yes{fix} shares it so the next agent skips this (claim --yes alone stays local)"
 
 
 def unshared_claims(store, limit: int = 500) -> list[str]:

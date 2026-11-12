@@ -93,6 +93,9 @@ def test_empty_miss_omits_gate():
         def by_fp(self, fp):
             return []
 
+        def by_fingerprints(self, fps):
+            return []
+
     q = {"err": "no such failure xyzzy", "fp": "deadbeef", "cls": "other", "eco": "py", "rt": "", "dep": []}
     out = miss_enrichment(_Empty(), q, [])
     assert "gate" not in out

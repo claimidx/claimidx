@@ -16,18 +16,24 @@ from .policy import _LOCAL_PIP, _norm_head, eval_allowed, split_eval
 
 
 def project_python(cwd: str | os.PathLike[str] | None) -> str | None:
-    """The tree's own interpreter (`.venv`/`venv` under cwd), when it has one.
+    """The tree's own interpreter, or the active `$VIRTUAL_ENV`.
 
-    A claim about a project is about that project's environment: an agent's
-    shell PATH rarely has the venv active when a hook fires, and replaying
-    `python -c "import x"` under the wrong interpreter turns a real fix into
-    a false miss.
+    Prefer `<cwd>/.venv` or `<cwd>/venv` when that tree has one: a claim about
+    a project is about that project's environment, and an agent's shell PATH
+    rarely has the venv active when a hook fires. If the tree has no venv,
+    honor `$VIRTUAL_ENV` so `apply` can install into a named environment.
+    Replaying `python -c "import x"` under the wrong interpreter turns a real
+    fix into a false miss.
     """
-    if not cwd:
-        return None
-    root = Path(cwd)
-    for venv in (".venv", "venv"):
-        cand = root / venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if cwd:
+        root = Path(cwd)
+        for venv in (".venv", "venv"):
+            cand = root / venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+            if cand.is_file():
+                return str(cand)
+    env = (os.environ.get("VIRTUAL_ENV") or "").strip()
+    if env:
+        cand = Path(env) / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         if cand.is_file():
             return str(cand)
     return None

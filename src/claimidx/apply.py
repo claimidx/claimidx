@@ -8,7 +8,7 @@ own package manager, or `git apply` the diff, then replay the eval under
 
 The tree's own package manager, per ecosystem:
 
-  py    <cwd>/.venv python -m pip install <spec>
+  py    <cwd>/.venv python -m pip install <spec> (or $VIRTUAL_ENV when the tree has no venv)
   npm   npm install <spec>
   go    go get <module>[@version]
   rust  cargo add <crate>[@version]
@@ -56,6 +56,28 @@ def _java_build_file(root: str) -> str | None:
     return None
 
 
+def host_rt_mismatch(claim: Claim) -> str:
+    """If claim.rt disagrees with this interpreter at proof grain, a one-line reason; else empty."""
+    declared = (claim.rt or "").strip()
+    if not declared:
+        return ""
+    from .env import _node_rt, _py_rt
+    from .fingerprint import runtime_proof_key
+
+    eco = (claim.eco or "").lower()
+    observed = ""
+    head = declared.lower()
+    if eco == "py" or head.startswith(("py@", "python@")):
+        observed = _py_rt()
+    elif eco in {"npm", "node"} or head.startswith(("node@", "nodejs@")):
+        observed = _node_rt()
+    if not observed:
+        return ""
+    if runtime_proof_key(declared) != runtime_proof_key(observed):
+        return f"hold env mismatch: claim.rt={declared} observed={observed}"
+    return ""
+
+
 def plan(claim: Claim, cwd: str) -> dict[str, Any]:
     """What `apply` would run. `steps` is a list of argv; `edit` a build-file write; `manual` is set when the agent must act."""
     root = os.path.abspath(cwd or os.getcwd())
@@ -101,7 +123,7 @@ def plan(claim: Claim, cwd: str) -> dict[str, Any]:
 
         py = project_python(root)
         if not py:
-            out["manual"] = f"no .venv under {root}; install {spec} into the environment your eval runs in, then confirm --replay"
+            out["manual"] = f"no .venv under {root} and VIRTUAL_ENV is not set; install {spec} into the environment your eval runs in, then confirm --replay"
             return out
         out["steps"] = [[py, "-m", "pip", "install", "--disable-pip-version-check", "-q", spec]]
         return out
@@ -126,6 +148,8 @@ def render_plan(p: dict[str, Any], *, trusted: bool, own: str, src: str) -> str:
     lines = [f"# apply {p['id']} ({p['kind']}) in {p['cwd']}"]
     if not trusted:
         lines.append(f"# this claim was not published here (own={own}, src={src}); its remedy is another agent's choice")
+    if p.get("rt_mismatch"):
+        lines.append("runtime: " + p["rt_mismatch"])
     if p.get("manual"):
         lines.append("manual: " + p["manual"])
         return "\n".join(lines)
@@ -269,7 +293,12 @@ def apply_claim(store, claim: Claim, *, cwd: str, own: str | None, yes: bool, tr
 
     trusted = eval_trust(store, claim) == "local"
     p = plan(claim, cwd)
+    mismatch = host_rt_mismatch(claim)
+    if mismatch:
+        p["rt_mismatch"] = mismatch
     out: dict[str, Any] = {"id": claim.id, "plan": p, "trusted": trusted, "applied": False}
+    if mismatch:
+        out["rt_mismatch"] = mismatch
     if p.get("manual"):
         out["manual"] = p["manual"]
         return out
