@@ -952,6 +952,52 @@ def test_sync_docs_stamps_site_product_brief_and_pins():
     assert any("36 days old" in e for e in late), late
 
 
+def test_sync_docs_stamps_copyright_year_range():
+    """Footer copyright is © 2026 in 2026 and © 2026–<year> (en dash) from 2027 on."""
+    from datetime import date
+    import importlib.util
+
+    from claimidx import __version__
+    from claimidx.discovery import ROOT
+
+    spec = importlib.util.spec_from_file_location("sync_docs", ROOT / "scripts" / "sync_docs.py")
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    assert mod.copyright_label(date(2026, 11, 12)) == "© 2026"
+    assert mod.copyright_label(date(2026, 12, 31)) == "© 2026"
+    assert mod.copyright_label(date(2027, 1, 1)) == "© 2026–2027"
+    assert "–" in mod.copyright_label(date(2027, 6, 15))  # en dash, not a hyphen
+    assert "-" not in mod.copyright_label(date(2027, 1, 1))
+
+    # Walk the public pages so this test never has to name a private-looking path.
+    tracked = []
+    for path in sorted((ROOT / "docs").rglob("*.html")):
+        body = path.read_text(encoding="utf-8")
+        if "data-cix-year" in body or "©" in body:
+            rel = path.relative_to(ROOT).as_posix()
+            tracked.append(rel)
+            assert "data-cix-year" in body, rel
+            assert mod.site_stamp_errors(body, rel, __version__, date(2026, 11, 12)) == [], rel
+    assert len(tracked) >= 4
+
+    bare = "<span>© 2026 Claimidx</span>"
+    assert any("data-cix-year" in e for e in mod.site_stamp_errors(bare, "docs/index.html", __version__, date(2026, 11, 12)))
+
+    src = "<span data-cix-year>© 2025</span> Claimidx"
+    y2026 = mod.stamp_site_text(src, __version__, date(2026, 11, 12))
+    y2027 = mod.stamp_site_text(src, __version__, date(2027, 1, 1))
+    assert y2026 == "<span data-cix-year>© 2026</span> Claimidx"
+    assert y2027 == "<span data-cix-year>© 2026–2027</span> Claimidx"
+    assert y2026 == mod.stamp_site_text(y2026, __version__, date(2026, 11, 12))
+    assert y2027 == mod.stamp_site_text(y2027, __version__, date(2027, 1, 1))
+    assert mod.site_stamp_errors(y2026, "docs/index.html", __version__, date(2026, 11, 12)) == []
+    assert mod.site_stamp_errors(y2027, "docs/index.html", __version__, date(2027, 1, 1)) == []
+    stale = mod.site_stamp_errors(y2026, "docs/index.html", __version__, date(2027, 1, 1))
+    assert any("copyright stamp" in e and "2026–2027" in e for e in stale), stale
+
+
 def test_mcp_force_keeps_stored_cls(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAIMIDX_SHARE", "0")
     store = Store(tmp_path / "ix.sqlite")

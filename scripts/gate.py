@@ -4,7 +4,7 @@
     python scripts/gate.py pre-push        # tracked tree: sanitize, docs, verify, mcp   (minutes)
     python scripts/gate.py ci              # what the GitHub lint job runs: sanitize, docs, lint, mcp
     python scripts/gate.py release         # pre-push + site + commons + smoke + build
-    python scripts/gate.py deploy-site     # site gate, stamp brief/pins into a temp copy of docs/, deploy that copy
+    python scripts/gate.py deploy-site     # site gate, stamp brief/pins/year into a temp copy of docs/, deploy that copy
     python scripts/gate.py sanitize|docs|lint|verify|mcp|site|commons|smoke|build
     python scripts/gate.py commit-msg <file>
     python scripts/gate.py install-hooks   # once per clone: core.hooksPath -> .githooks
@@ -20,10 +20,11 @@ Stages
             the server card; serverInfo, server.json packages, and pyproject agree on the version.
   site      docs/ is a complete Pages tree: every tracked public page, every file the operator's manifest
             (INTERNAL/site-required.txt, never in git) requires beside them, and a CSP that allows the commons.
-            The homepage product brief and site install pins must match the package version, and the brief
-            month must be no more than 35 days old. A deploy from an incomplete tree once replaced production;
-            deploy-site refuses that. deploy-site restamps a temporary copy of docs/ (worktree unchanged) so a
-            monthly redeploy can roll the brief month without a commit.
+            The homepage product brief and site install pins must match the package version, the brief
+            month must be no more than 35 days old, and every copyright line must be in <span data-cix-year>
+            with the current year (© 2026 in 2026, © 2026–<year> from 2027). A deploy from an incomplete tree
+            once replaced production; deploy-site refuses that. deploy-site restamps a temporary copy of docs/
+            (worktree unchanged) so a monthly redeploy can roll the brief month and copyright year without a commit.
   commons   the commons answers: health ok with claims, and the leaderboard states its rules.
   smoke     python scripts/live_smoke.py: the whole loop per ecosystem against real toolchains (skips absent ones).
   build     python -m build ; twine check ; scripts/audit_artifacts.py on the wheel and sdist.
@@ -446,7 +447,7 @@ def site_errors(docs: Path | None = None, manifest: Path | None = None) -> list[
 
 
 def site_stamp_errors(docs: Path | None = None) -> list[str]:
-    """Product-brief / install-pin errors in a docs tree (version mismatch or a brief month older than 35 days)."""
+    """Product-brief / install-pin / copyright-year errors in a docs tree."""
     sync = _load("scripts/sync_docs.py")
     root = docs or (ROOT / "docs")
     if not root.is_dir():
@@ -481,10 +482,11 @@ def site() -> None:
 def deploy_site() -> None:
     """The only sanctioned production Pages deploy: after the site gate, with --branch main.
 
-    Completeness is checked on the worktree. The product brief and install pins are
-    restamped into a temporary copy of docs/ (current package version and month) so
-    a monthly redeploy stays current without a commit, and the worktree is unchanged.
-    The same command is idempotent within a month: a second run stamps the same text.
+    Completeness is checked on the worktree. The product brief, install pins, and
+    copyright year are restamped into a temporary copy of docs/ (current package
+    version, month, and year) so a monthly redeploy stays current without a commit,
+    and the worktree is unchanged. The same command is idempotent within a month:
+    a second run stamps the same text.
     """
     errors = site_errors()
     if errors:
