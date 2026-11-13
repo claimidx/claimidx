@@ -4,7 +4,7 @@
     python scripts/gate.py pre-push        # tracked tree: sanitize, docs, verify, mcp   (minutes)
     python scripts/gate.py ci              # what the GitHub lint job runs: sanitize, docs, lint, mcp
     python scripts/gate.py release         # pre-push + site + commons + smoke + build
-    python scripts/gate.py deploy-site     # site gate, then the production Pages deploy (the only way production is deployed)
+    python scripts/gate.py deploy-site     # site gate, stamp brief/pins into a temp copy of docs/, deploy that copy
     python scripts/gate.py sanitize|docs|lint|verify|mcp|site|commons|smoke|build
     python scripts/gate.py commit-msg <file>
     python scripts/gate.py install-hooks   # once per clone: core.hooksPath -> .githooks
@@ -20,7 +20,10 @@ Stages
             the server card; serverInfo, server.json packages, and pyproject agree on the version.
   site      docs/ is a complete Pages tree: every tracked public page, every file the operator's manifest
             (INTERNAL/site-required.txt, never in git) requires beside them, and a CSP that allows the commons.
-            A deploy from an incomplete tree once replaced production; deploy-site refuses that.
+            The homepage product brief and site install pins must match the package version, and the brief
+            month must be no more than 35 days old. A deploy from an incomplete tree once replaced production;
+            deploy-site refuses that. deploy-site restamps a temporary copy of docs/ (worktree unchanged) so a
+            monthly redeploy can roll the brief month without a commit.
   commons   the commons answers: health ok with claims, and the leaderboard states its rules.
   smoke     python scripts/live_smoke.py: the whole loop per ecosystem against real toolchains (skips absent ones).
   build     python -m build ; twine check ; scripts/audit_artifacts.py on the wheel and sdist.
@@ -33,6 +36,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -441,22 +445,64 @@ def site_errors(docs: Path | None = None, manifest: Path | None = None) -> list[
     return errors
 
 
+def site_stamp_errors(docs: Path | None = None) -> list[str]:
+    """Product-brief / install-pin errors in a docs tree (version mismatch or a brief month older than 35 days)."""
+    sync = _load("scripts/sync_docs.py")
+    root = docs or (ROOT / "docs")
+    if not root.is_dir():
+        return [f"{root}: missing"]
+    version = sync.package_version()
+    when = sync.stamp_now()
+    errors: list[str] = []
+    for path in sorted(root.rglob("*.html")):
+        rel = "docs/" + path.relative_to(root).as_posix()
+        errors.extend(sync.site_stamp_errors(path.read_text(encoding="utf-8").replace("\r\n", "\n"), rel, version, when))
+    return errors
+
+
+def stamp_docs_tree(docs: Path) -> None:
+    """Fill product-brief and install-pin stamps in a docs tree (used on a temp copy at deploy)."""
+    sync = _load("scripts/sync_docs.py")
+    version = sync.package_version()
+    when = sync.stamp_now()
+    for path in docs.rglob("*.html"):
+        body = path.read_text(encoding="utf-8").replace("\r\n", "\n")
+        stamped = sync.stamp_site_text(body, version, when)
+        if stamped != body:
+            path.write_text(stamped, encoding="utf-8", newline="\n")
+
+
 def site() -> None:
-    errors = site_errors()
+    errors = site_errors() + site_stamp_errors()
     if errors:
         raise GateError("\n".join(errors) + "\nthe site carries files git does not; deploy production only from a desktop with the complete docs/ tree")
 
 
 def deploy_site() -> None:
-    """The only sanctioned production Pages deploy: after the site gate, with --branch main."""
-    site()
+    """The only sanctioned production Pages deploy: after the site gate, with --branch main.
+
+    Completeness is checked on the worktree. The product brief and install pins are
+    restamped into a temporary copy of docs/ (current package version and month) so
+    a monthly redeploy stays current without a commit, and the worktree is unchanged.
+    The same command is idempotent within a month: a second run stamps the same text.
+    """
+    errors = site_errors()
+    if errors:
+        raise GateError("\n".join(errors) + "\nthe site carries files git does not; deploy production only from a desktop with the complete docs/ tree")
     if not (os.environ.get("CLOUDFLARE_API_TOKEN") and os.environ.get("CLOUDFLARE_ACCOUNT_ID")):
         raise GateError("CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not set (source ~/.claimidx/cloudflare.env)")
-    _check(
-        "pages deploy",
-        ["npx", "--yes", "wrangler", "pages", "deploy", "docs", "--project-name", PAGES_PROJECT, "--branch", "main", "--commit-dirty=true"],
-        shell=(os.name == "nt"),
-    )
+    with tempfile.TemporaryDirectory() as td:
+        dest = Path(td) / "docs"
+        shutil.copytree(ROOT / "docs", dest, symlinks=True)
+        stamp_docs_tree(dest)
+        stamp_errors = site_stamp_errors(dest)
+        if stamp_errors:
+            raise GateError("\n".join(stamp_errors))
+        _check(
+            "pages deploy",
+            ["npx", "--yes", "wrangler", "pages", "deploy", str(dest), "--project-name", PAGES_PROJECT, "--branch", "main", "--commit-dirty=true"],
+            shell=(os.name == "nt"),
+        )
 
 
 def commons_errors(api: str = COMMONS_API) -> list[str]:

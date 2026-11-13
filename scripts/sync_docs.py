@@ -12,6 +12,12 @@ The release version has one source, ``pyproject.toml``. ``VERSION_STAMPS`` lists
 every file that must carry a literal copy of it (``__version__``, A2A/MCP cards,
 ai.txt, llms.txt); this script rewrites them so a release is a one-line bump.
 
+The public site's product-brief line and current-release install pins are stamped
+the same way (``data-cix-brief`` on the homepage, ``claimidx[server]>=`` pins on
+site HTML). ``deploy-site`` restamps a temporary copy of ``docs/`` with today's
+month so a monthly redeploy stays current without a commit. A brief month more
+than 35 days old fails the site gate.
+
 The MCP server card's ``tools`` / ``prompts`` / ``resources`` arrays are rendered
 from ``claimidx.mcp_server`` (``TOOLS``, ``PROMPTS``, ``RESOURCES``), so a tool
 description edited in code reaches crawlers without a second hand edit.
@@ -23,7 +29,9 @@ import argparse
 import json
 import re
 import sys
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
@@ -104,6 +112,96 @@ def package_version() -> str:
     return m.group(1)
 
 
+# Public site stamps (homepage brief + current-release install pins). Historical
+# "≥0.7.16" feature notes are left alone: they do not use these prefixes.
+STAMP_TZ = ZoneInfo("America/Chicago")
+BRIEF_MAX_AGE_DAYS = 35
+MONTHS = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
+BRIEF_RE = re.compile(r"(<span data-cix-brief>)(.*?)(</span>)", re.DOTALL)
+BRIEF_VALUE_RE = re.compile(r"^v(.+?) · ([A-Z][a-z]+ \d{4})$")
+SITE_PIN_RE = re.compile(r"(claimidx\[server\](?:>=|&gt;=)|INSTALL · SHARE · ≥)(\d+\.\d+\.\d+)")
+
+
+def stamp_now(when: date | None = None) -> date:
+    """Calendar date for the brief month, in the operator's timezone."""
+    return when or datetime.now(STAMP_TZ).date()
+
+
+def brief_label(version: str, when: date | None = None) -> str:
+    day = stamp_now(when)
+    return f"v{version} · {MONTHS[day.month - 1]} {day.year}"
+
+
+def stamp_site_text(body: str, version: str, when: date | None = None) -> str:
+    """Fill data-cix-brief and current-release install pins in one HTML page."""
+    label = brief_label(version, when)
+    body = BRIEF_RE.sub(lambda m: f"{m.group(1)}{label}{m.group(3)}", body)
+    return SITE_PIN_RE.sub(lambda m: f"{m.group(1)}{version}", body)
+
+
+def _parse_brief_month(month_year: str) -> date | None:
+    try:
+        return datetime.strptime(month_year, "%B %Y").date().replace(day=1)
+    except ValueError:
+        return None
+
+
+def site_stamp_errors(body: str, rel: str, version: str, when: date | None = None) -> list[str]:
+    """Version mismatch, a missing marker, or a brief month older than 35 days."""
+    day = stamp_now(when)
+    errors: list[str] = []
+    if "Product brief" in body and not BRIEF_RE.search(body):
+        errors.append(f"{rel}: Product brief is not wrapped in <span data-cix-brief>")
+    for m in BRIEF_RE.finditer(body):
+        inner = m.group(2).strip()
+        parsed = BRIEF_VALUE_RE.fullmatch(inner)
+        if not parsed:
+            errors.append(f"{rel}: brief stamp {inner!r} is not 'vVERSION · Month Year'")
+            continue
+        got, month_year = parsed.group(1), parsed.group(2)
+        if got != version:
+            errors.append(f"{rel}: brief version v{got} != package {version}")
+        start = _parse_brief_month(month_year)
+        if start is None:
+            errors.append(f"{rel}: brief month {month_year!r} is not a Month Year")
+        elif start > day:
+            errors.append(f"{rel}: brief month {month_year} is in the future")
+        else:
+            age = (day - start).days
+            if age > BRIEF_MAX_AGE_DAYS:
+                errors.append(f"{rel}: brief month {month_year} is {age} days old (limit {BRIEF_MAX_AGE_DAYS})")
+    for m in SITE_PIN_RE.finditer(body):
+        if m.group(2) != version:
+            errors.append(f"{rel}: install pin {m.group(2)} != package {version}")
+    return errors
+
+
+def site_html_rels() -> tuple[str, ...]:
+    """docs/ HTML pages that carry a product brief or a current-release install pin."""
+    docs = ROOT / "docs"
+    rels: list[str] = []
+    if not docs.is_dir():
+        return ()
+    for path in sorted(docs.rglob("*.html")):
+        body = path.read_text(encoding="utf-8")
+        if BRIEF_RE.search(body) or SITE_PIN_RE.search(body) or "Product brief" in body:
+            rels.append(path.relative_to(ROOT).as_posix())
+    return tuple(rels)
+
+
 def stamped() -> dict[str, str]:
     """Each VERSION_STAMPS file with every version literal set to the pyproject version."""
     version = package_version()
@@ -155,6 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--check", action="store_true", help="report stale copies; write nothing")
     ns = ap.parse_args(argv)
     stale: list[str] = []
+    check_errors: list[str] = []
     for rel, body in expected().items():
         path = ROOT / rel
         current = path.read_text(encoding="utf-8").replace("\r\n", "\n") if path.exists() else None
@@ -164,10 +263,27 @@ def main(argv: list[str] | None = None) -> int:
         if not ns.check:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(body, encoding="utf-8", newline="\n")
+    version = package_version()
+    # Write mode restamps pins and the brief month to today. --check requires the
+    # marker, a matching version, and matching install pins; month freshness is
+    # enforced by the site / deploy-site gate so regular CI does not go red when
+    # the calendar month rolls over without a commit.
+    for rel in site_html_rels():
+        path = ROOT / rel
+        current = path.read_text(encoding="utf-8").replace("\r\n", "\n") if path.exists() else ""
+        stamped_body = stamp_site_text(current, version)
+        pin_and_marker_errors = [e for e in site_stamp_errors(current, rel, version) if "days old" not in e and "is in the future" not in e]
+        if ns.check:
+            check_errors.extend(pin_and_marker_errors)
+        elif current != stamped_body:
+            stale.append(rel)
+            path.write_text(stamped_body, encoding="utf-8", newline="\n")
     if ns.check:
         for rel in stale:
             print(f"stale: {rel}", file=sys.stderr)
-        return 1 if stale else 0
+        for err in check_errors:
+            print(err, file=sys.stderr)
+        return 1 if stale or check_errors else 0
     for rel in stale:
         print(f"wrote {rel}")
     return 0

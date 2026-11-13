@@ -123,3 +123,39 @@ def test_release_bundle_includes_site_commons_and_smoke():
     assert gate.BUNDLES["deploy-site"] == ("site",)
     for stage in ("site", "commons", "smoke"):
         assert stage in gate.RUNNERS and stage in gate.STAGES
+
+
+def test_site_stamp_errors_and_deploy_copy_is_idempotent(tmp_path: Path):
+    """A stale brief fails the site stamp check; stamping a docs copy is idempotent and leaves the source alone."""
+    from datetime import date
+
+    gate = _gate()
+    sync = gate._load("scripts/sync_docs.py")
+    version = gate.package_version()
+    src = (
+        f'<p class="eyebrow">Product brief · <span data-cix-brief>v{version} · October 2026</span></p>\n'
+        f'<pre>pip install -U "claimidx[server]&gt;={version}"</pre>\n'
+        "<p>On ≥0.7.16, claim --yes stays local.</p>\n"
+    )
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "index.html").write_text(src, encoding="utf-8")
+    errors = sync.site_stamp_errors(src, "docs/index.html", version, date(2026, 11, 12))
+    assert any("42 days old" in e for e in errors), errors
+
+    first = sync.stamp_site_text(src, version, date(2026, 11, 12))
+    second = sync.stamp_site_text(first, version, date(2026, 11, 12))
+    assert first == second
+    assert f"v{version} · November 2026" in first
+    assert f"claimidx[server]&gt;={version}" in first
+    assert "≥0.7.16" in first
+    assert (docs / "index.html").read_text(encoding="utf-8") == src
+    assert sync.site_stamp_errors(first, "docs/index.html", version, date(2026, 11, 12)) == []
+
+    copy = tmp_path / "copy"
+    copy.mkdir()
+    (copy / "index.html").write_text(src, encoding="utf-8")
+    gate.stamp_docs_tree(copy)
+    stamped = (copy / "index.html").read_text(encoding="utf-8")
+    assert f"v{version} · " in stamped
+    assert (docs / "index.html").read_text(encoding="utf-8") == src

@@ -902,6 +902,56 @@ def test_sync_docs_stamps_every_version_literal():
         assert cur == body, f"stale version: {rel}"
 
 
+def test_sync_docs_stamps_site_product_brief_and_pins():
+    """Homepage brief and site install pins come from pyproject; a stale month fails the check."""
+    import re
+    from datetime import date
+    import importlib.util
+
+    from claimidx import __version__
+    from claimidx.discovery import ROOT
+
+    spec = importlib.util.spec_from_file_location("sync_docs", ROOT / "scripts" / "sync_docs.py")
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    site = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+    assert "data-cix-brief" in site
+    assert f"Product brief · <span data-cix-brief>v{__version__} ·" in site
+    assert mod.site_stamp_errors(site, "docs/index.html", __version__, date(2026, 11, 12)) == []
+
+    # Historical feature floors stay put; only current-release pins move.
+    stale = mod.BRIEF_RE.sub(r"\1v0.0.1 · October 2026\3", site)
+    stale = re.sub(r"(claimidx\[server\](?:>=|&gt;=))\d+\.\d+\.\d+", r"\g<1>0.0.1", stale)
+    errors = mod.site_stamp_errors(stale, "docs/index.html", __version__, date(2026, 11, 12))
+    assert any("brief version v0.0.1" in e for e in errors), errors
+    assert any("is 42 days old" in e for e in errors), errors
+    assert any("install pin 0.0.1" in e for e in errors), errors
+    assert "≥0.7.16" in stale  # feature floor not treated as a current pin
+
+    marked = '<p class="eyebrow">Product brief · October 2026</p>'
+    assert any("data-cix-brief" in e for e in mod.site_stamp_errors(marked, "docs/index.html", __version__, date(2026, 11, 12)))
+
+    today = date(2026, 11, 12)
+    filled = mod.stamp_site_text(
+        "Product brief · <span data-cix-brief>v0.0.1 · October 2026</span>\n"
+        'pip install -U "claimidx[server]&gt;=0.0.1"\n'
+        "On ≥0.7.16, claim --yes stays local.\n",
+        __version__,
+        today,
+    )
+    assert f"v{__version__} · November 2026" in filled
+    assert f"claimidx[server]&gt;={__version__}" in filled
+    assert "≥0.7.16" in filled
+    assert filled == mod.stamp_site_text(filled, __version__, today)  # idempotent
+    assert mod.site_stamp_errors(filled, "docs/index.html", __version__, today) == []
+    # 35 days from November 1 is December 6; the 36th day fails.
+    assert mod.site_stamp_errors(filled, "docs/index.html", __version__, date(2026, 12, 6)) == []
+    late = mod.site_stamp_errors(filled, "docs/index.html", __version__, date(2026, 12, 7))
+    assert any("36 days old" in e for e in late), late
+
+
 def test_mcp_force_keeps_stored_cls(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAIMIDX_SHARE", "0")
     store = Store(tmp_path / "ix.sqlite")
