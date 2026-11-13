@@ -12,11 +12,14 @@ The release version has one source, ``pyproject.toml``. ``VERSION_STAMPS`` lists
 every file that must carry a literal copy of it (``__version__``, A2A/MCP cards,
 ai.txt, llms.txt); this script rewrites them so a release is a one-line bump.
 
-The public site's product-brief line and current-release install pins are stamped
-the same way (``data-cix-brief`` on the homepage, ``claimidx[server]>=`` pins on
-site HTML). ``deploy-site`` restamps a temporary copy of ``docs/`` with today's
-month so a monthly redeploy stays current without a commit. A brief month more
-than 35 days old fails the site gate.
+The public site's product-brief line, current-release install pins, and footer
+copyright year are stamped the same way (``data-cix-brief`` on the homepage,
+``claimidx[server]>=`` pins on site HTML, ``data-cix-year`` on every copyright
+line). ``deploy-site`` restamps a temporary copy of ``docs/`` with today's month
+and year so a monthly redeploy stays current without a commit. A brief month more
+than 35 days old, or a copyright year that is not the current year, fails the
+site gate. The copyright stamp is ``© 2026`` in 2026 and ``© 2026–<year>``
+(en dash) from 2027 on.
 
 The MCP server card's ``tools`` / ``prompts`` / ``resources`` arrays are rendered
 from ``claimidx.mcp_server`` (``TOOLS``, ``PROMPTS``, ``RESOURCES``), so a tool
@@ -112,10 +115,12 @@ def package_version() -> str:
     return m.group(1)
 
 
-# Public site stamps (homepage brief + current-release install pins). Historical
-# "≥0.7.16" feature notes are left alone: they do not use these prefixes.
+# Public site stamps (homepage brief, current-release install pins, footer year).
+# Historical "≥0.7.16" feature notes, the terms effective date, the SkillMaxx
+# citation, and the "as of Oct 2026" status line are left alone.
 STAMP_TZ = ZoneInfo("America/Chicago")
 BRIEF_MAX_AGE_DAYS = 35
+COPYRIGHT_START = 2026
 MONTHS = (
     "January",
     "February",
@@ -133,6 +138,9 @@ MONTHS = (
 BRIEF_RE = re.compile(r"(<span data-cix-brief>)(.*?)(</span>)", re.DOTALL)
 BRIEF_VALUE_RE = re.compile(r"^v(.+?) · ([A-Z][a-z]+ \d{4})$")
 SITE_PIN_RE = re.compile(r"(claimidx\[server\](?:>=|&gt;=)|INSTALL · SHARE · ≥)(\d+\.\d+\.\d+)")
+YEAR_RE = re.compile(r"(<span data-cix-year>)(.*?)(</span>)", re.DOTALL)
+# Footer copyright: © 2026 in the start year, © 2026–YYYY (en dash) afterwards.
+YEAR_VALUE_RE = re.compile(r"^© 2026(?:–\d{4})?$")
 
 
 def stamp_now(when: date | None = None) -> date:
@@ -145,10 +153,20 @@ def brief_label(version: str, when: date | None = None) -> str:
     return f"v{version} · {MONTHS[day.month - 1]} {day.year}"
 
 
+def copyright_label(when: date | None = None) -> str:
+    """© 2026 in 2026; © 2026–<year> (en dash) from 2027 on, America/Chicago."""
+    year = stamp_now(when).year
+    if year <= COPYRIGHT_START:
+        return f"© {COPYRIGHT_START}"
+    return f"© {COPYRIGHT_START}–{year}"
+
+
 def stamp_site_text(body: str, version: str, when: date | None = None) -> str:
-    """Fill data-cix-brief and current-release install pins in one HTML page."""
+    """Fill data-cix-brief, data-cix-year, and current-release install pins in one HTML page."""
     label = brief_label(version, when)
+    year_label = copyright_label(when)
     body = BRIEF_RE.sub(lambda m: f"{m.group(1)}{label}{m.group(3)}", body)
+    body = YEAR_RE.sub(lambda m: f"{m.group(1)}{year_label}{m.group(3)}", body)
     return SITE_PIN_RE.sub(lambda m: f"{m.group(1)}{version}", body)
 
 
@@ -160,11 +178,20 @@ def _parse_brief_month(month_year: str) -> date | None:
 
 
 def site_stamp_errors(body: str, rel: str, version: str, when: date | None = None) -> list[str]:
-    """Version mismatch, a missing marker, or a brief month older than 35 days."""
+    """Version mismatch, a missing marker, a brief month older than 35 days, or a stale copyright year."""
     day = stamp_now(when)
     errors: list[str] = []
     if "Product brief" in body and not BRIEF_RE.search(body):
         errors.append(f"{rel}: Product brief is not wrapped in <span data-cix-brief>")
+    if ("©" in body or "&copy;" in body) and not YEAR_RE.search(body):
+        errors.append(f"{rel}: copyright line is not wrapped in <span data-cix-year>")
+    expected_year = copyright_label(day)
+    for m in YEAR_RE.finditer(body):
+        inner = m.group(2).strip()
+        if not YEAR_VALUE_RE.fullmatch(inner):
+            errors.append(f"{rel}: copyright stamp {inner!r} is not '© 2026' or '© 2026–YYYY'")
+        elif inner != expected_year:
+            errors.append(f"{rel}: copyright stamp {inner!r} != {expected_year}")
     for m in BRIEF_RE.finditer(body):
         inner = m.group(2).strip()
         parsed = BRIEF_VALUE_RE.fullmatch(inner)
@@ -190,14 +217,14 @@ def site_stamp_errors(body: str, rel: str, version: str, when: date | None = Non
 
 
 def site_html_rels() -> tuple[str, ...]:
-    """docs/ HTML pages that carry a product brief or a current-release install pin."""
+    """docs/ HTML pages that carry a product brief, a copyright line, or a current-release install pin."""
     docs = ROOT / "docs"
     rels: list[str] = []
     if not docs.is_dir():
         return ()
     for path in sorted(docs.rglob("*.html")):
         body = path.read_text(encoding="utf-8")
-        if BRIEF_RE.search(body) or SITE_PIN_RE.search(body) or "Product brief" in body:
+        if BRIEF_RE.search(body) or SITE_PIN_RE.search(body) or YEAR_RE.search(body) or "Product brief" in body or "©" in body or "&copy;" in body:
             rels.append(path.relative_to(ROOT).as_posix())
     return tuple(rels)
 
@@ -272,7 +299,9 @@ def main(argv: list[str] | None = None) -> int:
         path = ROOT / rel
         current = path.read_text(encoding="utf-8").replace("\r\n", "\n") if path.exists() else ""
         stamped_body = stamp_site_text(current, version)
-        pin_and_marker_errors = [e for e in site_stamp_errors(current, rel, version) if "days old" not in e and "is in the future" not in e]
+        pin_and_marker_errors = [
+            e for e in site_stamp_errors(current, rel, version) if "days old" not in e and "is in the future" not in e and "copyright stamp" not in e
+        ]
         if ns.check:
             check_errors.extend(pin_and_marker_errors)
         elif current != stamped_body:
