@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from claimidx.fingerprint import fingerprint_accepted  # noqa: E402
 from claimidx.home import COMMONS_LEDGER, _get  # noqa: E402
 from claimidx.models import Claim  # noqa: E402
 
@@ -65,6 +66,16 @@ def _public_ok(row: dict, *, blocked: set[str]) -> str | None:
     cmd = str((row.get("eval") or {}).get("cmd") or "")
     if "_claimidx_eval_" in cmd:
         return "tree-local-eval"
+    dep = row.get("dep") or []
+    if not fingerprint_accepted(
+        str(row.get("fp") or ""),
+        err=str(row.get("err") or ""),
+        cls=str(row.get("cls") or ""),
+        eco=str(row.get("eco") or ""),
+        rt=str(row.get("rt") or ""),
+        dep=list(dep) if isinstance(dep, list) else [],
+    ):
+        return "unverified-fingerprint"
     return None
 
 
@@ -90,7 +101,7 @@ def fetch(url: str = COMMONS_LEDGER) -> list[str]:
     if skipped:
         print(f"skipped {skipped} rows that do not validate", file=sys.stderr)
     if filtered:
-        print(f"filtered {filtered} rows (forbidden / self / retired / tree-local)", file=sys.stderr)
+        print(f"filtered {filtered} rows (forbidden / self / retired / tree-local / unverified-fp)", file=sys.stderr)
     return lines
 
 

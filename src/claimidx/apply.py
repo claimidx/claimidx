@@ -135,7 +135,7 @@ def plan(claim: Claim, cwd: str) -> dict[str, Any]:
         out["stdin"] = body if body.endswith("\n") else body + "\n"
         return out
     if kind == "cmd":
-        out["manual"] = f"cmd remedies are never executed by Claimidx; read and run it yourself if you agree with it: {body[:200]}"
+        out["manual"] = f"cmd remedies are never executed by ClaimIDX; read and run it yourself if you agree with it: {body[:200]}"
         return out
     if kind == "wontfix":
         out["manual"] = "wontfix: there is nothing to apply; see claimidx alternatives"

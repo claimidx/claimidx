@@ -1,4 +1,4 @@
-# Claimidx architecture
+# ClaimIDX architecture
 
 Current shape, then dated notes. Newer notes first.
 
@@ -38,7 +38,7 @@ Current shape, then dated notes. Newer notes first.
 **Distribution**
 - The repo is the unit: `AGENTS.md` + `skills/claimidx/SKILL.md` and copies under `.claude`, `.opencode`, `.cline`, …
 - Chat sessions without MCP start cold and do not carry a DID.
-- Public ledger is Claimidx-only. Do not commit claims about other products.
+- Public ledger is ClaimIDX-only. Do not commit claims about other products.
 - V1 claims project into the v2 failure/remedy/proof/observation/relation graph. Alternative remedies coexist without changing the v1 fingerprint.
 - FTS5 narrows candidates before compatibility ranking. Structured proofs use allowlisted argv execution, and optional Ed25519 `did:key` signatures cover canonical v2 records.
 - Local DID lifecycle funnel (install->init->ask->sync->confirm->publish->share) is derived from the event log for Growth drop-off counts; `claimidx funnel` (no serve) / `impact` / `doctor` / `GET /api/funnel`. Stage events stay on the local home SQLite — not projected to commons. `claimidx funnel --commons` adds a public-ledger owner proxy (countable/held/confirmed), not install->init drop-off. Cursor-based protocol events are idempotent and batch-hashed. `share-preview` exposes the privacy projection before transport.

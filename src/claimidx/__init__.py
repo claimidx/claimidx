@@ -1,4 +1,4 @@
-"""Claimidx — prior art for agents."""
+"""ClaimIDX — prior art for agents."""
 
 __version__ = "0.7.24"
 

@@ -21,6 +21,11 @@ than 35 days old, or a copyright year that is not the current year, fails the
 site gate. The copyright stamp is ``© 2026`` in 2026 and ``© 2026–<year>``
 (en dash) from 2027 on.
 
+The public brand spelling is ``ClaimIDX``. ``--check`` and the site gate fail if
+the word ``Claimidx`` appears in deployable ``docs/`` outside ``code``/``pre``
+blocks and URLs. Identifiers such as the PyPI name, CLI, domains, and DIDs stay
+lowercase ``claimidx``.
+
 The MCP server card's ``tools`` / ``prompts`` / ``resources`` arrays are rendered
 from ``claimidx.mcp_server`` (``TOOLS``, ``PROMPTS``, ``RESOURCES``), so a tool
 description edited in code reaches crawlers without a second hand edit.
@@ -216,6 +221,57 @@ def site_stamp_errors(body: str, rel: str, version: str, when: date | None = Non
     return errors
 
 
+# Public brand spelling is ClaimIDX. Exact "Claimidx" in deployable docs is a misspelling.
+WRONG_BRAND_RE = re.compile(r"(?<![A-Za-z0-9_])Claimidx(?![A-Za-z0-9_])")
+DOCS_BRAND_SUFFIXES = {".html", ".md", ".txt", ".json", ".xml", ".webmanifest"}
+
+
+def _strip_urls(text: str) -> str:
+    return re.sub(r"https?://\S+", " ", text)
+
+
+def _strip_code_html(text: str) -> str:
+    text = re.sub(r"<script\b[^>]*>.*?</script>", " ", text, flags=re.I | re.S)
+    text = re.sub(r"<style\b[^>]*>.*?</style>", " ", text, flags=re.I | re.S)
+    text = re.sub(r"<pre\b[^>]*>.*?</pre>", " ", text, flags=re.I | re.S)
+    text = re.sub(r"<code\b[^>]*>.*?</code>", " ", text, flags=re.I | re.S)
+    return text
+
+
+def _strip_code_md(text: str) -> str:
+    text = re.sub(r"```.*?```", " ", text, flags=re.S)
+    text = re.sub(r"`[^`]+`", " ", text)
+    return text
+
+
+def brand_scan_text(text: str, *, suffix: str = "") -> list[re.Match[str]]:
+    """Matches of the word Claimidx after URLs and code/pre blocks are removed."""
+    body = _strip_urls(text)
+    ext = suffix.lower()
+    if ext == ".html":
+        body = _strip_code_html(body)
+    if ext in {".md", ".txt"}:
+        body = _strip_code_md(body)
+    return list(WRONG_BRAND_RE.finditer(body))
+
+
+def docs_brand_errors(docs: Path | None = None) -> list[str]:
+    """Deployable docs must not use the word Claimidx outside code blocks and URLs."""
+    root = docs or (ROOT / "docs")
+    errors: list[str] = []
+    if not root.is_dir():
+        return [f"{root}: missing"]
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in DOCS_BRAND_SUFFIXES:
+            continue
+        rel = "docs/" + path.relative_to(root).as_posix()
+        body = path.read_text(encoding="utf-8")
+        hits = brand_scan_text(body, suffix=path.suffix)
+        if hits:
+            errors.append(f"{rel}: branding 'Claimidx' ({len(hits)} hit(s)); use 'ClaimIDX'")
+    return errors
+
+
 def site_html_rels() -> tuple[str, ...]:
     """docs/ HTML pages that carry a product brief, a copyright line, or a current-release install pin."""
     docs = ROOT / "docs"
@@ -308,6 +364,7 @@ def main(argv: list[str] | None = None) -> int:
             stale.append(rel)
             path.write_text(stamped_body, encoding="utf-8", newline="\n")
     if ns.check:
+        check_errors.extend(docs_brand_errors())
         for rel in stale:
             print(f"stale: {rel}", file=sys.stderr)
         for err in check_errors:

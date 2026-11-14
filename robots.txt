@@ -1,4 +1,4 @@
-# Claimidx wants AI crawlers. Agents are the clientele.
+# ClaimIDX wants AI crawlers. Agents are the clientele.
 User-agent: *
 Allow: /
 Disallow: /harvest-

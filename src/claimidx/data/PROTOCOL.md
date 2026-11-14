@@ -1,4 +1,4 @@
-# Claimidx protocol v1 + v2
+# ClaimIDX protocol v1 + v2
 
 Protocol v1 is the frozen compatibility wire format. Every v1 claim is projected into the additive v2 graph; existing clients, fingerprints, and ledgers continue to work.
 
@@ -69,7 +69,7 @@ proposed ──nc≥1──► confirmed ──stale──► stale
     └────nf>nc─────────┴──► contested (sticky)
 ```
 
-`eval.cmd` is a recipe. Claimidx does not execute it on pull or publish.
+`eval.cmd` is a recipe. ClaimIDX does not execute it on pull or publish.
 `confirm --replay` is opt-in, allowlisted, no shell metacharacters.
 Replay establishes that a remedy held in the executing environment. It is not an independent witness when repeated inside the same trust domain, and it does not attest that the host is uncompromised. Resolve a contested remedy by publishing a replacement or alternative remedy; additional confirms do not clear the contest.
 
@@ -86,7 +86,7 @@ Provenance is on the claim: `src` (`seed` corpus / `home` harvested / `local`), 
 - Read plane: `CLAIMIDX_HOME` (default the commons export `home.claimidx.com/t/commons/api/claims.jsonl`; GitHub raw `data/claims.jsonl` when the commons is off or unreachable) or `GET /ledger.jsonl` on a live home.
 - Write plane: `CLAIMIDX_HOME_API` + DID (+ optional bearer). Never a raw git push from an agent.
 - Admission: the same `inspect_claim` gate on ingest. Remote `confirmed` is rewritten to `proposed`.
-- Identity: `own` must be a DID (`did:claimidx:…`, `did:web:…`, `did:key:…`, …). `did:claimidx:anon` is refused except on `src=seed`. Any agent, any provider. A local roster is optional labels, not a write gate. The home is Claimidx, not the process operator: `GET /api/whoami` returns `{home, product, operator, actors}`. HTTP `POST /api/ask` logs `own` or `did:claimidx:anon` — never the serve-process `CLAIMIDX_OWNER`. HTTP writes (`publish` / confirm / fail / reject) require `own`; they do not inherit the operator DID.
+- Identity: `own` must be a DID (`did:claimidx:…`, `did:web:…`, `did:key:…`, …). `did:claimidx:anon` is refused except on `src=seed`. Any agent, any provider. A local roster is optional labels, not a write gate. The home is ClaimIDX, not the process operator: `GET /api/whoami` returns `{home, product, operator, actors}`. HTTP `POST /api/ask` logs `own` or `did:claimidx:anon` — never the serve-process `CLAIMIDX_OWNER`. HTTP writes (`publish` / confirm / fail / reject) require `own`; they do not inherit the operator DID.
 - A live home may require `Authorization: Bearer` once `CLAIMIDX_HOME_TOKEN` or `claimidx token new` exists.
 - Ingest/confirm auto-share when `CLAIMIDX_HOME_API` is set (`CLAIMIDX_SHARE=0` disables).
 - **Private home vs public commons.** A live home you control stores the full (secret-scanned) claim. The GitHub ledger / `home-propose` outbox stores a **public projection**: same `id` + `fp`, empty `note`/`model`, local paths stripped. A tree eval is blanked (not rewritten as `true` — that looked like proof). Ask surfaces `eval_proof`; replayable recipes rank first. `true` remains a valid local hint.
@@ -102,7 +102,7 @@ The graph has five first-class records:
 - `Failure`: the stable v1 fingerprint plus a broader family fingerprint and extracted features.
 - `Remedy`: one proposed resolution, applicability constraints, owner, proof reference, and optional signature.
 - `Proof`: structured, bounded steps (`run`, `expect_exit`, runtime and package observations). Legacy eval commands are wrapped without changing v1.
-- `Observation`: an immutable held/failed result by an actor in an environment, with optional declared `trust_domain` and `sensor_plane` metadata. These declarations are provenance, not quorum; Claimidx does not infer independence from them.
+- `Observation`: an immutable held/failed result by an actor in an environment, with optional declared `trust_domain` and `sensor_plane` metadata. These declarations are provenance, not quorum; ClaimIDX does not infer independence from them.
 - `Relation`: typed edges such as alternative and supersedes.
 
 Protocol events are cursor-addressed and idempotent. Batches carry a canonical hash, so peers can exchange evidence without sharing SQLite files or rewriting history. Public projection is the default share; it removes private fields before transport, and `--local` opts a claim out.
