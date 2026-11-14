@@ -26,6 +26,11 @@ the word ``Claimidx`` appears in deployable ``docs/`` outside ``code``/``pre``
 blocks and URLs. Identifiers such as the PyPI name, CLI, domains, and DIDs stay
 lowercase ``claimidx``.
 
+``--check`` and the site gate also fail when an indexable public HTML page is
+missing a title, meta description, or canonical URL, when a JSON-LD block does
+not parse, or when ``docs/sitemap.xml`` omits a public URL (or lists a noindex
+path). ``deploy-site`` restamps sitemap ``lastmod`` to today in a temporary copy.
+
 The MCP server card's ``tools`` / ``prompts`` / ``resources`` arrays are rendered
 from ``claimidx.mcp_server`` (``TOOLS``, ``PROMPTS``, ``RESOURCES``), so a tool
 description edited in code reaches crawlers without a second hand edit.
@@ -146,6 +151,7 @@ SITE_PIN_RE = re.compile(r"(claimidx\[server\](?:>=|&gt;=)|INSTALL · SHARE · �
 YEAR_RE = re.compile(r"(<span data-cix-year>)(.*?)(</span>)", re.DOTALL)
 # Footer copyright: © 2026 in the start year, © 2026–YYYY (en dash) afterwards.
 YEAR_VALUE_RE = re.compile(r"^© 2026(?:–\d{4})?$")
+SOFTWARE_VERSION_RE = re.compile(r'("softwareVersion"\s*:\s*")(\d+\.\d+\.\d+)(")')
 
 
 def stamp_now(when: date | None = None) -> date:
@@ -172,7 +178,8 @@ def stamp_site_text(body: str, version: str, when: date | None = None) -> str:
     year_label = copyright_label(when)
     body = BRIEF_RE.sub(lambda m: f"{m.group(1)}{label}{m.group(3)}", body)
     body = YEAR_RE.sub(lambda m: f"{m.group(1)}{year_label}{m.group(3)}", body)
-    return SITE_PIN_RE.sub(lambda m: f"{m.group(1)}{version}", body)
+    body = SITE_PIN_RE.sub(lambda m: f"{m.group(1)}{version}", body)
+    return SOFTWARE_VERSION_RE.sub(lambda m: f"{m.group(1)}{version}{m.group(3)}", body)
 
 
 def _parse_brief_month(month_year: str) -> date | None:
@@ -218,6 +225,9 @@ def site_stamp_errors(body: str, rel: str, version: str, when: date | None = Non
     for m in SITE_PIN_RE.finditer(body):
         if m.group(2) != version:
             errors.append(f"{rel}: install pin {m.group(2)} != package {version}")
+    for m in SOFTWARE_VERSION_RE.finditer(body):
+        if m.group(2) != version:
+            errors.append(f"{rel}: softwareVersion {m.group(2)} != package {version}")
     return errors
 
 
@@ -269,6 +279,163 @@ def docs_brand_errors(docs: Path | None = None) -> list[str]:
         hits = brand_scan_text(body, suffix=path.suffix)
         if hits:
             errors.append(f"{rel}: branding 'Claimidx' ({len(hits)} hit(s)); use 'ClaimIDX'")
+    return errors
+
+
+# Public sitemap: indexable HTML and the machine-discovery URLs already advertised
+# in llms.txt. Operator / thank-you / paused pages stay out (they are noindex).
+SITEMAP_PATHS = (
+    "/",
+    "/llms.txt",
+    "/llms-full.txt",
+    "/ai.txt",
+    "/AGENTS.md",
+    "/SECURITY.md",
+    "/PROTOCOL.md",
+    "/skills/claimidx/SKILL.md",
+    "/.well-known/agent-card.json",
+    "/.well-known/agent.json",
+    "/.well-known/mcp.json",
+    "/.well-known/mcp/server-card.json",
+    "/.well-known/agent-skills/index.json",
+    "/.well-known/agents.json",
+    "/.well-known/ai.txt",
+    "/.well-known/llms.txt",
+    "/.well-known/api-catalog",
+    "/.well-known/security.txt",
+    "/server.json",
+    "/humans.txt",
+    "/integrations/",
+    "/integrations/crewai",
+    "/integrations/langgraph",
+    "/integrations/autogen",
+    "/integrations/openai-agents",
+    "/windows-mcp-spawn-fixes.md",
+    "/pilot",
+    "/terms",
+    "/pricing",
+)
+NOINDEX_SITEMAP_PATHS = (
+    "/homes",
+    "/thanks",
+    "/credits",
+    "/pilot/welcome",
+    "/leaderboard",
+)
+LASTMOD_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+ROBOTS_RE = re.compile(r'<meta[^>]+name=["\']robots["\'][^>]+content=["\']([^"\']*)["\']', re.I)
+TITLE_RE = re.compile(r"<title>(.*?)</title>", re.I | re.S)
+DESC_RE = re.compile(
+    r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']*)["\']',
+    re.I,
+)
+CANONICAL_RE = re.compile(r'<link[^>]+rel=["\']canonical["\'][^>]+href=["\']([^"\']+)["\']', re.I)
+JSONLD_RE = re.compile(r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', re.I | re.S)
+
+
+def sitemap_locs() -> list[str]:
+    return [f"https://claimidx.com{path}" for path in SITEMAP_PATHS]
+
+
+def render_sitemap(lastmod: str) -> str:
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for loc in sitemap_locs():
+        lines.append("  <url>")
+        lines.append(f"    <loc>{loc}</loc>")
+        lines.append(f"    <lastmod>{lastmod}</lastmod>")
+        lines.append("  </url>")
+    lines.append("</urlset>")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def stamp_sitemap(docs: Path, when: date | None = None) -> None:
+    """Write docs/sitemap.xml with lastmod set to the stamp date (America/Chicago)."""
+    body = render_sitemap(stamp_now(when).isoformat())
+    (docs / "sitemap.xml").write_text(body, encoding="utf-8", newline="\n")
+
+
+def _robots_content(body: str) -> str:
+    m = ROBOTS_RE.search(body)
+    return (m.group(1) if m else "").lower()
+
+
+def _html_route(rel: str) -> str:
+    if rel == "index.html":
+        return "/"
+    if rel.endswith("/index.html"):
+        return "/" + rel[: -len("index.html")]
+    if rel.endswith(".html"):
+        return "/" + rel[: -len(".html")]
+    return "/" + rel
+
+
+def docs_seo_errors(docs: Path | None = None) -> list[str]:
+    """Indexable public pages need a title, description, canonical, and valid JSON-LD; the sitemap must list them."""
+    root = docs or (ROOT / "docs")
+    errors: list[str] = []
+    if not root.is_dir():
+        return [f"{root}: missing"]
+    expected = set(sitemap_locs())
+    forbidden = {f"https://claimidx.com{path}" for path in NOINDEX_SITEMAP_PATHS}
+    indexable_locs: set[str] = set()
+    for path in sorted(root.rglob("*.html")):
+        rel = path.relative_to(root).as_posix()
+        body = path.read_text(encoding="utf-8")
+        robots = _robots_content(body)
+        noindex = "noindex" in robots or rel in {"404.html", "leaderboard.html"}
+        loc = "https://claimidx.com" + _html_route(rel)
+        if noindex:
+            continue
+        indexable_locs.add(loc)
+        label = "docs/" + rel
+        title = TITLE_RE.search(body)
+        title_text = re.sub(r"\s+", " ", title.group(1)).strip() if title else ""
+        if not title_text:
+            errors.append(f"{label}: missing <title>")
+        elif "ClaimIDX" not in title_text:
+            errors.append(f"{label}: <title> does not contain ClaimIDX")
+        desc = DESC_RE.search(body)
+        if not desc or not desc.group(1).strip():
+            errors.append(f"{label}: missing meta description")
+        canon = CANONICAL_RE.search(body)
+        if not canon:
+            errors.append(f"{label}: missing canonical URL")
+        elif not canon.group(1).startswith("https://claimidx.com"):
+            errors.append(f"{label}: canonical {canon.group(1)!r} is not on claimidx.com")
+        blocks = JSONLD_RE.findall(body)
+        if not blocks:
+            errors.append(f"{label}: missing JSON-LD")
+        for i, raw in enumerate(blocks):
+            try:
+                json.loads(raw)
+            except json.JSONDecodeError as exc:
+                errors.append(f"{label}: JSON-LD block {i} does not parse ({exc})")
+    sitemap_path = root / "sitemap.xml"
+    if not sitemap_path.is_file():
+        errors.append("docs/sitemap.xml missing")
+        return errors
+    text = sitemap_path.read_text(encoding="utf-8")
+    locs = re.findall(r"<loc>([^<]+)</loc>", text)
+    lastmods = re.findall(r"<lastmod>([^<]+)</lastmod>", text)
+    have = set(locs)
+    missing = sorted(expected - have)
+    if missing:
+        errors.append("docs/sitemap.xml missing: " + ", ".join(missing))
+    leaked = sorted(have & forbidden)
+    if leaked:
+        errors.append("docs/sitemap.xml lists noindex URL: " + ", ".join(leaked))
+    for loc in sorted(indexable_locs):
+        if loc not in have and loc not in forbidden:
+            errors.append(f"docs/sitemap.xml missing public page {loc}")
+    for value in lastmods:
+        if not LASTMOD_RE.fullmatch(value):
+            errors.append(f"docs/sitemap.xml lastmod {value!r} is not YYYY-MM-DD")
+    if "http://www.sitemaps.org/schemas/sitemap/0.9" not in text:
+        errors.append("docs/sitemap.xml is missing the sitemap namespace")
     return errors
 
 
@@ -365,6 +532,7 @@ def main(argv: list[str] | None = None) -> int:
             path.write_text(stamped_body, encoding="utf-8", newline="\n")
     if ns.check:
         check_errors.extend(docs_brand_errors())
+        check_errors.extend(docs_seo_errors())
         for rel in stale:
             print(f"stale: {rel}", file=sys.stderr)
         for err in check_errors:

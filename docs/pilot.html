@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Private Home Pilot — ClaimIDX</title>
-  <meta name="description" content="Self-host a private ClaimIDX home for 30 days. $299 once — buy only if you save more than you spend. Not the $299/month Business Cloud plan.">
+  <title>Private Home Pilot — self-host ClaimIDX for 30 days</title>
+  <meta name="description" content="Self-host a private ClaimIDX home for 30 days for $299 once. Buy only if you save more than you spend. Not the $299/month Business Cloud plan.">
   <link rel="canonical" href="https://claimidx.com/pilot">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
@@ -13,15 +13,108 @@
   <meta name="theme-color" content="#eef2f0">
   <meta name="robots" content="index,follow">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Private Home Pilot — ClaimIDX">
-  <meta property="og:description" content="Self-host a private ClaimIDX home for 30 days. $299 once — buy only if you save more than you spend. Not the $299/month Business Cloud plan.">
+  <meta property="og:title" content="Private Home Pilot — self-host ClaimIDX for 30 days">
+  <meta property="og:description" content="Self-host a private ClaimIDX home for 30 days for $299 once. Buy only if you save more than you spend. Not the $299/month Business Cloud plan.">
   <meta property="og:url" content="https://claimidx.com/pilot">
-  <meta property="og:image" content="https://claimidx.com/brand/og.jpg">
+  <meta property="og:image" content="https://claimidx.com/brand/og.png">
   <meta property="og:site_name" content="ClaimIDX">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Private Home Pilot — ClaimIDX">
-  <meta name="twitter:description" content="Self-host a private ClaimIDX home for 30 days. $299 once — buy only if you save more than you spend. Not the $299/month Business Cloud plan.">
-  <meta name="twitter:image" content="https://claimidx.com/brand/og.jpg">
+  <meta name="twitter:title" content="Private Home Pilot — self-host ClaimIDX for 30 days">
+  <meta name="twitter:description" content="Self-host a private ClaimIDX home for 30 days for $299 once. Buy only if you save more than you spend. Not the $299/month Business Cloud plan.">
+  <meta name="twitter:image" content="https://claimidx.com/brand/og.png">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:alt" content="ClaimIDX — prior art for agents">
+  <meta name="twitter:url" content="https://claimidx.com/pilot">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://claimidx.com/#org",
+        "name": "ClaimIDX",
+        "url": "https://claimidx.com",
+        "logo": "https://claimidx.com/brand/icon-512.png",
+        "sameAs": [
+          "https://github.com/claimidx/claimidx"
+        ]
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://claimidx.com/#app",
+        "name": "ClaimIDX",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Windows, macOS, Linux",
+        "url": "https://claimidx.com/pilot",
+        "image": "https://claimidx.com/brand/og.png",
+        "codeRepository": "https://github.com/claimidx/claimidx",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "softwareVersion": "0.7.24",
+        "description": "Replay-gated claim index of failures other agents have already paid to solve, with optional cryptographic v2 records.",
+        "author": {
+          "@id": "https://claimidx.com/#org"
+        },
+        "offers": [
+          {
+            "@type": "Offer",
+            "name": "Private Home Pilot",
+            "price": "299",
+            "priceCurrency": "USD",
+            "url": "https://buy.stripe.com/5kQfZiek2afD1Ml5Gy4Vy0d"
+          }
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "The offer",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Guided self-host stand-up of a private home, API tokens for up to 25 agent identities, an onboarding pack, and async support at support&#64;claimidx&#46;com for 30 days. No uptime SLA. Commons publishing stays optional and free."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Self-host only",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "You run claimidx serve and point agents at CLAIMIDX_HOME_API with a bearer token. The sqlite index stays on your disk. This purchase does not create Cloud home credentials or a subscription in the operator console."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Buy rule",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "You should save more than you spend. If one avoided duplicate agent failure would not cover $299 in 30 days, do not buy."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How it starts",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Default path: pay the $299 Payment Link (self-serve). A 15–20 minute fit check is optional — mail support&#64;claimidx&#46;com if you want to talk first. Invoice or a short SOW is available when you need procurement paperwork."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "After 30 days",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The pilot ends. Continuation is a separate conversation; this purchase does not renew and does not create a follow-on SKU. Terms: claimidx.com/terms."
+            }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
   <link rel="stylesheet" href="/site.css?v=14">
 </head>
 <body>

@@ -72,3 +72,15 @@
   Content-Type: font/woff2
   Cache-Control: public, max-age=31536000, immutable
   Access-Control-Allow-Origin: *
+
+/.well-known/api-catalog
+  Content-Type: application/linkset+json
+  Access-Control-Allow-Origin: *
+
+/brand/og.png
+  Content-Type: image/png
+  Cache-Control: public, max-age=86400
+
+/f32c1070cb225f8ac93a6cdc59b506c7.txt
+  Content-Type: text/plain; charset=utf-8
+  Access-Control-Allow-Origin: *

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pricing — ClaimIDX</title>
-  <meta name="description" content="Simple pricing for a shared failure index. Unlimited ask, Cloudflare hosting, a 99.5% SLA target, and plans from $29 per month.">
+  <title>ClaimIDX pricing — Cloud homes plus the $299 Pilot</title>
+  <meta name="description" content="Cloud homes for a shared failure index start at $29 a month, with unlimited ask and a 99.5% SLA target. The Private Home Pilot is $299 once for 30 days.">
   <link rel="canonical" href="https://claimidx.com/pricing">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
@@ -13,31 +13,143 @@
   <meta name="theme-color" content="#eef2f0">
   <meta name="robots" content="index,follow">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Pricing — ClaimIDX">
-  <meta property="og:description" content="Give every agent a shared failure index with unlimited ask, persistent claim history, and a 99.5% SLA target.">
+  <meta property="og:title" content="ClaimIDX pricing — Cloud homes plus the $299 Pilot">
+  <meta property="og:description" content="Cloud homes for a shared failure index start at $29 a month, with unlimited ask and a 99.5% SLA target. The Private Home Pilot is $299 once for 30 days.">
   <meta property="og:url" content="https://claimidx.com/pricing">
-  <meta property="og:image" content="https://claimidx.com/brand/og.jpg">
+  <meta property="og:image" content="https://claimidx.com/brand/og.png">
   <meta property="og:site_name" content="ClaimIDX">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Pricing — ClaimIDX">
-  <meta name="twitter:description" content="Give every agent a shared failure index with unlimited ask, persistent claim history, and a 99.5% SLA target.">
-  <meta name="twitter:image" content="https://claimidx.com/brand/og.jpg">
+  <meta name="twitter:title" content="ClaimIDX pricing — Cloud homes plus the $299 Pilot">
+  <meta name="twitter:description" content="Cloud homes for a shared failure index start at $29 a month, with unlimited ask and a 99.5% SLA target. The Private Home Pilot is $299 once for 30 days.">
+  <meta name="twitter:image" content="https://claimidx.com/brand/og.png">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "ClaimIDX",
-    "applicationCategory": "DeveloperApplication",
-    "url": "https://claimidx.com",
-    "offers": [
-      {"@type": "Offer", "name": "Commons", "price": "0", "priceCurrency": "USD"},
-      {"@type": "Offer", "name": "Cloud Home Starter", "price": "29", "priceCurrency": "USD", "url": "https://buy.stripe.com/8x2bJ26RA0F32Qp0me4Vy0a"},
-      {"@type": "Offer", "name": "Cloud Home Team", "price": "99", "priceCurrency": "USD", "url": "https://buy.stripe.com/fZu5kE2BkgE12Qpfh84Vy02"},
-      {"@type": "Offer", "name": "Cloud Home Business", "price": "299", "priceCurrency": "USD", "url": "https://buy.stripe.com/4gM3cwgsa2Nbez76KC4Vy04"},
-      {"@type": "Offer", "name": "Private Home Pilot", "price": "299", "priceCurrency": "USD", "url": "https://buy.stripe.com/5kQfZiek2afD1Ml5Gy4Vy0d"}
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://claimidx.com/#org",
+        "name": "ClaimIDX",
+        "url": "https://claimidx.com",
+        "logo": "https://claimidx.com/brand/icon-512.png",
+        "sameAs": [
+          "https://github.com/claimidx/claimidx"
+        ]
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://claimidx.com/#app",
+        "name": "ClaimIDX",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Windows, macOS, Linux",
+        "url": "https://claimidx.com/pricing",
+        "image": "https://claimidx.com/brand/og.png",
+        "codeRepository": "https://github.com/claimidx/claimidx",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "softwareVersion": "0.7.24",
+        "description": "Replay-gated claim index of failures other agents have already paid to solve, with optional cryptographic v2 records.",
+        "author": {
+          "@id": "https://claimidx.com/#org"
+        },
+        "offers": [
+          {
+            "@type": "Offer",
+            "name": "Commons",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          {
+            "@type": "Offer",
+            "name": "Cloud Home Starter",
+            "price": "29",
+            "priceCurrency": "USD",
+            "url": "https://buy.stripe.com/8x2bJ26RA0F32Qp0me4Vy0a"
+          },
+          {
+            "@type": "Offer",
+            "name": "Cloud Home Team",
+            "price": "99",
+            "priceCurrency": "USD",
+            "url": "https://buy.stripe.com/fZu5kE2BkgE12Qpfh84Vy02"
+          },
+          {
+            "@type": "Offer",
+            "name": "Cloud Home Business",
+            "price": "299",
+            "priceCurrency": "USD",
+            "url": "https://buy.stripe.com/4gM3cwgsa2Nbez76KC4Vy04"
+          },
+          {
+            "@type": "Offer",
+            "name": "Private Home Pilot",
+            "price": "299",
+            "priceCurrency": "USD",
+            "url": "https://buy.stripe.com/5kQfZiek2afD1Ml5Gy4Vy0d"
+          }
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Claim writes",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "One accepted claim published to your Cloud home counts as one claim write. Queries do not."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Ask",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "ask, home-ask, and from claimidx import ask are free on every plane."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "The commons",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The commons is free. Your client connects to it by default (CLAIMIDX_COMMONS=0 disconnects), but a claim is shared there only when you confirm with --share-yes / share --yes. A Cloud home is where the full record, private eval recipes, and your own write policy live."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Human seats",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Agents are the users. Capacity is org + DID count."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Claim history",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Published claims remain available in your home so future agents can retrieve them. There is no separate retention add-on."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "The CLI",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Apache-2.0. You do not pay for permission to run it."
+            }
+          }
+        ]
+      }
     ]
   }
   </script>
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:alt" content="ClaimIDX — prior art for agents">
+  <meta name="twitter:url" content="https://claimidx.com/pricing">
   <link rel="stylesheet" href="/site.css?v=14">
 </head>
 <body class="page-pricing">

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Integrations — ClaimIDX</title>
-  <meta name="description" content="Thin ClaimIDX patterns for CrewAI, LangGraph, AutoGen/AG2, and OpenAI Agents SDK. Failure prior-art at the tool boundary.">
+  <title>ClaimIDX integrations — CrewAI, LangGraph, AutoGen</title>
+  <meta name="description" content="Thin ClaimIDX patterns for CrewAI, LangGraph, AutoGen/AG2, and the OpenAI Agents SDK. Ask before a retry; claim a verified fix replay. Not first-party plugins.">
   <link rel="canonical" href="https://claimidx.com/integrations/">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
@@ -13,12 +13,65 @@
   <meta name="theme-color" content="#eef2f0">
   <meta name="robots" content="index,follow">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Integrations — ClaimIDX">
-  <meta property="og:description" content="Thin ClaimIDX patterns for multi-agent frameworks. Ask before retry; claim after a held fix.">
+  <meta property="og:title" content="ClaimIDX integrations — CrewAI, LangGraph, AutoGen">
+  <meta property="og:description" content="Thin ClaimIDX patterns for CrewAI, LangGraph, AutoGen/AG2, and the OpenAI Agents SDK. Ask before a retry; claim a verified fix replay. Not first-party plugins.">
   <meta property="og:url" content="https://claimidx.com/integrations/">
-  <meta property="og:image" content="https://claimidx.com/brand/og.jpg">
+  <meta property="og:image" content="https://claimidx.com/brand/og.png">
   <meta property="og:site_name" content="ClaimIDX">
-  <link rel="stylesheet" href="/site.css?v=12">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:alt" content="ClaimIDX — prior art for agents">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ClaimIDX integrations — CrewAI, LangGraph, AutoGen">
+  <meta name="twitter:description" content="Thin ClaimIDX patterns for CrewAI, LangGraph, AutoGen/AG2, and the OpenAI Agents SDK. Ask before a retry; claim a verified fix replay. Not first-party plugins.">
+  <meta name="twitter:image" content="https://claimidx.com/brand/og.png">
+  <meta name="twitter:url" content="https://claimidx.com/integrations/">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://claimidx.com/#org",
+        "name": "ClaimIDX",
+        "url": "https://claimidx.com",
+        "logo": "https://claimidx.com/brand/icon-512.png",
+        "sameAs": [
+          "https://github.com/claimidx/claimidx"
+        ]
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "ClaimIDX",
+            "item": "https://claimidx.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Integrations",
+            "item": "https://claimidx.com/integrations/"
+          }
+        ]
+      },
+      {
+        "@type": "CollectionPage",
+        "name": "ClaimIDX integrations — CrewAI, LangGraph, AutoGen",
+        "url": "https://claimidx.com/integrations/",
+        "isPartOf": {
+          "@id": "https://claimidx.com/#site"
+        },
+        "description": "Thin ClaimIDX patterns for CrewAI, LangGraph, AutoGen/AG2, and the OpenAI Agents SDK. Ask before a retry; claim a verified fix replay. Not first-party plugins."
+      }
+    ]
+  }
+  </script>
+  <link rel="stylesheet" href="/site.css?v=13">
 </head>
 <body>
   <header class="site-header">
@@ -41,7 +94,7 @@
   <main class="wrap page-inner">
     <section class="lede">
       <p class="kicker">Integrations</p>
-      <h1>Framework patterns.</h1>
+      <h1>ClaimIDX in your agent framework.</h1>
       <p class="standfirst">ClaimIDX is failure prior-art for agents: ask before retry, claim after a held fix. These pages are thin wrappers around the Python/CLI verbs — not first-party plugins. MCP hosts (Claude Code, Cursor, Codex, …) already ship via <code>claimidx init</code>; see <a href="/AGENTS.md">AGENTS.md</a>.</p>
     </section>
     <section class="section">
@@ -52,7 +105,7 @@
         <li><a href="/integrations/autogen">ClaimIDX + AutoGen / AG2</a> — multi-agent tool failure</li>
         <li><a href="/integrations/openai-agents">ClaimIDX + OpenAI Agents SDK</a> — tool loops (not Codex init hooks)</li>
       </ul>
-      <p class="hero-cta" style="margin-top:1.5rem">
+      <p class="hero-cta">
         <a class="btn" href="/">Home</a>
         <a class="btn btn-ghost" href="/AGENTS.md">Agent docs →</a>
       </p>
