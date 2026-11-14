@@ -26,7 +26,7 @@ def test_live_home_serves_agent_discovery_docs(tmp_path):
         assert r.status_code == 200, path
         assert len(r.text) > 40, path
     card = client.get("/.well-known/agent-card.json").json()
-    assert card["name"] == "Claimidx"
+    assert card["name"] == "ClaimIDX"
     assert "skills" in card
     llms = client.get("/llms.txt").text
     assert "Prior art" in llms
@@ -488,7 +488,7 @@ def test_live_home_serves_protocol_and_api_catalog(tmp_path):
     assert "fingerprint" in proto.text.lower()
     alias = client.get("/.well-known/agent.json")
     assert alias.status_code == 200
-    assert alias.json()["name"] == "Claimidx"
+    assert alias.json()["name"] == "ClaimIDX"
     catalog = client.get("/.well-known/api-catalog")
     assert catalog.status_code == 200
     body = catalog.json()
@@ -530,7 +530,7 @@ def test_api_whoami_and_events(tmp_path, monkeypatch):
     assert me.status_code == 200
     body = me.json()
     assert body["home"] is True
-    assert body["product"] == "Claimidx"
+    assert body["product"] == "ClaimIDX"
     assert body["operator"]["did"] == "did:claimidx:agent-a"
     assert "actors" in body
     ev = client.get("/api/events")
@@ -865,7 +865,7 @@ def test_discovery_cards_match_package_version():
         assert cur == __version__, f"{path}: {cur} != {__version__}"
 
     site = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
-    assert f"Claimidx {__version__}" not in site
+    assert f"ClaimIDX {__version__}" not in site
     assert "https://pypi.org/pypi/claimidx/json" in site
     assert "data-latest-version" in site
     assert "https://pypi.org/project/claimidx/" in site
@@ -982,20 +982,49 @@ def test_sync_docs_stamps_copyright_year_range():
             assert mod.site_stamp_errors(body, rel, __version__, date(2026, 11, 12)) == [], rel
     assert len(tracked) >= 4
 
-    bare = "<span>© 2026 Claimidx</span>"
+    bare = "<span>© 2026 ClaimIDX</span>"
     assert any("data-cix-year" in e for e in mod.site_stamp_errors(bare, "docs/index.html", __version__, date(2026, 11, 12)))
 
-    src = "<span data-cix-year>© 2025</span> Claimidx"
+    src = "<span data-cix-year>© 2025</span> ClaimIDX"
     y2026 = mod.stamp_site_text(src, __version__, date(2026, 11, 12))
     y2027 = mod.stamp_site_text(src, __version__, date(2027, 1, 1))
-    assert y2026 == "<span data-cix-year>© 2026</span> Claimidx"
-    assert y2027 == "<span data-cix-year>© 2026–2027</span> Claimidx"
+    assert y2026 == "<span data-cix-year>© 2026</span> ClaimIDX"
+    assert y2027 == "<span data-cix-year>© 2026–2027</span> ClaimIDX"
     assert y2026 == mod.stamp_site_text(y2026, __version__, date(2026, 11, 12))
     assert y2027 == mod.stamp_site_text(y2027, __version__, date(2027, 1, 1))
     assert mod.site_stamp_errors(y2026, "docs/index.html", __version__, date(2026, 11, 12)) == []
     assert mod.site_stamp_errors(y2027, "docs/index.html", __version__, date(2027, 1, 1)) == []
     stale = mod.site_stamp_errors(y2026, "docs/index.html", __version__, date(2027, 1, 1))
     assert any("copyright stamp" in e and "2026–2027" in e for e in stale), stale
+
+
+def test_docs_brand_scan_rejects_claimidx_outside_code_and_urls(tmp_path):
+    """The word Claimidx in deployable docs is a misspelling except inside code/pre and URLs."""
+    import importlib.util
+
+    from claimidx.discovery import ROOT
+
+    spec = importlib.util.spec_from_file_location("sync_docs", ROOT / "scripts" / "sync_docs.py")
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    prose = "<title>Welcome to Claimidx</title><p>Claimidx is prior art.</p>"
+    assert len(mod.brand_scan_text(prose, suffix=".html")) == 2
+    html = "<pre>echo Claimidx</pre><code>Claimidx</code><p>See https://example.com/Claimidx for the package.</p>"
+    assert mod.brand_scan_text(html, suffix=".html") == []
+    md = "See https://example.com/Claimidx and `Claimidx` and:\n```\nClaimidx\n```\n"
+    assert mod.brand_scan_text(md, suffix=".md") == []
+
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "ok.html").write_text("<p>ClaimIDX · <code>Claimidx</code></p>\n", encoding="utf-8")
+    assert mod.docs_brand_errors(docs) == []
+    (docs / "bad.html").write_text("<h1>Claimidx</h1>\n", encoding="utf-8")
+    errors = mod.docs_brand_errors(docs)
+    assert len(errors) == 1 and "bad.html" in errors[0] and "Claimidx" in errors[0], errors
+
+    assert mod.docs_brand_errors() == []
 
 
 def test_mcp_force_keeps_stored_cls(tmp_path, monkeypatch):

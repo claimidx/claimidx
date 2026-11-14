@@ -22,9 +22,10 @@ Stages
             (INTERNAL/site-required.txt, never in git) requires beside them, and a CSP that allows the commons.
             The homepage product brief and site install pins must match the package version, the brief
             month must be no more than 35 days old, and every copyright line must be in <span data-cix-year>
-            with the current year (© 2026 in 2026, © 2026–<year> from 2027). A deploy from an incomplete tree
-            once replaced production; deploy-site refuses that. deploy-site restamps a temporary copy of docs/
-            (worktree unchanged) so a monthly redeploy can roll the brief month and copyright year without a commit.
+            with the current year (© 2026 in 2026, © 2026–<year> from 2027). Deployable docs must not use the
+            word Claimidx (the public brand is ClaimIDX). A deploy from an incomplete tree once replaced
+            production; deploy-site refuses that. deploy-site restamps a temporary copy of docs/ (worktree
+            unchanged) so a monthly redeploy can roll the brief month and copyright year without a commit.
   commons   the commons answers: health ok with claims, and the leaderboard states its rules.
   smoke     python scripts/live_smoke.py: the whole loop per ecosystem against real toolchains (skips absent ones).
   build     python -m build ; twine check ; scripts/audit_artifacts.py on the wheel and sdist.
@@ -458,6 +459,7 @@ def site_stamp_errors(docs: Path | None = None) -> list[str]:
     for path in sorted(root.rglob("*.html")):
         rel = "docs/" + path.relative_to(root).as_posix()
         errors.extend(sync.site_stamp_errors(path.read_text(encoding="utf-8").replace("\r\n", "\n"), rel, version, when))
+    errors.extend(sync.docs_brand_errors(root))
     return errors
 
 

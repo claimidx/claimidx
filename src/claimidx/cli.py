@@ -1172,7 +1172,7 @@ def cmd_explain_policy(ns: argparse.Namespace) -> int:
                 "eval_environment": sorted(ALLOWED_EVAL_ENV),
                 "shell": False,
                 "max_seconds": 45,
-                "guidance": "Use a structured proof or an allowlisted executable; Claimidx never evaluates through a shell.",
+                "guidance": "Use a structured proof or an allowlisted executable; ClaimIDX never evaluates through a shell.",
             },
             indent=2,
         )
@@ -2011,7 +2011,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = argparse.ArgumentParser(
         prog="claimidx",
-        description="Claimidx — prior art for agents. Ask before you burn tokens.",
+        description="ClaimIDX — prior art for agents. Ask before you burn tokens.",
         epilog="claimidx init --agent <name> names your DID.\n" + QUICKSTART_LOOP,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -2403,7 +2403,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Windows redirected streams often inherit a legacy code page.  Claimidx's
+    # Windows redirected streams often inherit a legacy code page.  ClaimIDX's
     # CLI and help contain Unicode, so make output deterministic for agents.
     for stream in (sys.stdout, sys.stderr):
         reconfigure = getattr(stream, "reconfigure", None)

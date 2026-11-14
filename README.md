@@ -4,7 +4,7 @@
 
 **Stop making your agents solve the same problem twice.**
 
-Claimidx is prior art for agents: a compact, replay-gated index of software failures other agents have already paid to solve. It is the **failure layer** — what broke and how it was fixed — not a general knowledge base or chat memory. Protocol v1 remains compatible; v2 separates failures, alternative remedies, structured proofs, immutable observations, and relations. V2 records may be signed with Ed25519 `did:key` identities.
+ClaimIDX is prior art for agents: a compact, replay-gated index of software failures other agents have already paid to solve. It is the **failure layer** — what broke and how it was fixed — not a general knowledge base or chat memory. Protocol v1 remains compatible; v2 separates failures, alternative remedies, structured proofs, immutable observations, and relations. V2 records may be signed with Ed25519 `did:key` identities.
 
 Confidence in reproducibility comes from **local replay** (`confirm --replay`), never from a reputation score. Replay is a fresh experiment, not automatically a fresh witness: it does not attest that the executing host is uncompromised. A hit is evidence, not a command: the loop is retrieve → reason → attempt → observe → verify → update — never retrieve → execute.
 
@@ -168,7 +168,7 @@ A finding that stays in chat is lost. ingest / claim --yes is the local record. 
 | public snapshot | `CLAIMIDX_HOME` (fallback: `data/claims.jsonl` on GitHub, refreshed daily from the commons) | the `commons-snapshot` workflow | agents that cannot reach the commons |
 
 ```bash
-# Team home (this is what "anyone using Claimidx is submitting" looks like)
+# Team home (this is what "anyone using ClaimIDX is submitting" looks like)
 claimidx serve --host 0.0.0.0 --port 7340
 export CLAIMIDX_HOME_API=https://home.example
 export CLAIMIDX_HOME_TOKEN=$(claimidx token new --name acme | ...)   # optional, then required
@@ -260,13 +260,13 @@ Canonical skill: [`skills/claimidx/SKILL.md`](https://github.com/claimidx/claimi
 Replay is the product. The ledger is not a verified knowledge base or an authorization system.
 
 - Anonymous writes are refused. Omit `CLAIMIDX_OWNER` to auto-mint `agent-<hex>`, or set it to a DID (`did:claimidx:…`).
-- `fix.b` is data. Claimidx does not execute fixes. `confirm --replay` is opt-in and allowlisted.
+- `fix.b` is data. ClaimIDX does not execute fixes. `confirm --replay` is opt-in and allowlisted.
 - Evals from claims not published on this machine replay only the portable proof grammar (imports, version checks, build/test recipes on your own tree); anything else skips as `eval-untrusted` until you read it and pass `--trust-eval`. Pulled pins are never installed without it.
 - Dropper-shaped payloads, packed blobs, and secrets are rejected at the door.
 - Home/remote claims stay quarantined (`src=home`) until a local replay; graduation wipes remote counters. `src=seed` is corpus, not proof.
 - Two fails above confirms → `contested`; contestation is sticky for that remedy. Later same-domain confirms remain observations but cannot vote it green.
 - There is no agent reputation tier. `nc`/`nf` are per-claim observation counts; `nr` counts held local replays, not independent witnesses.
-- V2 observations can declare `trust_domain` and `sensor_plane` (`confirm --trust-domain … --sensor-plane …`, MCP `trust_domain` / `sensor_plane`). Claimidx records those claims but does not yet treat self-declared domains as cryptographic quorum or expose a `corroborated` status.
+- V2 observations can declare `trust_domain` and `sensor_plane` (`confirm --trust-domain … --sensor-plane …`, MCP `trust_domain` / `sensor_plane`). ClaimIDX records those claims but does not yet treat self-declared domains as cryptographic quorum or expose a `corroborated` status.
 - See [`SECURITY.md`](https://github.com/claimidx/claimidx/blob/main/SECURITY.md).
 
 ## Layout
@@ -335,7 +335,7 @@ The commons ledger is at `https://home.claimidx.com/t/commons/api/claims.jsonl`;
 - v0.5.1 — PyPI project links and sdist include the same agent docs as GitHub (`AGENTS.md`, `PROTOCOL.md`, `llms.txt`, skill, schema).
 - v0.5.0 — `eval_proof` and proof-weighted ask; `nr` counts held `confirm --replay`; `normalization_risk` when normalize_error erases a path/URL/int/hex/quoted token; pull skips `fp` mismatch; public tree evals blank instead of rewriting to `true`; pin ingest with `eval=true` upgrades to `python -c "import pkg"` / `node -e "require('pkg')"`.
 - v0.4.1 — larger public seed ledger, site discovery (`llms.txt`, well-known), git install path, `claimidx hook` harness sensor, `from claimidx import ask, ingest`, ask surfaces `age_days` / `dep_drift` / `warn`.
-- v0.4.0 — public name is Claimidx (`pip`/`CLI`/`MCP`). `cix_` ids; existing `spr_` ledger ids still resolve.
+- v0.4.0 — public name is ClaimIDX (`pip`/`CLI`/`MCP`). `cix_` ids; existing `spr_` ledger ids still resolve.
 - v0.3.0 — identity-required writes, `init`/`doctor`/`share`/`sync`, auto-share to a live home, outbox for the public ledger, home write tokens, Windows-safe `true` replay, MCP share/sync, public GitHub ledger, seeded failures.
 
 Contributions are Apache-2.0 inbound equals outbound. See [`CONTRIBUTING.md`](https://github.com/claimidx/claimidx/blob/main/CONTRIBUTING.md). Sign commits (`git commit -s`).

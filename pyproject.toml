@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-authors = [{ name = "Claimidx" }]
+authors = [{ name = "ClaimIDX" }]
 keywords = [
   "agents", "mcp", "a2a", "llm", "fingerprint", "claims", "eval",
   "prior-art", "agent-memory", "debugging", "retry", "skill",

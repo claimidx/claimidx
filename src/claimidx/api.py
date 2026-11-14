@@ -89,7 +89,7 @@ def create_app(db: str | None = None) -> FastAPI:
     store = Store(db)
     origins = [o.strip() for o in (os.environ.get("CLAIMIDX_CORS") or "").split(",") if o.strip()]
     app = FastAPI(
-        title="Claimidx",
+        title="ClaimIDX",
         version=__version__,
         description="Prior art for AI agents. Ask before you retry a failure. Ingest after you learn. Share so the next agent does not pay twice.",
         docs_url="/api/docs",
@@ -148,7 +148,7 @@ def create_app(db: str | None = None) -> FastAPI:
         for page in (WEB, WEB_PACKAGED):
             if page.exists():
                 return page.read_text(encoding="utf-8")
-        return HTMLResponse("<pre>Claimidx inspector missing</pre>")
+        return HTMLResponse("<pre>ClaimIDX inspector missing</pre>")
 
     @app.get("/health")
     def health():
@@ -160,10 +160,10 @@ def create_app(db: str | None = None) -> FastAPI:
 
     @app.get("/api/whoami")
     def api_whoami():
-        """The home is Claimidx, not the process operator DID."""
+        """The home is ClaimIDX, not the process operator DID."""
         return {
             "home": True,
-            "product": "Claimidx",
+            "product": "ClaimIDX",
             "operator": team_whoami(),
             "actors": activity(store),
         }
