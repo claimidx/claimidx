@@ -6,7 +6,7 @@
   --surface-2: #eee8dc;
   --ink: #17283a;
   --ink-soft: #425366;
-  --muted: #6e746f;
+  --muted: #606661;
   --line: #c7bda9;
   --line-strong: #17283a;
   --accent: #a43a2d;
@@ -87,7 +87,7 @@ h3 { font: 700 13px/1.3 var(--sans); letter-spacing: .07em; text-transform: uppe
 .code-name { font: 700 11px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .copy { border: 0; background: transparent; color: var(--blue); cursor: pointer; font: 700 11px/1.3 var(--mono); text-transform: uppercase; }
 .code-win pre { padding: 22px; color: var(--code-ink); font-size: 13px; line-height: 1.65; }
-.code-win .cmt { color: #6e746f; }
+.code-win .cmt { color: var(--muted); }
 .code-win .ok { color: var(--ok); font-weight: 700; }
 
 .steps { border-top: 3px solid var(--ink); }
