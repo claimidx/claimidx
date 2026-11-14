@@ -308,3 +308,19 @@ body .warn-card, body .secret-block, body .wire-card, body .op-form input, body 
 .board-kpi { border-top: 3px solid var(--ink); padding: 12px 0 0; }
 .board-kpi strong { display: block; font: 500 36px/1 var(--serif); }
 .board-kpi span { display: block; margin-top: 6px; font: 700 11px/1.5 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+
+.hero .code-win { margin-top: 1.25rem; }
+.code-win > .btn-note { margin-top: 0.75rem; color: var(--ink-soft); }
+.code-win > .btn-note.btn-note-tight { margin-top: 0.5rem; }
+.hero-cta { margin-top: 1.5rem; }
+.section.faq .wrap { }
+.section.faq h2 { margin: 0 0 8px; }
+.section.faq dl { margin: 0; display: grid; grid-template-columns: minmax(170px,.36fr) minmax(0,1fr); }
+.section.faq dt, .section.faq dd { margin: 0; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.section.faq dt { padding-right: 28px; font: 700 12px/1.4 var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+.section.faq dd { color: var(--ink-soft); }
+@media (max-width: 700px) {
+  .section.faq dl { grid-template-columns: 1fr; }
+  .section.faq dt { padding-bottom: 4px; border-bottom: 0; }
+  .section.faq dd { padding-top: 4px; }
+}

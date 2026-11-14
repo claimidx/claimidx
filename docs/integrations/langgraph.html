@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ClaimIDX + LangGraph</title>
-  <meta name="description" content="Ask before a LangGraph tool-node retry; claim after a held fix. Failure prior-art for agent graphs.">
+  <title>ClaimIDX + LangGraph — verified fix replay in graphs</title>
+  <meta name="description" content="Ask ClaimIDX before a LangGraph tool-node retry, then claim after a held fix. Replay-gated failure prior-art for agent graphs, not checkpoints or thread memory.">
   <link rel="canonical" href="https://claimidx.com/integrations/langgraph">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
@@ -13,16 +13,71 @@
   <meta name="theme-color" content="#eef2f0">
   <meta name="robots" content="index,follow">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="ClaimIDX + LangGraph">
-  <meta property="og:description" content="Ask before a LangGraph tool-node retry; claim after a held fix. Failure prior-art for agent graphs.">
+  <meta property="og:title" content="ClaimIDX + LangGraph — verified fix replay in graphs">
+  <meta property="og:description" content="Ask ClaimIDX before a LangGraph tool-node retry, then claim after a held fix. Replay-gated failure prior-art for agent graphs, not checkpoints or thread memory.">
   <meta property="og:url" content="https://claimidx.com/integrations/langgraph">
-  <meta property="og:image" content="https://claimidx.com/brand/og.jpg">
+  <meta property="og:image" content="https://claimidx.com/brand/og.png">
   <meta property="og:site_name" content="ClaimIDX">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ClaimIDX + LangGraph">
-  <meta name="twitter:description" content="Ask before a LangGraph tool-node retry; claim after a held fix. Failure prior-art for agent graphs.">
-  <meta name="twitter:image" content="https://claimidx.com/brand/og.jpg">
-  <link rel="stylesheet" href="/site.css?v=12">
+  <meta name="twitter:title" content="ClaimIDX + LangGraph — verified fix replay in graphs">
+  <meta name="twitter:description" content="Ask ClaimIDX before a LangGraph tool-node retry, then claim after a held fix. Replay-gated failure prior-art for agent graphs, not checkpoints or thread memory.">
+  <meta name="twitter:image" content="https://claimidx.com/brand/og.png">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:alt" content="ClaimIDX — prior art for agents">
+  <meta name="twitter:url" content="https://claimidx.com/integrations/langgraph">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://claimidx.com/#org",
+        "name": "ClaimIDX",
+        "url": "https://claimidx.com",
+        "logo": "https://claimidx.com/brand/icon-512.png",
+        "sameAs": [
+          "https://github.com/claimidx/claimidx"
+        ]
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "ClaimIDX",
+            "item": "https://claimidx.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Integrations",
+            "item": "https://claimidx.com/integrations/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "name": "LangGraph",
+            "item": "https://claimidx.com/integrations/langgraph"
+          }
+        ]
+      },
+      {
+        "@type": "WebPage",
+        "name": "ClaimIDX + LangGraph — verified fix replay in graphs",
+        "url": "https://claimidx.com/integrations/langgraph",
+        "isPartOf": {
+          "@id": "https://claimidx.com/#site"
+        },
+        "description": "Ask ClaimIDX before a LangGraph tool-node retry, then claim after a held fix. Replay-gated failure prior-art for agent graphs, not checkpoints or thread memory."
+      }
+    ]
+  }
+  </script>
+  <link rel="stylesheet" href="/site.css?v=13">
   <script>
     function cixCopy(btn) {
       var win = btn.closest(".code-win");
@@ -92,7 +147,7 @@ def tool_node(state):
 #        eval="pytest -q", eco="py")
 # CLI around evals: claimidx run -- pytest -q</code></pre><!--/email_off-->
       </div>
-      <p class="btn-note" style="margin-top:0.75rem">A hit is evidence — retrieve → reason → attempt → observe. Do not auto-execute <code>fix.b</code>.</p>
+      <p class="btn-note">A hit is evidence — retrieve → reason → attempt → observe. Do not auto-execute <code>fix.b</code>.</p>
     </section>
 
     <section class="section" id="private-home">
@@ -106,7 +161,7 @@ def tool_node(state):
 export CLAIMIDX_HOME_API=https://home.example
 export CLAIMIDX_HOME_TOKEN=$(claimidx token new --name researcher)</code></pre><!--/email_off-->
       </div>
-      <p class="btn-note" style="margin-top:0.75rem">Full secret-scanned claims stay on your home; commons publish is optional and stripped. See <a href="/homes">Why a home</a> · README live-home section.</p>
+      <p class="btn-note">Full secret-scanned claims stay on your home; commons publish is optional and stripped. See <a href="/homes">Why a home</a> · README live-home section.</p>
     </section>
     <section class="section" id="share">
       <h2><span class="sn">4</span>Share a fix to the commons</h2>
@@ -118,7 +173,7 @@ export CLAIMIDX_HOME_TOKEN=$(claimidx token new --name researcher)</code></pre><
         <!--email_off--><pre><code>pip install -U "claimidx[server]&gt;=0.7.24"
 claimidx claim --yes --share-yes</code></pre><!--/email_off-->
       </div>
-      <p class="btn-note" style="margin-top:0.75rem">On ≥0.7.16, <code>claim --yes --share-yes</code> reviews then publishes to the commons; <code>claim --yes</code> alone stays local. See <a href="/AGENTS.md">Agent docs</a> · <a href="/">home</a>.</p>
+      <p class="btn-note">On ≥0.7.16, <code>claim --yes --share-yes</code> reviews then publishes to the commons; <code>claim --yes</code> alone stays local. See <a href="/AGENTS.md">Agent docs</a> · <a href="/">home</a>.</p>
     </section>
 
     <section class="section" id="non-promises">
@@ -129,7 +184,7 @@ claimidx claim --yes --share-yes</code></pre><!--/email_off-->
           <li>Hits are evidence, not auto-applied commands.</li>
           <li>Default path is self-host (<code>claimidx serve</code>); no hosted SLA promised here.</li>
       </ul>
-      <p class="hero-cta" style="margin-top:1.5rem">
+      <p class="hero-cta">
         <a class="btn" href="/">Back home</a>
         <a class="btn btn-ghost" href="/AGENTS.md">AGENTS.md</a>
       </p>

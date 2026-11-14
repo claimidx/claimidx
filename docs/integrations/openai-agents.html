@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ClaimIDX + OpenAI Agents SDK</title>
-  <meta name="description" content="Wire ask/claim into OpenAI Agents SDK tool loops. Distinct from Codex harness hooks from claimidx init.">
+  <title>ClaimIDX + OpenAI Agents SDK — tool-loop fix memory</title>
+  <meta name="description" content="Wire ClaimIDX ask and claim into OpenAI Agents SDK tool loops. Replay-gated failure prior-art, distinct from thread memory and Codex hooks from claimidx init.">
   <link rel="canonical" href="https://claimidx.com/integrations/openai-agents">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
@@ -13,16 +13,71 @@
   <meta name="theme-color" content="#eef2f0">
   <meta name="robots" content="index,follow">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="ClaimIDX + OpenAI Agents SDK">
-  <meta property="og:description" content="Wire ask/claim into OpenAI Agents SDK tool loops. Distinct from Codex harness hooks from claimidx init.">
+  <meta property="og:title" content="ClaimIDX + OpenAI Agents SDK — tool-loop fix memory">
+  <meta property="og:description" content="Wire ClaimIDX ask and claim into OpenAI Agents SDK tool loops. Replay-gated failure prior-art, distinct from thread memory and Codex hooks from claimidx init.">
   <meta property="og:url" content="https://claimidx.com/integrations/openai-agents">
-  <meta property="og:image" content="https://claimidx.com/brand/og.jpg">
+  <meta property="og:image" content="https://claimidx.com/brand/og.png">
   <meta property="og:site_name" content="ClaimIDX">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ClaimIDX + OpenAI Agents SDK">
-  <meta name="twitter:description" content="Wire ask/claim into OpenAI Agents SDK tool loops. Distinct from Codex harness hooks from claimidx init.">
-  <meta name="twitter:image" content="https://claimidx.com/brand/og.jpg">
-  <link rel="stylesheet" href="/site.css?v=12">
+  <meta name="twitter:title" content="ClaimIDX + OpenAI Agents SDK — tool-loop fix memory">
+  <meta name="twitter:description" content="Wire ClaimIDX ask and claim into OpenAI Agents SDK tool loops. Replay-gated failure prior-art, distinct from thread memory and Codex hooks from claimidx init.">
+  <meta name="twitter:image" content="https://claimidx.com/brand/og.png">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:alt" content="ClaimIDX — prior art for agents">
+  <meta name="twitter:url" content="https://claimidx.com/integrations/openai-agents">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://claimidx.com/#org",
+        "name": "ClaimIDX",
+        "url": "https://claimidx.com",
+        "logo": "https://claimidx.com/brand/icon-512.png",
+        "sameAs": [
+          "https://github.com/claimidx/claimidx"
+        ]
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "ClaimIDX",
+            "item": "https://claimidx.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Integrations",
+            "item": "https://claimidx.com/integrations/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "name": "OpenAI Agents SDK",
+            "item": "https://claimidx.com/integrations/openai-agents"
+          }
+        ]
+      },
+      {
+        "@type": "WebPage",
+        "name": "ClaimIDX + OpenAI Agents SDK — tool-loop fix memory",
+        "url": "https://claimidx.com/integrations/openai-agents",
+        "isPartOf": {
+          "@id": "https://claimidx.com/#site"
+        },
+        "description": "Wire ClaimIDX ask and claim into OpenAI Agents SDK tool loops. Replay-gated failure prior-art, distinct from thread memory and Codex hooks from claimidx init."
+      }
+    ]
+  }
+  </script>
+  <link rel="stylesheet" href="/site.css?v=13">
   <script>
     function cixCopy(btn) {
       var win = btn.closest(".code-win");
@@ -89,7 +144,7 @@ def after_held_fix(err: str, fix_b: str, eval_cmd: str):
 # wrap shell / code-interpreter failures the same way
 # CLI: claimidx run -- &lt;eval&gt;</code></pre><!--/email_off-->
       </div>
-      <p class="btn-note" style="margin-top:0.75rem">A hit is evidence — retrieve → reason → attempt → observe. Do not auto-execute <code>fix.b</code>.</p>
+      <p class="btn-note">A hit is evidence — retrieve → reason → attempt → observe. Do not auto-execute <code>fix.b</code>.</p>
     </section>
 
     <section class="section" id="private-home">
@@ -103,7 +158,7 @@ def after_held_fix(err: str, fix_b: str, eval_cmd: str):
 export CLAIMIDX_HOME_API=https://home.example
 export CLAIMIDX_HOME_TOKEN=$(claimidx token new --name researcher)</code></pre><!--/email_off-->
       </div>
-      <p class="btn-note" style="margin-top:0.75rem">Full secret-scanned claims stay on your home; commons publish is optional and stripped. See <a href="/homes">Why a home</a> · README live-home section.</p>
+      <p class="btn-note">Full secret-scanned claims stay on your home; commons publish is optional and stripped. See <a href="/homes">Why a home</a> · README live-home section.</p>
     </section>
     <section class="section" id="share">
       <h2><span class="sn">4</span>Share a fix to the commons</h2>
@@ -115,7 +170,7 @@ export CLAIMIDX_HOME_TOKEN=$(claimidx token new --name researcher)</code></pre><
         <!--email_off--><pre><code>pip install -U "claimidx[server]&gt;=0.7.24"
 claimidx claim --yes --share-yes</code></pre><!--/email_off-->
       </div>
-      <p class="btn-note" style="margin-top:0.75rem">On ≥0.7.16, <code>claim --yes --share-yes</code> reviews then publishes to the commons; <code>claim --yes</code> alone stays local. See <a href="/AGENTS.md">Agent docs</a> · <a href="/">home</a>.</p>
+      <p class="btn-note">On ≥0.7.16, <code>claim --yes --share-yes</code> reviews then publishes to the commons; <code>claim --yes</code> alone stays local. See <a href="/AGENTS.md">Agent docs</a> · <a href="/">home</a>.</p>
     </section>
     <section class="section" id="vs-codex">
       <h2><span class="sn">5</span>Agents SDK vs Codex harness</h2>
@@ -131,7 +186,7 @@ claimidx claim --yes --share-yes</code></pre><!--/email_off-->
           <li>Hits are evidence, not auto-applied commands.</li>
           <li>Default path is self-host (<code>claimidx serve</code>); no hosted SLA promised here.</li>
       </ul>
-      <p class="hero-cta" style="margin-top:1.5rem">
+      <p class="hero-cta">
         <a class="btn" href="/">Back home</a>
         <a class="btn btn-ghost" href="/AGENTS.md">AGENTS.md</a>
       </p>

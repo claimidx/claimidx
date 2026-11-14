@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ClaimIDX + CrewAI</title>
-  <meta name="description" content="Wire ClaimIDX ask/claim at the CrewAI tool or task boundary. Failure prior-art, not crew memory.">
+  <title>ClaimIDX + CrewAI — verified fix replay at tool calls</title>
+  <meta name="description" content="Wire ClaimIDX ask and claim at the CrewAI tool or task boundary. A replay-gated failure index so crews do not re-hit the same error. Prior-art, not crew memory.">
   <link rel="canonical" href="https://claimidx.com/integrations/crewai">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
@@ -13,16 +13,71 @@
   <meta name="theme-color" content="#eef2f0">
   <meta name="robots" content="index,follow">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="ClaimIDX + CrewAI">
-  <meta property="og:description" content="Wire ClaimIDX ask/claim at the CrewAI tool or task boundary. Failure prior-art, not crew memory.">
+  <meta property="og:title" content="ClaimIDX + CrewAI — verified fix replay at tool calls">
+  <meta property="og:description" content="Wire ClaimIDX ask and claim at the CrewAI tool or task boundary. A replay-gated failure index so crews do not re-hit the same error. Prior-art, not crew memory.">
   <meta property="og:url" content="https://claimidx.com/integrations/crewai">
-  <meta property="og:image" content="https://claimidx.com/brand/og.jpg">
+  <meta property="og:image" content="https://claimidx.com/brand/og.png">
   <meta property="og:site_name" content="ClaimIDX">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ClaimIDX + CrewAI">
-  <meta name="twitter:description" content="Wire ClaimIDX ask/claim at the CrewAI tool or task boundary. Failure prior-art, not crew memory.">
-  <meta name="twitter:image" content="https://claimidx.com/brand/og.jpg">
-  <link rel="stylesheet" href="/site.css?v=12">
+  <meta name="twitter:title" content="ClaimIDX + CrewAI — verified fix replay at tool calls">
+  <meta name="twitter:description" content="Wire ClaimIDX ask and claim at the CrewAI tool or task boundary. A replay-gated failure index so crews do not re-hit the same error. Prior-art, not crew memory.">
+  <meta name="twitter:image" content="https://claimidx.com/brand/og.png">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:alt" content="ClaimIDX — prior art for agents">
+  <meta name="twitter:url" content="https://claimidx.com/integrations/crewai">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://claimidx.com/#org",
+        "name": "ClaimIDX",
+        "url": "https://claimidx.com",
+        "logo": "https://claimidx.com/brand/icon-512.png",
+        "sameAs": [
+          "https://github.com/claimidx/claimidx"
+        ]
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "ClaimIDX",
+            "item": "https://claimidx.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Integrations",
+            "item": "https://claimidx.com/integrations/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "name": "CrewAI",
+            "item": "https://claimidx.com/integrations/crewai"
+          }
+        ]
+      },
+      {
+        "@type": "WebPage",
+        "name": "ClaimIDX + CrewAI — verified fix replay at tool calls",
+        "url": "https://claimidx.com/integrations/crewai",
+        "isPartOf": {
+          "@id": "https://claimidx.com/#site"
+        },
+        "description": "Wire ClaimIDX ask and claim at the CrewAI tool or task boundary. A replay-gated failure index so crews do not re-hit the same error. Prior-art, not crew memory."
+      }
+    ]
+  }
+  </script>
+  <link rel="stylesheet" href="/site.css?v=13">
   <script>
     function cixCopy(btn) {
       var win = btn.closest(".code-win");
@@ -93,7 +148,7 @@ def run_tool(name: str, fn, *args, **kwargs):
 #        eval="python -c 'import pkg'", eco="py")
 # or: claimidx claim --yes</code></pre><!--/email_off-->
       </div>
-      <p class="btn-note" style="margin-top:0.75rem">A hit is evidence — retrieve → reason → attempt → observe. Do not auto-execute <code>fix.b</code>.</p>
+      <p class="btn-note">A hit is evidence — retrieve → reason → attempt → observe. Do not auto-execute <code>fix.b</code>.</p>
     </section>
 
     <section class="section" id="private-home">
@@ -107,7 +162,7 @@ def run_tool(name: str, fn, *args, **kwargs):
 export CLAIMIDX_HOME_API=https://home.example
 export CLAIMIDX_HOME_TOKEN=$(claimidx token new --name researcher)</code></pre><!--/email_off-->
       </div>
-      <p class="btn-note" style="margin-top:0.75rem">Full secret-scanned claims stay on your home; commons publish is optional and stripped. See <a href="/homes">Why a home</a> · README live-home section.</p>
+      <p class="btn-note">Full secret-scanned claims stay on your home; commons publish is optional and stripped. See <a href="/homes">Why a home</a> · README live-home section.</p>
     </section>
     <section class="section" id="share">
       <h2><span class="sn">4</span>Share a fix to the commons</h2>
@@ -119,7 +174,7 @@ export CLAIMIDX_HOME_TOKEN=$(claimidx token new --name researcher)</code></pre><
         <!--email_off--><pre><code>pip install -U "claimidx[server]&gt;=0.7.24"
 claimidx claim --yes --share-yes</code></pre><!--/email_off-->
       </div>
-      <p class="btn-note" style="margin-top:0.75rem">On ≥0.7.16, <code>claim --yes --share-yes</code> reviews then publishes to the commons; <code>claim --yes</code> alone stays local. See <a href="/AGENTS.md">Agent docs</a> · <a href="/">home</a>.</p>
+      <p class="btn-note">On ≥0.7.16, <code>claim --yes --share-yes</code> reviews then publishes to the commons; <code>claim --yes</code> alone stays local. See <a href="/AGENTS.md">Agent docs</a> · <a href="/">home</a>.</p>
     </section>
 
     <section class="section" id="non-promises">
@@ -130,7 +185,7 @@ claimidx claim --yes --share-yes</code></pre><!--/email_off-->
           <li>Hits are evidence, not auto-applied commands.</li>
           <li>Default path is self-host (<code>claimidx serve</code>); no hosted SLA promised here.</li>
       </ul>
-      <p class="hero-cta" style="margin-top:1.5rem">
+      <p class="hero-cta">
         <a class="btn" href="/">Back home</a>
         <a class="btn btn-ghost" href="/AGENTS.md">AGENTS.md</a>
       </p>

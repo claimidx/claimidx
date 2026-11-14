@@ -1127,3 +1127,90 @@ def test_doc_copies_are_in_sync():
 
     proc = subprocess.run([sys.executable, "scripts/sync_docs.py", "--check"], cwd=ROOT, capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr
+
+
+def _sync_docs():
+    import importlib.util
+
+    from claimidx.discovery import ROOT
+
+    spec = importlib.util.spec_from_file_location("sync_docs", ROOT / "scripts" / "sync_docs.py")
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_docs_seo_scan_requires_title_description_canonical_and_jsonld(tmp_path):
+    """Indexable HTML needs title, description, canonical, and parseable JSON-LD; the sitemap must list it."""
+    mod = _sync_docs()
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    page = """<!doctype html><html lang="en"><head>
+<title>ClaimIDX — example page for agents</title>
+<meta name="description" content="A replay-gated failure index example page used only in the SEO gate test.">
+<link rel="canonical" href="https://claimidx.com/example">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage","name":"ClaimIDX"}</script>
+</head><body><h1>Example</h1></body></html>
+"""
+    (docs / "example.html").write_text(page, encoding="utf-8")
+    (docs / "sitemap.xml").write_text(mod.render_sitemap("2026-11-14"), encoding="utf-8")
+    # The fixture tree is missing the real public URLs, so sitemap errors are expected;
+    # the example page itself should not produce a title/description/canonical/JSON-LD error.
+    errors = mod.docs_seo_errors(docs)
+    assert not any("example.html" in e for e in errors), errors
+    assert any("sitemap.xml missing" in e for e in errors)
+
+    (docs / "example.html").write_text("<html><head></head><body>hi</body></html>\n", encoding="utf-8")
+    errors = mod.docs_seo_errors(docs)
+    blob = "\n".join(errors)
+    assert "example.html: missing <title>" in blob
+    assert "missing meta description" in blob
+    assert "missing canonical URL" in blob
+    assert "missing JSON-LD" in blob
+
+    (docs / "broken.html").write_text(
+        """<!doctype html><html><head>
+<title>ClaimIDX — broken json</title>
+<meta name="description" content="Broken JSON-LD should fail the SEO gate.">
+<link rel="canonical" href="https://claimidx.com/broken">
+<script type="application/ld+json">{not json}</script>
+</head><body></body></html>
+""",
+        encoding="utf-8",
+    )
+    errors = mod.docs_seo_errors(docs)
+    assert any("broken.html" in e and "does not parse" in e for e in errors), errors
+
+
+def test_docs_seo_errors_on_tracked_docs_are_empty():
+    mod = _sync_docs()
+    assert mod.docs_seo_errors() == []
+
+
+def test_sitemap_omits_noindex_paths_and_lists_public_pages():
+    mod = _sync_docs()
+    from claimidx.discovery import ROOT
+
+    text = (ROOT / "docs" / "sitemap.xml").read_text(encoding="utf-8")
+    for path in mod.NOINDEX_SITEMAP_PATHS:
+        assert f"https://claimidx.com{path}<" not in text.replace("\n", ""), path
+        assert f"<loc>https://claimidx.com{path}</loc>" not in text
+    for loc in (
+        "https://claimidx.com/",
+        "https://claimidx.com/pilot",
+        "https://claimidx.com/terms",
+        "https://claimidx.com/integrations/",
+        "https://claimidx.com/integrations/crewai",
+    ):
+        assert f"<loc>{loc}</loc>" in text
+    # lastmod is a calendar date; deploy restamps the day without a commit.
+    assert "<lastmod>20" in text
+
+
+def test_software_version_stamp_follows_package_version():
+    mod = _sync_docs()
+    body = '{"softwareVersion": "0.0.0"}'
+    assert '"softwareVersion": "9.9.9"' in mod.stamp_site_text(body, "9.9.9")
+    errors = mod.site_stamp_errors('{"softwareVersion": "0.0.0"}', "docs/index.html", "9.9.9")
+    assert any("softwareVersion" in e for e in errors)

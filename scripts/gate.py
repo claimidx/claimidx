@@ -460,6 +460,7 @@ def site_stamp_errors(docs: Path | None = None) -> list[str]:
         rel = "docs/" + path.relative_to(root).as_posix()
         errors.extend(sync.site_stamp_errors(path.read_text(encoding="utf-8").replace("\r\n", "\n"), rel, version, when))
     errors.extend(sync.docs_brand_errors(root))
+    errors.extend(sync.docs_seo_errors(root))
     return errors
 
 
@@ -473,6 +474,7 @@ def stamp_docs_tree(docs: Path) -> None:
         stamped = sync.stamp_site_text(body, version, when)
         if stamped != body:
             path.write_text(stamped, encoding="utf-8", newline="\n")
+    sync.stamp_sitemap(docs, when)
 
 
 def site() -> None:
@@ -507,6 +509,16 @@ def deploy_site() -> None:
             ["npx", "--yes", "wrangler", "pages", "deploy", str(dest), "--project-name", PAGES_PROJECT, "--branch", "main", "--commit-dirty=true"],
             shell=(os.name == "nt"),
         )
+    # IndexNow is best-effort: a failed ping must not roll back a successful deploy.
+    ping = ROOT / "scripts" / "indexnow_ping.py"
+    if ping.is_file():
+        result = subprocess.run([sys.executable, str(ping)], cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
+        if result.stdout:
+            print(result.stdout, end="")
+        if result.returncode != 0 and result.stderr:
+            print(result.stderr, end="", file=sys.stderr)
+        if result.returncode != 0:
+            print("warning: IndexNow ping failed; the Pages deploy already succeeded", file=sys.stderr)
 
 
 def commons_errors(api: str = COMMONS_API) -> list[str]:
