@@ -1,4 +1,4 @@
-"""Fail if a Claimidx wheel or sdist contains non-public material."""
+"""Fail if a ClaimIDX wheel or sdist contains non-public material."""
 
 from __future__ import annotations
 

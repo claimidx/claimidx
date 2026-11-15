@@ -734,5 +734,5 @@
       "$ref": "#/$defs/Bundle"
     }
   ],
-  "title": "Claimidx protocol v2 envelope"
+  "title": "ClaimIDX protocol v2 envelope"
 }

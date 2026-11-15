@@ -1,4 +1,4 @@
-"""Generate or verify the public Claimidx protocol v2 JSON Schema."""
+"""Generate or verify the public ClaimIDX protocol v2 JSON Schema."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ Envelope = Failure | Remedy | Proof | Observation | Relation | ProtocolEvent | B
 def render() -> str:
     schema = TypeAdapter(Envelope).json_schema(mode="validation")
     schema["$id"] = "https://github.com/claimidx/claimidx/blob/main/schema/protocol.v2.json"
-    schema["title"] = "Claimidx protocol v2 envelope"
+    schema["title"] = "ClaimIDX protocol v2 envelope"
     return json.dumps(schema, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
 
 

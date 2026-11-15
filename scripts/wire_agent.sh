@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Boot an agent process as a Claimidx owner. Any agent name, any provider.
+# Boot an agent process as a ClaimIDX owner. Any agent name, any provider.
 # Usage: source scripts/wire_agent.sh <name>
 set -euo pipefail
 AGENT="${1:-${CLAIMIDX_AGENT:-}}"
