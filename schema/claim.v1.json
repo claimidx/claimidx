@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/claimidx/claimidx/schema/claim.v1.json",
-  "title": "Claimidx claim v1",
+  "title": "ClaimIDX claim v1",
   "type": "object",
   "required": ["v", "id", "fp", "cls", "err", "fix", "eval"],
   "additionalProperties": false,

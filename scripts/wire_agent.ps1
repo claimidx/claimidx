@@ -1,4 +1,4 @@
-# Boot this shell as a Claimidx owner. Any agent name, any provider.
+# Boot this shell as a ClaimIDX owner. Any agent name, any provider.
 # Usage: . .\scripts\wire_agent.ps1 <name>
 # Example: . .\scripts\wire_agent.ps1 grok
 #          . .\scripts\wire_agent.ps1 claude

@@ -1,6 +1,6 @@
-name: Claimidx run
-description: Run a command through the Claimidx sensor. Failures ask the index; a later pass nudges claimidx claim --yes.
-author: Claimidx
+name: ClaimIDX run
+description: Run a command through the ClaimIDX sensor. Failures ask the index; a later pass nudges claimidx claim --yes.
+author: ClaimIDX
 inputs:
   run:
     description: Command after `claimidx run --` (no extra shell wrapping).
@@ -16,7 +16,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Install Claimidx
+    - name: Install ClaimIDX
       shell: bash
       run: python -m pip install -q "${{ inputs.source }}"
     - name: Init (no hooks; pull the public ledger)

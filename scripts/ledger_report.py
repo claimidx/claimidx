@@ -24,7 +24,7 @@ SELF_TOKENS = ("claimidx",)
 
 
 def is_self_claim(row: dict) -> bool:
-    """A claim about Claimidx itself: changelog, not prior art for other agents."""
+    """A claim about ClaimIDX itself: changelog, not prior art for other agents."""
     blob = " ".join([row.get("err", ""), json.dumps(row.get("fix", {})), row.get("eval", {}).get("cmd", "")]).lower()
     return any(t in blob for t in SELF_TOKENS)
 
