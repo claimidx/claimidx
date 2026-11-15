@@ -1,4 +1,4 @@
-"""Claimidx protocol v2 graph objects.
+"""ClaimIDX protocol v2 graph objects.
 
 V1 remains the wire compatibility surface.  These objects split a failure from
 its possible remedies and immutable proof observations, allowing alternatives

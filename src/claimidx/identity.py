@@ -1,4 +1,4 @@
-"""Portable Ed25519 identity for signed Claimidx v2 records."""
+"""Portable Ed25519 identity for signed ClaimIDX v2 records."""
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def generate_identity(path: str | os.PathLike[str], *, overwrite: bool = False) 
 def load_identity(path: str | os.PathLike[str]) -> tuple[str, Ed25519PrivateKey]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if payload.get("v") != "claimidx-key-1":
-        raise ValueError("unsupported Claimidx key version")
+        raise ValueError("unsupported ClaimIDX key version")
     private = Ed25519PrivateKey.from_private_bytes(_unb64(str(payload["private"])))
     public_raw = private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     did = did_from_public_key(public_raw)

@@ -1,6 +1,6 @@
 """`claimidx impact`: the number that keeps the hook installed.
 
-Agents do not have egos, but the human deciding whether Claimidx stays in
+Agents do not have egos, but the human deciding whether ClaimIDX stays in
 the config does. This reads the local event log (never the raw errors) and,
 when reachable, the public ledger, and answers: how many retries did the
 index save this week, what did I contribute, and did anyone else use it.

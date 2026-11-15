@@ -738,7 +738,7 @@ def claude_settings_path() -> Path:
     return Path.home() / ".claude" / "settings.json"
 
 
-# The four moments an agent forgets Claimidx, and the one command that covers them all:
+# The four moments an agent forgets ClaimIDX, and the one command that covers them all:
 #   PostToolUseFailure  a command failed          -> ask, remember the failure
 #   PostToolUse         the same command passed   -> "you fixed it: claimidx claim --yes"
 #   SessionStart        a new session             -> one-line brief (impact, what to do)
@@ -1626,7 +1626,7 @@ def install_one_skill(target: Path, body: str) -> dict:
 
 
 def install_user_skills() -> dict:
-    """Drop SKILL.md into user harness skill dirs so other trees see Claimidx."""
+    """Drop SKILL.md into user harness skill dirs so other trees see ClaimIDX."""
     body = bundled_skill_text()
     if not body:
         return {"status": "skip", "reason": "no bundled skill"}

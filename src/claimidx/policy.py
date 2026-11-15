@@ -1,4 +1,4 @@
-"""Admission policy. Claimidx stores claims. It does not run strangers' code.
+"""Admission policy. ClaimIDX stores claims. It does not run strangers' code.
 
 fix.b is data. eval.cmd is a recipe. Neither is executed on pull or publish.
 Replay is opt-in, allowlisted, no shell metacharacters, no network fetchers.
