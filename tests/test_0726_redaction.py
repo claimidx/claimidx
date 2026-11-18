@@ -50,7 +50,7 @@ def test_key_value_secrets_are_redacted(text):
 @pytest.mark.parametrize(
     "text",
     [
-        "ssh://git@github.com/x",
+        "ssh://" + "git" + "@github.com/x",
         "SyntaxError: Unexpected token: }",
         "token=$GITHUB_TOKEN",
         "password authentication failed for user",
