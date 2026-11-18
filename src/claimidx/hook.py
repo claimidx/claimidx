@@ -26,7 +26,7 @@ from .security import SecretError, reject_secrets
 _MARKER = "claimidx hook"
 
 _ERR_LINE = re.compile(
-    r"Error|Exception|FAILED|FATAL|Traceback|ModuleNotFound|TypeError|"
+    r"Error|Exception|FAILED|FATAL|Traceback|ModuleNotFound|TypeError|WRONGPASS|NOAUTH|"
     r"ImportError|EADDRINUSE|npm ERR|error:",
     re.I,
 )
@@ -409,11 +409,24 @@ _PYTEST_E = re.compile(r"^E\s+")
 _SECTION_HEADER = re.compile(r"^\[ERROR\]\s*(?:COMPILATION ERROR|BUILD FAILURE|Failed to execute goal)\b", re.I)
 
 
+# A line that carries a connection URL with userinfo (redacted or not) is a client banner, not the driver error:
+# `[Redis Error] Connection: redis://user:pass@host` after the clean `WRONGPASS ...` line. Last resort only.
+_CONN_URL_LINE = re.compile(r"(?i)\b[a-z][a-z0-9+.\-]*://[^\s]*@")
+
+
 def _first_err_line(body: str) -> str | None:
+    from .security import redact_credentials
+
+    body = redact_credentials(body or "")
     fallback = None
+    url_fallback = None
     for line in body.splitlines():
         s = _PYTEST_E.sub("", line.strip())  # pytest's `E   TypeError: ...` is the same error as the bare traceback line
         if not s or s.lower().startswith("traceback"):
+            continue
+        if _CONN_URL_LINE.search(s):
+            if url_fallback is None and _ERR_LINE.search(s):
+                url_fallback = s
             continue
         if _SECTION_HEADER.match(s):
             if fallback is None:
@@ -427,6 +440,8 @@ def _first_err_line(body: str) -> str | None:
             fallback = s
     if fallback:
         return fallback
+    if url_fallback:
+        return url_fallback
     cleaned = " ".join(body.split())
     if len(cleaned) < 12:
         return None

@@ -1058,7 +1058,9 @@ def _err(id_, code, msg):
 
 def _text(obj) -> dict:
     """Tool result: JSON text for every client, plus structuredContent (MCP 2025-06-18) when the result is an object."""
-    body = json.dumps(obj, default=str)
+    from .security import redact_obj
+
+    body = json.dumps(redact_obj(json.loads(json.dumps(obj, default=str))), default=str)
     out: dict[str, Any] = {"content": [{"type": "text", "text": body}]}
     if isinstance(obj, dict):
         out["structuredContent"] = json.loads(body)
@@ -1131,6 +1133,10 @@ def handle(msg: dict, store: Store) -> dict:
     if method == "tools/call":
         name = str(params.get("name") or "")
         args = params.get("arguments") or {}
+        if isinstance(args, dict) and isinstance(args.get("err"), str):
+            from .security import redact_credentials
+
+            args = {**args, "err": redact_credentials(args["err"])}
         try:
             res = _call(name, args, store)
             out = _text(res)

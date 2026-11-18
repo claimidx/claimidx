@@ -441,15 +441,15 @@ def interpreter_from_error(err: str) -> str:
 def remember_failure(
     err: str, *, command: str = "", cwd: str = "", eco: str = "", rt: str = "", event: str = "", fp: str = "", extra: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    from .security import SecretError, reject_secrets, strip_control
+    from .security import SecretError, redact, redact_credentials, reject_secrets, strip_control
 
-    command = strip_control(command or "")
+    command = redact_credentials(strip_control(command or ""))
     try:
         reject_secrets(command)
     except SecretError:
         command = ""  # a curl -H "Authorization: Bearer …" must not land on disk
     rec = {
-        "err": strip_control(err or "")[:280],
+        "err": redact(strip_control(err or ""))[:280],
         "command": command[:400],
         "cwd": cwd or os.getcwd(),
         "eco": eco or "",

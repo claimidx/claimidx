@@ -91,10 +91,12 @@ class Claim(BaseModel):
 
     @field_validator("err", "note", "model", "own", "rt", "cls")
     @classmethod
-    def strip_secrets(cls, v: str) -> str:
-        from .security import reject_secrets, strip_control
+    def strip_secrets(cls, v: str, info) -> str:
+        from .security import redact_credentials, reject_secrets, strip_control
 
         v = strip_control(v)
+        if info.field_name in ("err", "note"):
+            v = redact_credentials(v)
         reject_secrets(v)
         return v
 

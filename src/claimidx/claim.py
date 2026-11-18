@@ -373,6 +373,10 @@ def draft_claim(
         )
     if not fix_b:
         warns.insert(0, "fix.b empty: pass --fix '<what you changed>'")
+    from .security import redact, redact_credentials
+
+    err = redact_credentials(err)
+    note = redact(note or "")
     draft = {
         "ok": True,
         "err": err[:280],

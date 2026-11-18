@@ -1,6 +1,6 @@
 """ClaimIDX — prior art for agents."""
 
-__version__ = "0.7.25"
+__version__ = "0.7.26"
 
 from .dense import decode, encode
 from .fingerprint import classify, fingerprint, normalize_error
