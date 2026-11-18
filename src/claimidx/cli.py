@@ -2415,6 +2415,11 @@ def main(argv: list[str] | None = None) -> int:
     raw = list(argv) if argv is not None else sys.argv[1:]
     raw = _glue_dashed_opt(raw, "--fix-b")
     ns = build_parser().parse_args(raw)
+    from .security import redact_credentials
+
+    for _field in ("err", "note"):
+        if isinstance(getattr(ns, _field, None), str):
+            setattr(ns, _field, redact_credentials(getattr(ns, _field)))
     if not getattr(ns, "cmd", None):
         from .claim import QUICKSTART_LOOP
 

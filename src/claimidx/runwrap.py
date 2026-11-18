@@ -101,8 +101,10 @@ def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None =
     from .fingerprint import classify, fingerprint
     from .match import verdict_for
     from .query import retrieve
+    from .security import redact, redact_credentials
 
-    cmd = shlex.join(argv)
+    cmd = redact_credentials(shlex.join(argv))
+    output = redact(output or "")
     root = cwd or os.getcwd()
     out: dict[str, Any] = {"rc": rc, "command": cmd}
     if rc == 124 or (rc == 127 and not output):

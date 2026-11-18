@@ -369,6 +369,9 @@ class Store:
         actor: str,
         detail: dict | None = None,
     ) -> None:
+        from .security import redact_obj
+
+        detail = redact_obj(json.loads(json.dumps(detail, default=str))) if detail else detail
         blob = json.dumps(detail, default=str) if detail else None
         con.execute(
             "INSERT INTO events(claim_id, kind, actor, ts, detail) VALUES(?,?,?,?,?)",
@@ -1126,7 +1129,9 @@ class Store:
         sid = (sid or "").strip()
         if not sid:
             return
-        blob = json.dumps(detail or {}, ensure_ascii=False, default=str)[:2000]
+        from .security import redact_obj
+
+        blob = json.dumps(redact_obj(json.loads(json.dumps(detail or {}, default=str))), ensure_ascii=False, default=str)[:2000]
         with self._conn() as con:
             con.execute(
                 "INSERT INTO session_events(session_id, ts, kind, fp, claim_id, detail) VALUES (?,?,?,?,?,?)",

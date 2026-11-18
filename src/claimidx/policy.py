@@ -295,6 +295,11 @@ def require_identity(own: str, src: str = "local") -> None:
 
 def inspect_claim(*, err: str, fix_k: str, fix_b: str, eval_cmd: str, note: str = "", own: str = "", src: str = "local") -> None:
     """Gate used by publish/ingest/pull. Raises PolicyError or SecretError."""
+    from .security import redact_credentials
+
+    # err/note are stored redacted (Claim validator); check what will be stored.
+    err = redact_credentials(err)
+    note = redact_credentials(note)
     reject_secrets(err)
     reject_secrets(note)
     reject_secrets(own)

@@ -24,6 +24,7 @@ from .models import Claim
 from .policy import _LOCAL_PIP, _norm_head, eval_allowed, split_eval
 from .public import eval_is_proof
 from .sandbox import ReplayResult, eval_miss_info, observe_env, refused_replay_info, replay
+from .security import redact
 from .store import Store
 from .team import resolve_owner
 
@@ -214,7 +215,7 @@ def harness(c: Claim, scratch: Path) -> dict:
                 "action": "skip",
                 "reason": "harness-broken-install",
                 "id": c.id,
-                "stderr": (br.stderr or "")[-300:],
+                "stderr": redact((br.stderr or "")[-300:]),
             }
     broken = _replay_py(py, c.eval.cmd, c.eval.expect)
     try:
@@ -226,7 +227,7 @@ def harness(c: Claim, scratch: Path) -> dict:
             "action": "skip",
             "reason": "harness-pin-install",
             "id": c.id,
-            "stderr": (fx.stderr or "")[-300:],
+            "stderr": redact((fx.stderr or "")[-300:]),
         }
     fixed = _replay_py(py, c.eval.cmd, c.eval.expect)
     applied = " ".join(specs)
@@ -363,7 +364,7 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
     except (subprocess.SubprocessError, OSError) as e:
         return {"action": "skip", "reason": f"pin-install-error:{e}", "id": c.id}
     if inst.returncode != 0:
-        return {"action": "skip", "reason": "pin-install-failed", "id": c.id, "stderr": (inst.stderr or "")[-300:]}
+        return {"action": "skip", "reason": "pin-install-failed", "id": c.id, "stderr": redact((inst.stderr or "")[-300:])}
     env = os.environ.copy()
     env["VIRTUAL_ENV"] = str(venv)
     bindir = str(py.parent)
@@ -412,7 +413,7 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
                 **decision.refusal(),
                 "id": c.id,
                 "rc": proc.returncode,
-                "stderr": (proc.stderr or "")[-300:],
+                "stderr": redact((proc.stderr or "")[-300:]),
                 "applied": spec,
                 "replay": refused_replay_info(probe.as_dict()),
             }
@@ -421,7 +422,7 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
             "reason": "held-pin",
             "id": c.id,
             "rc": proc.returncode,
-            "stderr": (proc.stderr or "")[-300:],
+            "stderr": redact((proc.stderr or "")[-300:]),
             "applied": spec,
             "replay": probe.as_dict(),
         }
@@ -431,7 +432,7 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
             "reason": "pin-eval-unproven",
             "id": c.id,
             "rc": proc.returncode,
-            "stderr": (proc.stderr or "")[-300:],
+            "stderr": redact((proc.stderr or "")[-300:]),
             "applied": spec,
         }
     return {
@@ -440,7 +441,7 @@ def _apply_pin_and_replay(c: Claim, tmp: Path) -> dict | None:
         "eval_passed": False,
         "id": c.id,
         "rc": proc.returncode,
-        "stderr": (proc.stderr or "")[-300:],
+        "stderr": redact((proc.stderr or "")[-300:]),
         "applied": spec,
     }
 

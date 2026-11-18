@@ -464,7 +464,9 @@ def format_commons_review(claim: Claim, replay: dict | None = None) -> str:
             + ". eco=other or empty is always weak, even with a held replay (nr). "
             "Share only if you mean to; a countable claim needs a held replay (nr>=1) and a real ecosystem.\n"
         )
-    return (
+    from .security import redact
+
+    return redact(
         f"# commons review — destination=commons\n"
         f"{warn}"
         f"#   id={r['id']} eco={r['eco'] or '-'} rt={r['rt'] or '-'}\n"

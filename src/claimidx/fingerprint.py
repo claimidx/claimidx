@@ -4,6 +4,8 @@ import hashlib
 import re
 from typing import Any
 
+from .security import redact_credentials
+
 _PATH = re.compile(
     r"(?:[A-Za-z]:\\|\\\\|~[/\\]|/(?:home|Users|usr|var|tmp|opt|root|etc|app|src|private|workspace)|(?:\./|\.\./))[^\s:\'\"]+"
     r"|(?:(?<=\s)|^)/(?:[^\s:\'\"]+/)+(?:bin/python[\w.]*|bin/node|Scripts/python(?:\.exe)?)"
@@ -85,7 +87,7 @@ def normalization_risk(raw: str) -> list[str]:
     carry the same flags as a raw query that would produce them.
     Independent of canonical_error_id: an ID in the text does not drop these flags.
     """
-    s = raw or ""
+    s = redact_credentials(raw or "")
     flags: list[str] = []
     if _URL.search(s):
         flags.append("url")
@@ -108,7 +110,8 @@ def normalization_risk(raw: str) -> list[str]:
 
 
 def normalize_error(raw: str) -> str:
-    s = raw.strip()
+    # Credentials are redacted before anything is hashed; text without one is unchanged.
+    s = redact_credentials(raw).strip()
     s = _URL.sub("<URL>", s)
     s = _PATH.sub("<PATH>", s)
     s = _QUOTED.sub(_quote_token, s)
@@ -132,7 +135,7 @@ def canonical_error_id(raw: str) -> str | None:
     The leftmost match wins. A reworded message that still carries the ID
     maps to the same fingerprint material.
     """
-    s = raw or ""
+    s = redact_credentials(raw or "")
     best: tuple[int, str] | None = None
     for _name, pat in _ID_SPECS:
         m = pat.search(s)
@@ -153,6 +156,7 @@ def _error_material(raw: str) -> str:
 
 
 def classify(raw: str) -> str:
+    raw = redact_credentials(raw or "")
     for name, pat in _CLASS_RULES:
         if pat.search(raw):
             return name

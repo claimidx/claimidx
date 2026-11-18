@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .fingerprint import runtime_proof_key
 from .policy import _LOCAL_PIP, _norm_head, eval_allowed, split_eval
+from .security import redact
 
 
 def tree_venv_python(cwd: str | os.PathLike[str] | None) -> str | None:
@@ -144,8 +145,8 @@ class ReplayResult:
             "expect": self.expect,
             "held": self.held,
             "reason": self.reason,
-            "stdout": self.stdout[-400:],
-            "stderr": self.stderr[-400:],
+            "stdout": redact(self.stdout[-400:]),
+            "stderr": redact(self.stderr[-400:]),
             "env": self.env,
             "ms": int(self.ms or 0),
             "net": self.net,
