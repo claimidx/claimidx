@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from claimidx.home import parse_ledger
-from claimidx.loopkey import loop_task, public_loop
+from claimidx.loopkey import close_line_visible, loop_task, public_loop
 from claimidx.mcp_server import handle
 from claimidx.store import Store
 
@@ -85,6 +85,37 @@ def _mcp_loop(db: str) -> dict | None:
 
 def _latest(db: str, repo: Path) -> dict | None:
     return Store(db).loop_latest(loop_task(str(repo)))
+
+
+def test_close_line_visible_after_two_tries():
+    assert close_line_visible({"tries": 1}) is False
+    assert close_line_visible({"tries": 2}) is True
+    assert close_line_visible({"tries": 3}) is True
+    assert close_line_visible({}) is False
+
+
+def test_run_subprocess_close_at_tries_1_is_quiet(tmp_path: Path):
+    """A single failure that then passes closes the store/MCP loop but leaves stderr empty."""
+    repo = tmp_path / "repo"
+    _init_repo(repo, "import sys\nsys.exit(1)\n")
+    db = str(tmp_path / "ix.sqlite")
+    env = _env(tmp_path)
+
+    first = _run(tmp_path, db, repo, env)
+    assert first.returncode == 1
+    # Drop last_failure so this success is only about the close line, not the fixed nudge.
+    Path(env["CLAIMIDX_LAST_FAILURE"]).unlink(missing_ok=True)
+    (repo / "app.py").write_text("print('fixed')\n", encoding="utf-8")
+    success = _run(tmp_path, db, repo, env)
+    assert success.returncode == 0
+    assert (success.stderr or "") == ""
+    assert "CLAIMIDX loop closed" not in (success.stderr or "")
+    closed = _latest(db, repo)
+    assert closed and closed["state"] == "closed" and closed["tries"] == 1
+    assert closed["stop"] is False
+    mcp = _mcp_loop(db)
+    assert mcp and mcp.get("state") == "closed" and mcp.get("tries") == 1
+    assert public_loop(closed) == mcp
 
 
 def test_run_subprocess_refuses_third_try_then_resets_closes_and_reopens(tmp_path: Path):
