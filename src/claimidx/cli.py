@@ -1764,6 +1764,8 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
     from .session import version_fields
 
     vf = version_fields()
+    if vf["server_info_version"] is None:
+        vf = version_fields(__version__)
     add(
         "version-mismatch",
         not vf["version_mismatch"],
@@ -1983,7 +1985,22 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
         f"{funnel_detail}; countable={life.get('countable_actors', 0)} (claimidx funnel)",
     )
     ok = all(c["ok"] for c in checks)
-    print(json.dumps({"ok": ok, "whoami": me, "checks": checks, "funnel": life}, indent=2))
+    # Match MCP claimidx_doctor: lift the version trio to the top level.
+    body = {
+        "ok": ok,
+        "package_version": vf["package_version"],
+        "server_info_version": vf["server_info_version"],
+        "version_mismatch": vf["version_mismatch"],
+        "whoami": me,
+        "checks": checks,
+        "funnel": life,
+    }
+    print(json.dumps(body, indent=2))
+    if getattr(ns, "fmt", "dense") != "json":
+        print(
+            f"package_version={vf['package_version']} server_info_version={vf['server_info_version']} version_mismatch={str(vf['version_mismatch']).lower()}",
+            file=sys.stderr,
+        )
     return 0 if ok else 2
 
 
