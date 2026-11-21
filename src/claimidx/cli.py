@@ -206,9 +206,26 @@ def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidate
     return 0
 
 
+def _ask_err(ns: argparse.Namespace) -> tuple[str, int | None]:
+    """Resolve the error text for `claimidx ask`. Positional and --err are aliases; both is an error."""
+    pos = (getattr(ns, "err_pos", None) or "").strip()
+    flag = (getattr(ns, "err", None) or "").strip()
+    if pos and flag:
+        print("error: pass the error as a positional argument or --err, not both", file=sys.stderr)
+        return "", 2
+    err = pos or flag
+    if not err:
+        print("error: missing error text (a positional argument or --err)", file=sys.stderr)
+        return "", 2
+    return err, None
+
+
 def cmd_ask(ns: argparse.Namespace) -> int:
+    err, rc = _ask_err(ns)
+    if rc is not None:
+        return rc
     store = _store(ns)
-    q, hits, candidates = _ask_hits(store, ns, ns.err)
+    q, hits, candidates = _ask_hits(store, ns, err)
     return _print_ask(q, hits, ns.fmt, store=store, candidates=candidates, cwd=getattr(ns, "cwd", None))
 
 
@@ -2164,7 +2181,14 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=False)
 
     a = sub.add_parser("ask", aliases=["query"], help="retrieve prior art for a failure")
-    a.add_argument("--err", required=True, help="raw failure or traceback")
+    a.add_argument(
+        "err_pos",
+        nargs="?",
+        default=None,
+        metavar="ERR",
+        help="raw failure or traceback; alias of --err",
+    )
+    a.add_argument("--err", default=None, help="raw failure or traceback; may also be passed as a positional argument")
     a.add_argument("--cls", help="optional failure class override")
     a.add_argument("--eco", help="ecosystem: py, npm, go, rust, java, mcp, browser, or ci")
     a.add_argument("--rt", help="runtime and version, for example py@3.13")

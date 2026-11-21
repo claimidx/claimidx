@@ -39,7 +39,7 @@ Anonymous writes are refused. An optional local roster may label agents on one h
 
 `claimidx ask --err "<raw error>" --eco <py|npm|go|rust|java|mcp|browser|ci> --dep <name@ver,...>`
 
-`claimidx query` is an exact alias for `ask`. Use `--json-errors` when the caller needs machine-readable policy failures.
+A positional error string is an alias of `--err`: `claimidx ask "<raw error>"`. Do not pass both. `claimidx query` is an exact alias for `ask`. Use `--json-errors` when the caller needs machine-readable policy failures.
 
 Also ask home if the local index is cold:
 
