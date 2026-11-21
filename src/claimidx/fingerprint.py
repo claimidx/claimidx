@@ -64,13 +64,66 @@ _PLACEHOLDER_RISK = {
 
 # Closed catalog of known rule/error ID shapes. Adding a pattern requires a test
 # in the same commit. Bare integers (exit 1, HTTP 200) never match.
-_ID_SPECS: tuple[tuple[str, re.Pattern[str]], ...] = (
+# v0.7.24 catalog: kept so fingerprints() still accepts rows hashed under it.
+_ID_SPECS_V0724: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("ts", re.compile(r"\b(TS\d{3,5})\b")),
     ("ruff", re.compile(r"\b(RUF\d{3})\b")),
     ("rustc", re.compile(r"\berror\[(E\d{4})\]", re.I)),
     ("lint4", re.compile(r"\b([CRWEF]\d{4})\b")),
     ("lint3", re.compile(r"\b([EWF]\d{3})\b")),
 )
+# Current catalog: 0.7.24 plus Pylint/Ruff PL[CERW]#### and selected Ruff prefixes.
+# ESLint rule names are matched separately (end of string, eco=npm only).
+_ID_SPECS: tuple[tuple[str, re.Pattern[str]], ...] = _ID_SPECS_V0724 + (
+    ("pylint", re.compile(r"\b(PL[CERW]\d{4})\b")),
+    ("ruff_extra", re.compile(r"\b((?:ANN|ARG|SIM|UP|B)\d{3})\b")),
+)
+_ESLINT_ID = re.compile(r"(?<=\s)((?:@[\w-]+/)?[a-z]+(?:-[a-z]+)+)\s*$")
+
+_RULE_ID_MAP: dict[str, str] | None = None
+
+
+def _rule_id_map() -> dict[str, str]:
+    """Flatten data/rule_id_map.json to {old_id: canonical_id}."""
+    global _RULE_ID_MAP
+    if _RULE_ID_MAP is not None:
+        return _RULE_ID_MAP
+    import json
+    from pathlib import Path as _Path
+
+    path = _Path(__file__).resolve().parent / "data" / "rule_id_map.json"
+    flat: dict[str, str] = {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        _RULE_ID_MAP = flat
+        return flat
+    if isinstance(raw, dict):
+        for _tool, entries in raw.items():
+            if not isinstance(entries, dict):
+                continue
+            for old_id, spec in entries.items():
+                target = spec.get("to") if isinstance(spec, dict) else spec
+                if isinstance(old_id, str) and isinstance(target, str) and target:
+                    flat[old_id] = target
+                    if old_id != old_id.upper():
+                        flat[old_id.upper()] = target
+    _RULE_ID_MAP = flat
+    return flat
+
+
+def remap_rule_id(token: str) -> str:
+    """Apply the per-tool-version map. Unknown tokens are returned unchanged."""
+    table = _rule_id_map()
+    seen: set[str] = set()
+    current = token
+    while current not in seen:
+        seen.add(current)
+        nxt = table.get(current) or table.get(current.upper()) or table.get(current.lower())
+        if not nxt or nxt == current:
+            break
+        current = nxt
+    return current
 
 
 def _quote_token(m: re.Match[str]) -> str:
@@ -129,15 +182,16 @@ def normalize_error(raw: str) -> str:
     return s[:280]
 
 
-def canonical_error_id(raw: str) -> str | None:
-    """If a known rule or error ID appears in the text, return that canonical ID.
-
-    The leftmost match wins. A reworded message that still carries the ID
-    maps to the same fingerprint material.
-    """
+def _best_id(
+    raw: str,
+    specs: tuple[tuple[str, re.Pattern[str]], ...],
+    *,
+    eco: str = "",
+    allow_eslint: bool = True,
+) -> tuple[int, str] | None:
     s = redact_credentials(raw or "")
     best: tuple[int, str] | None = None
-    for _name, pat in _ID_SPECS:
+    for _name, pat in specs:
         m = pat.search(s)
         if not m:
             continue
@@ -145,11 +199,41 @@ def canonical_error_id(raw: str) -> str | None:
         start = m.start()
         if best is None or start < best[0]:
             best = (start, token)
-    return best[1] if best else None
+    if allow_eslint and (eco or "").lower() == "npm":
+        m = _ESLINT_ID.search(s)
+        if m and (best is None or m.start() < best[0]):
+            best = (m.start(), m.group(1))
+    return best
 
 
-def _error_material(raw: str) -> str:
-    cid = canonical_error_id(raw)
+def canonical_error_id(raw: str, *, eco: str = "", apply_map: bool = True) -> str | None:
+    """If a known rule or error ID appears in the text, return that canonical ID.
+
+    The leftmost match wins. A reworded message that still carries the ID
+    maps to the same fingerprint material. ESLint names (`no-unused-vars`,
+    `@plugin/rule`) are recognized only at the end of the string when eco=npm.
+    The packaged rule_id_map.json remaps deprecated tool IDs onto their
+    current names when apply_map is true.
+    """
+    best = _best_id(raw, _ID_SPECS, eco=eco, allow_eslint=True)
+    if not best:
+        return None
+    token = best[1]
+    return remap_rule_id(token) if apply_map else token
+
+
+def _error_material(
+    raw: str,
+    *,
+    eco: str = "",
+    apply_map: bool = True,
+    specs: tuple[tuple[str, re.Pattern[str]], ...] | None = None,
+) -> str:
+    if specs is None:
+        cid = canonical_error_id(raw, eco=eco, apply_map=apply_map)
+    else:
+        best = _best_id(raw, specs, eco=eco, allow_eslint=False)
+        cid = (remap_rule_id(best[1]) if apply_map else best[1]) if best else None
     if cid:
         return f"id={cid}"
     return normalize_error(raw)
@@ -200,12 +284,29 @@ def _join_material(*, nerr: str, cls: str, eco: str, rt: str, dep: list[str] | N
 
 
 def fingerprint_material(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> str:
-    return _join_material(nerr=_error_material(err), cls=cls, eco=eco, rt=rt, dep=dep, raw=err)
+    return _join_material(nerr=_error_material(err, eco=eco, apply_map=True), cls=cls, eco=eco, rt=rt, dep=dep, raw=err)
 
 
 def legacy_fingerprint_material(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> str:
     """Pre-0.7.24 material: the normalized wording, even when a rule/error ID is present."""
     return _join_material(nerr=normalize_error(err), cls=cls, eco=eco, rt=rt, dep=dep, raw=err)
+
+
+def v0724_fingerprint_material(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> str:
+    """0.7.24 catalog: known TS/RUF/rustc/lint IDs only, no remap, no ESLint/PL* shapes."""
+    return _join_material(
+        nerr=_error_material(err, eco=eco, apply_map=False, specs=_ID_SPECS_V0724),
+        cls=cls,
+        eco=eco,
+        rt=rt,
+        dep=dep,
+        raw=err,
+    )
+
+
+def unmapped_fingerprint_material(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> str:
+    """Current catalog before rule_id_map.json is applied."""
+    return _join_material(nerr=_error_material(err, eco=eco, apply_map=False), cls=cls, eco=eco, rt=rt, dep=dep, raw=err)
 
 
 def _hash_material(material: str) -> str:
@@ -218,20 +319,41 @@ def fingerprint(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: li
 
 
 def fingerprints(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> tuple[str, ...]:
-    """Current fingerprint first, then the pre-0.7.24 wording hash if it differs.
+    """Current, legacy (pre-0.7.24 wording), and remapped (pre-map / 0.7.24 ID) hashes.
 
-    Pull and exact-match accept either, so existing ledger rows are not skipped
-    when a known ID is in the text. New writes use fingerprint() (the first value).
+    Unique values, in that order. Pull and exact-match accept any of them, so a
+    stored fp is never rewritten. New writes use fingerprint() (the first value).
     """
     current = fingerprint(err=err, cls=cls, eco=eco, rt=rt, dep=dep)
     legacy = _hash_material(legacy_fingerprint_material(err=err, cls=cls, eco=eco, rt=rt, dep=dep))
-    if legacy != current:
-        return (current, legacy)
-    return (current,)
+    remapped = _hash_material(unmapped_fingerprint_material(err=err, cls=cls, eco=eco, rt=rt, dep=dep))
+    mid = _hash_material(v0724_fingerprint_material(err=err, cls=cls, eco=eco, rt=rt, dep=dep))
+    out: list[str] = []
+    for fp in (current, legacy, remapped, mid):
+        if fp not in out:
+            out.append(fp)
+    return tuple(out)
+
+
+def fingerprint_algorithms(*, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> list[tuple[str, str]]:
+    """(fp, algo) pairs for fp_alias edges: current, legacy, remapped, v0724."""
+    pairs = [
+        (_hash_material(fingerprint_material(err=err, cls=cls, eco=eco, rt=rt, dep=dep)), "current"),
+        (_hash_material(legacy_fingerprint_material(err=err, cls=cls, eco=eco, rt=rt, dep=dep)), "legacy"),
+        (_hash_material(unmapped_fingerprint_material(err=err, cls=cls, eco=eco, rt=rt, dep=dep)), "remapped"),
+        (_hash_material(v0724_fingerprint_material(err=err, cls=cls, eco=eco, rt=rt, dep=dep)), "v0724"),
+    ]
+    seen: set[str] = set()
+    out: list[tuple[str, str]] = []
+    for fp, algo in pairs:
+        if fp not in seen:
+            seen.add(fp)
+            out.append((fp, algo))
+    return out
 
 
 def fingerprint_accepted(fp: str, *, err: str, cls: str = "", eco: str = "", rt: str = "", dep: list[str] | None = None) -> bool:
-    """True when `fp` is the current hash or the pre-0.7.24 wording hash of these fields."""
+    """True when `fp` is the current, legacy, remapped, or 0.7.24 hash of these fields."""
     return (fp or "") in fingerprints(err=err, cls=cls, eco=eco, rt=rt, dep=dep)
 
 
@@ -250,15 +372,16 @@ def same_fingerprint(
     claim_rt: str = "",
     claim_dep: list[str] | None = None,
 ) -> bool:
-    """Exact match under the current or legacy algorithm, including a reworded ID."""
+    """Exact match under the current, legacy, or remapped algorithm, including a reworded ID."""
     q_fps = fingerprints(err=query_err, cls=query_cls, eco=query_eco, rt=query_rt, dep=query_dep)
     if query_fp and query_fp not in q_fps:
         q_fps = (query_fp, *q_fps)
     if claim_fp and claim_fp in q_fps:
         return True
-    c_current = fingerprint(err=claim_err, cls=claim_cls, eco=claim_eco, rt=claim_rt, dep=claim_dep)
-    q_current = fingerprint(err=query_err, cls=query_cls, eco=query_eco, rt=query_rt, dep=query_dep)
-    return c_current == q_current
+    c_fps = fingerprints(err=claim_err, cls=claim_cls, eco=claim_eco, rt=claim_rt, dep=claim_dep)
+    if claim_fp and claim_fp not in c_fps:
+        c_fps = (claim_fp, *c_fps)
+    return bool(set(q_fps) & set(c_fps))
 
 
 _SYMBOL = re.compile(r"\b[A-Za-z_][A-Za-z0-9_.]{2,79}\b")
