@@ -176,6 +176,11 @@ def format_stop_line(entry: dict[str, Any]) -> str:
     return f"CLAIMIDX loop stop: ask/claim before retrying (key={short_key(str(entry.get('key') or ''))} tries={int(entry.get('tries') or 0)})"
 
 
+def format_close_line(entry: dict[str, Any]) -> str:
+    reason = str(entry.get("reset_reason") or "artifact-changed")
+    return f"CLAIMIDX loop closed key={short_key(str(entry.get('key') or ''))} tries={int(entry.get('tries') or 0)} reason={reason}"
+
+
 def artifact_allows_retry(entry: dict[str, Any], current_artifact: str) -> bool:
     """True when the tree changed enough that the hard stop should not fire."""
     stored = str(entry.get("artifact") or "")
