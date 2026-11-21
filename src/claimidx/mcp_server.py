@@ -768,12 +768,13 @@ TOOLS: list[dict[str, Any]] = [
             "Import the public ledger into the local index under quarantine: imported claims get src=home and st=proposed, are served "
             "by claimidx_ask, and cannot be confirmed without replay=true. Existing local claims are untouched; re-pulls are idempotent. "
             "Use to refresh prior art at session start; claimidx_sync does this and then shares. "
-            "Returns url, seen, imported, existed, refused, skipped, skipped_n, and hint. "
+            "Returns url, seen, imported, existed, refused, skipped, skipped_n, excluded, excluded_n, and hint. "
             "Skipped rows include a reason; an unknown field-set version is reported as "
-            "'unknown field-set version vN, upgrade claimidx' and hint tells the user to upgrade."
+            "'unknown field-set version vN, upgrade claimidx' and hint tells the user to upgrade. "
+            "Known historic ids are counted in excluded, not skipped."
         ),
         "inputSchema": {"type": "object", "properties": {"url": _URL}},
-        "outputSchema": _out(url=_S, seen=_I, imported=_I, existed=_I, refused=_I, skipped=_A, skipped_n=_I, hint=_S),
+        "outputSchema": _out(url=_S, seen=_I, imported=_I, existed=_I, refused=_I, skipped=_A, skipped_n=_I, excluded=_A, excluded_n=_I, hint=_S),
         "annotations": _ann(read_only=False, destructive=False, idempotent=True, open_world=True),
     },
     {

@@ -167,12 +167,33 @@ def _post(url: str, payload: dict[str, Any], token: str = "", timeout: float = 2
         raise HomeError(f"home returned non-json: {e}") from e
 
 
+# Historic rows that must not fail a live pull. Same idea as the exact leaked
+# falsifier DIDs in impact._PROXY_DEFAULT_EXCLUDE (agent-c0827d, agent-1efe8e,
+# agent-fbb9d6): list the id, do not rewrite the row or its fingerprint.
+# cix_23fb9d61fa06544d is the 0.7.22 first-run audit share
+# (did:claimidx:falsifier-0722-audit). Its err still carries a half-normalized
+# venv path (`/workspace/firstrun-audit-<N>.<N>.<N>-<HEX>/venv-py313/bin/python`);
+# today's normalize_error collapses that to `<PATH>`, so the stored fingerprint
+# no longer recomputes (fingerprint_accepted is False → "fp mismatch").
+PULL_EXCLUDED_IDS = frozenset({"cix_23fb9d61fa06544d"})
+
+
 def parse_ledger(text: str) -> tuple[list[Claim], list[str]]:
     """Parse jsonl. Returns (accepted, skip_reasons). Does not persist."""
+    accepted, skipped, _excluded = parse_ledger_report(text)
+    return accepted, skipped
+
+
+def parse_ledger_report(text: str) -> tuple[list[Claim], list[str], list[str]]:
+    """Parse jsonl. Returns (accepted, skip_reasons, exclude_reasons). Does not persist.
+
+    Known-excluded historic ids are counted as intentional excludes, not skips.
+    """
     from .fieldset import fieldset_rejection
 
     accepted: list[Claim] = []
     skipped: list[str] = []
+    excluded: list[str] = []
     for i, line in enumerate(text.splitlines(), 1):
         line = line.strip()
         if not line:
@@ -181,6 +202,10 @@ def parse_ledger(text: str) -> tuple[list[Claim], list[str]]:
             raw = json.loads(line)
             if not isinstance(raw, dict):
                 skipped.append(f"L{i}: field-set: not an object")
+                continue
+            cid = str(raw.get("id") or "").strip()
+            if cid in PULL_EXCLUDED_IDS:
+                excluded.append(f"L{i}: excluded {cid}")
                 continue
             reason = fieldset_rejection(raw)
             if reason:
@@ -194,7 +219,7 @@ def parse_ledger(text: str) -> tuple[list[Claim], list[str]]:
             accepted.append(claim)
         except (json.JSONDecodeError, PolicyError, SecretError, ValueError) as e:
             skipped.append(f"L{i}: {type(e).__name__}: {e}")
-    return accepted, skipped
+    return accepted, skipped, excluded
 
 
 def _read_target(target: str) -> str:
@@ -220,7 +245,8 @@ def _read_target(target: str) -> str:
     return _get(raw).decode("utf-8", errors="replace")
 
 
-def fetch_ledger(url: str | None = None) -> tuple[list[Claim], list[str], str]:
+def fetch_ledger_report(url: str | None = None) -> tuple[list[Claim], list[str], list[str], str]:
+    """Fetch a ledger and return (accepted, skipped, excluded, target)."""
     target = url or ledger_url()
     try:
         text = _read_target(target)
@@ -229,7 +255,12 @@ def fetch_ledger(url: str | None = None) -> tuple[list[Claim], list[str], str]:
             raise
         target = DEFAULT_LEDGER  # the commons is unreachable: the repo snapshot is the offline copy
         text = _read_target(target)
-    claims, skipped = parse_ledger(text)
+    claims, skipped, excluded = parse_ledger_report(text)
+    return claims, skipped, excluded, target
+
+
+def fetch_ledger(url: str | None = None) -> tuple[list[Claim], list[str], str]:
+    claims, skipped, _excluded, target = fetch_ledger_report(url)
     return claims, skipped, target
 
 
@@ -290,13 +321,13 @@ def fetch_commons_claims(api: str | None = None, *, timeout: float = 20.0) -> tu
             url = base + nxt
         else:
             url = first + "?" + urllib.parse.urlencode({"cursor": nxt})
-    claims, skipped = parse_ledger("\n".join(json.dumps(r) for r in rows))
+    claims, skipped, _excluded = parse_ledger_report("\n".join(json.dumps(r) for r in rows))
     return claims, skipped, first
 
 
 def pull(store, url: str | None = None) -> dict[str, Any]:
     """Fetch the public ledger and ingest under quarantine."""
-    claims, skipped, target = fetch_ledger(url)
+    claims, skipped, excluded, target = fetch_ledger_report(url)
     imported = 0
     existed = 0
     refused = 0
@@ -321,6 +352,8 @@ def pull(store, url: str | None = None) -> dict[str, Any]:
         "refused": refused,
         "skipped": skipped[:20],
         "skipped_n": len(skipped),
+        "excluded": excluded[:20],
+        "excluded_n": len(excluded),
     }
     if any("upgrade claimidx" in s for s in skipped):
         out["hint"] = UPGRADE_HINT
@@ -331,14 +364,21 @@ def pull_skip_lines(result: dict[str, Any]) -> list[str]:
     """Human-visible skip lines for `claimidx pull` / home-pull (stderr)."""
     from .fieldset import UPGRADE_HINT
 
+    lines: list[str] = []
     skipped = list(result.get("skipped") or [])
     n = int(result.get("skipped_n") or len(skipped))
-    if n <= 0:
-        return []
-    noun = "row" if n == 1 else "rows"
-    lines = [f"claimidx: skipped {n} {noun} on pull"]
-    for reason in skipped:
-        lines.append(f"claimidx: skipped: {reason}")
+    if n > 0:
+        noun = "row" if n == 1 else "rows"
+        lines.append(f"claimidx: skipped {n} {noun} on pull")
+        for reason in skipped:
+            lines.append(f"claimidx: skipped: {reason}")
+    excluded = list(result.get("excluded") or [])
+    en = int(result.get("excluded_n") or len(excluded))
+    if en > 0:
+        noun = "row" if en == 1 else "rows"
+        lines.append(f"claimidx: excluded {en} historic {noun} on pull")
+        for reason in excluded:
+            lines.append(f"claimidx: excluded: {reason}")
     hint = str(result.get("hint") or "")
     if hint or any("upgrade claimidx" in str(s) for s in skipped):
         lines.append(f"claimidx: {hint or UPGRADE_HINT}")

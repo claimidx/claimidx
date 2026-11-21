@@ -11,7 +11,7 @@ from claimidx.distinct import compare, split_argv
 from claimidx.fieldset import UPGRADE_HINT, fieldset_rejection
 from claimidx.fingerprint import classify, fingerprint, fingerprint_accepted, same_fingerprint
 from claimidx.gate import graduation_gate, status_only_eval
-from claimidx.home import parse_ledger, pull, pull_skip_lines
+from claimidx.home import parse_ledger, parse_ledger_report, pull, pull_skip_lines
 from claimidx.models import Claim, EvalSpec, Fix
 from claimidx.public import ingest_warnings
 from claimidx.sandbox import ReplayResult, replay_records_hold
@@ -258,10 +258,10 @@ def test_pull_and_cli_surface_upgrade_skip(tmp_path: Path, monkeypatch, capsys):
     raw["v"] = 99
 
     def fake_fetch(url=None):
-        claims, skipped = parse_ledger(json.dumps(raw) + "\n")
-        return claims, skipped, "https://example.invalid/claims.jsonl"
+        claims, skipped, excluded = parse_ledger_report(json.dumps(raw) + "\n")
+        return claims, skipped, excluded, "https://example.invalid/claims.jsonl"
 
-    monkeypatch.setattr("claimidx.home.fetch_ledger", fake_fetch)
+    monkeypatch.setattr("claimidx.home.fetch_ledger_report", fake_fetch)
     store = Store(tmp_path / "ix.sqlite")
     result = pull(store)
     assert result["skipped_n"] == 1
@@ -288,10 +288,10 @@ def test_mcp_home_pull_returns_upgrade_skip(tmp_path: Path, monkeypatch):
     raw["v"] = 99
 
     def fake_fetch(url=None):
-        claims, skipped = parse_ledger(json.dumps(raw) + "\n")
-        return claims, skipped, "https://example.invalid/claims.jsonl"
+        claims, skipped, excluded = parse_ledger_report(json.dumps(raw) + "\n")
+        return claims, skipped, excluded, "https://example.invalid/claims.jsonl"
 
-    monkeypatch.setattr("claimidx.home.fetch_ledger", fake_fetch)
+    monkeypatch.setattr("claimidx.home.fetch_ledger_report", fake_fetch)
     store = Store(tmp_path / "ix.sqlite")
     listed = handle({"id": 1, "method": "tools/list"}, store)
     tools = {t["name"]: t for t in listed["result"]["tools"]}
