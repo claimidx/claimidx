@@ -47,6 +47,24 @@ _CLASS_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("perm", re.compile(r"eacces|permission denied", re.I)),
     ("ci_flake", re.compile(r"eagain|etimedout|flaky|not found in path", re.I)),
     ("type_error", re.compile(r"typeerror|type error", re.I)),
+    # After existing rules so current classifications (including http_status_lie) do not move.
+    (
+        "write_unverified",
+        re.compile(
+            r"\b20[12]\b.*(?:already|duplicate|exists)|accepted but"
+            r"|\b(?:http(?:\s+status)?|status(?:\s+code)?)\s*20[12]\b"
+            r"|created but (?:unverified|not (?:found|visible|present))",
+            re.I,
+        ),
+    ),
+    (
+        "stale_identical",
+        re.compile(
+            r"same result for different query|cached response|stale identical"
+            r"|identical output for (?:a )?different",
+            re.I,
+        ),
+    ),
 ]
 
 

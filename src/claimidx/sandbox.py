@@ -348,6 +348,10 @@ def replay_records_hold(
             captured = ""
         used = (result.interpreter or "").strip()
         if captured and not _real_exe(captured):
+            from .env import is_uv_managed_interpreter
+
+            if is_uv_managed_interpreter(captured):
+                return False, f"hold env mismatch: env-deleted ({captured})"
             return False, f"hold env mismatch: captured interpreter is gone ({captured})"
         if captured:
             same = bool(used) and same_interpreter(captured, used)

@@ -191,7 +191,7 @@ def test_pull_rejects_short_fieldset_rows_with_reason():
     future = dict(raw)
     future["v"] = 99
     _, skipped_future = parse_ledger(json.dumps(future) + "\n")
-    assert skipped_future and "unknown field-set version 99" in skipped_future[0]
+    assert skipped_future and "unknown field-set version v99, upgrade claimidx" in skipped_future[0]
 
 
 def test_receipt_fieldset_rejects_short_observation(tmp_path: Path):
