@@ -128,3 +128,4 @@ def test_run_stream_timeout_kills_a_hang_and_is_not_a_tree_failure(tmp_path, cap
     assert rc == 124
     assert "CLAIMIDX verdict" not in captured.err
     assert last_failure() is None
+    assert "unkeyable" in captured.err

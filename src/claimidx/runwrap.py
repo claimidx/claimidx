@@ -2,13 +2,15 @@
 
 Claude Code gets four hook events. Everything else — Codex, Cursor, Gemini,
 a plain shell, a CI job — gets this one wrapper: it runs the command exactly
-as given (no shell), streams its output through untouched, and then does
+as given (no shell), streams its output (redacted by default), and then does
 what the hooks do: on a non-zero exit, ask the index and remember the
 failure; on a zero exit that clears a remembered failure for the same
 command, say "claim it" with the draft. Exit status is the command's own.
 
 The advice goes to stderr after the command's own output, prefixed
 `CLAIMIDX`, so an agent reading the tool result sees it last.
+Credential URLs and secret-shaped tokens in the passthrough are redacted
+unless `--raw` or `CLAIMIDX_RUN_RAW` is set.
 """
 
 from __future__ import annotations
@@ -28,7 +30,7 @@ def _tail(text: str, n: int = 4000) -> str:
     return text[-n:] if len(text) > n else text
 
 
-def run_command(argv: list[str], *, cwd: str | None = None, timeout: float | None = None, stream: bool = True) -> tuple[int, str]:
+def run_command(argv: list[str], *, cwd: str | None = None, timeout: float | None = None, stream: bool = True, raw: bool = False) -> tuple[int, str]:
     """Run argv, passing stdout/stderr through live unless stream=False (MCP must not write to stdio)."""
     if not argv:
         return 2, ""
@@ -62,8 +64,11 @@ def run_command(argv: list[str], *, cwd: str | None = None, timeout: float | Non
             # the pipe open. Pump in a thread and time the process itself.
             def _pump() -> None:
                 assert proc.stdout is not None
+                from .security import redact
+
                 for line in proc.stdout:
-                    sys.stdout.write(line)
+                    shown = line if raw else redact(line)
+                    sys.stdout.write(shown)
                     sys.stdout.flush()
                     chunks.append(line)
 
@@ -96,9 +101,24 @@ def run_command(argv: list[str], *, cwd: str | None = None, timeout: float | Non
     return rc, _tail("".join(chunks))
 
 
+def _emit_loop(out: dict[str, Any], entry: dict[str, Any] | None, *, emit: bool) -> None:
+    from .loopkey import format_try_line, public_loop
+
+    if not entry:
+        return
+    view = public_loop(entry)
+    if view:
+        out["loop"] = view
+    line = format_try_line(entry)
+    if emit and line:
+        sys.stderr.write(line + "\n")
+        out["loop_line"] = line
+
+
 def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None = None, k: int = 5, emit: bool = True) -> dict[str, Any]:
     """The hook logic, given a finished command. Returns what was printed."""
     from .fingerprint import classify, fingerprint
+    from .loopkey import apply_failure, apply_success, is_unkeyable_timeout, public_loop
     from .match import verdict_for
     from .query import retrieve
     from .security import redact, redact_credentials
@@ -107,13 +127,19 @@ def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None =
     output = redact(output or "")
     root = cwd or os.getcwd()
     out: dict[str, Any] = {"rc": rc, "command": cmd}
-    if rc == 124 or (rc == 127 and not output):
-        # Wrapper timeout, or run_command's spawn failure (127 with nothing captured): not a tree error to ask or
-        # remember. A child that exits 127 itself (`sh -c` on a missing tool) has output, and that is the tree's.
-        return out
     if rc != 0:
         err = _first_err_line(output) or ""
+        # Timeouts and empty spawn-127 are recorded as unkeyable and are not last_failure.
+        # Short output is keyable via command + rc + last line.
+        if rc == 124 or (rc == 127 and not output) or is_unkeyable_timeout(rc, output, err):
+            entry = apply_failure(store, command=cmd, rc=rc, output=output, cwd=root)
+            _emit_loop(out, entry, emit=emit)
+            return out
         if not err:
+            # Short or empty output is still keyable via command + rc + last line.
+            entry = apply_failure(store, command=cmd, rc=rc, output=output, cwd=root)
+            _emit_loop(out, entry, emit=emit)
+            remember_failure(err or "", command=cmd, cwd=root, eco="", rt="", event="run", fp=str((entry or {}).get("fp") or ""))
             return out
         guess = infer_env(root, err=err)
         dep = deps_from_traceback(output, root, guess["eco"])
@@ -132,6 +158,8 @@ def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None =
         interp = interpreter_from_command(cmd, argv=argv, executed=executed, cwd=root)
         extra = {"interpreter": interp} if interp else None
         remember_failure(err, command=cmd, cwd=root, eco=guess["eco"], rt=guess["rt"], event="run", fp=fp, extra=extra)
+        entry = apply_failure(store, command=cmd, rc=rc, output=output, cwd=root, fp=fp)
+        _emit_loop(out, entry, emit=emit)
         line = (
             f"CLAIMIDX verdict {v['action']} {v['id']} — {v['why']}; next: {v['next']}"
             if v.get("id")
@@ -145,6 +173,12 @@ def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None =
         out["advice"] = line
         out["verdict"] = v
         return out
+    closed = apply_success(store, command=cmd, cwd=root)
+    if closed:
+        view = public_loop(closed)
+        if view:
+            out["loop"] = view
+            out["loop_closed"] = True
     rec = last_failure()
     if not rec or rec.get("nudged") or " ".join(str(rec.get("command") or "").split()) != " ".join(cmd.split()):
         return out

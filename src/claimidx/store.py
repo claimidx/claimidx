@@ -108,6 +108,25 @@ class Store:
                 )
                 """
             )
+            con.execute(
+                """
+                CREATE TABLE IF NOT EXISTS loop_entries (
+                    key TEXT NOT NULL,
+                    task TEXT NOT NULL,
+                    fp TEXT,
+                    command TEXT,
+                    first_seen TEXT NOT NULL,
+                    last_seen TEXT NOT NULL,
+                    tries INTEGER NOT NULL DEFAULT 0,
+                    state TEXT NOT NULL,
+                    artifact TEXT,
+                    reset_reason TEXT,
+                    history_json TEXT,
+                    PRIMARY KEY (key, task)
+                )
+                """
+            )
+            con.execute("CREATE INDEX IF NOT EXISTS idx_loop_task ON loop_entries(task, last_seen)")
             self._migrate_events_detail(con)
             self._init_v2(con)
 
@@ -1178,8 +1197,10 @@ class Store:
         asks_focus = asks_by_fp.get(focus, 0) if focus else 0
         # Soft gate: same fp failed twice this session — ask before a third try.
         must_ask = bool(focus and fails_focus >= 2) or (not focus and any(v >= 2 for v in fails_by_fp.values()))
+        from .loopkey import loop_task, public_loop
         from .session import version_fields
 
+        loop = public_loop(self.loop_latest(loop_task()) or self.loop_latest_any())
         return {
             "session_id": sid,
             "asks": asks,
@@ -1192,8 +1213,205 @@ class Store:
             "focus_fp": focus or None,
             "asks_focus": asks_focus,
             "fails_focus": fails_focus,
+            "loop": loop,
             **version_fields(),
         }
+
+    def _loop_row(self, row: sqlite3.Row) -> dict:
+        """Map a loop_entries row to a dict, including a computed `stop` flag."""
+        try:
+            history = json.loads(row["history_json"] or "[]")
+        except json.JSONDecodeError:
+            history = []
+        if not isinstance(history, list):
+            history = []
+        from .loopkey import UNKEYABLE, loop_limit
+
+        tries = int(row["tries"] or 0)
+        state = str(row["state"] or "")
+        key = str(row["key"] or "")
+        limit = loop_limit()
+        stop = bool(state == "open" and key != UNKEYABLE and limit and tries >= max(1, limit - 1))
+        return {
+            "key": key,
+            "task": str(row["task"] or ""),
+            "fp": str(row["fp"] or ""),
+            "command": str(row["command"] or ""),
+            "first_seen": str(row["first_seen"] or ""),
+            "last_seen": str(row["last_seen"] or ""),
+            "tries": tries,
+            "state": state,
+            "artifact": str(row["artifact"] or ""),
+            "reset_reason": str(row["reset_reason"] or ""),
+            "history": history,
+            "stop": stop,
+        }
+
+    def loop_get(self, key: str, task: str) -> dict | None:
+        """Return one loop entry, or None."""
+        key = (key or "").strip()
+        task = (task or "").strip()
+        if not key or not task:
+            return None
+        with self._conn() as con:
+            row = con.execute("SELECT * FROM loop_entries WHERE key=? AND task=?", (key, task)).fetchone()
+        return self._loop_row(row) if row else None
+
+    def loop_latest(self, task: str) -> dict | None:
+        """Most recently updated loop entry for this task, any state."""
+        task = (task or "").strip()
+        if not task:
+            return None
+        with self._conn() as con:
+            row = con.execute(
+                "SELECT * FROM loop_entries WHERE task=? ORDER BY last_seen DESC, rowid DESC LIMIT 1",
+                (task,),
+            ).fetchone()
+        return self._loop_row(row) if row else None
+
+    def loop_latest_any(self) -> dict | None:
+        """Most recently updated loop entry in this local store, any task."""
+        with self._conn() as con:
+            row = con.execute("SELECT * FROM loop_entries ORDER BY last_seen DESC, rowid DESC LIMIT 1").fetchone()
+        return self._loop_row(row) if row else None
+
+    def loop_get_for_command(self, command: str, task: str) -> dict | None:
+        """Latest non-unkeyable entry for this command and task."""
+        from .loopkey import UNKEYABLE
+
+        cmd = " ".join((command or "").split())
+        task = (task or "").strip()
+        if not cmd or not task:
+            return None
+        with self._conn() as con:
+            row = con.execute(
+                """
+                SELECT * FROM loop_entries
+                WHERE task=? AND command=? AND state != ?
+                ORDER BY last_seen DESC, rowid DESC LIMIT 1
+                """,
+                (task, cmd, UNKEYABLE),
+            ).fetchone()
+        return self._loop_row(row) if row else None
+
+    def loop_bump(
+        self,
+        key: str,
+        *,
+        task: str,
+        fp: str = "",
+        command: str = "",
+        artifact: str = "",
+        unkeyable: bool = False,
+        reason: str = "",
+    ) -> dict:
+        """Increment or open a loop entry. Resets only on a changed fingerprint or artifact."""
+        from .loopkey import UNKEYABLE
+        from .session import utc_ts
+
+        key = (key or "").strip() or (UNKEYABLE if unkeyable else "")
+        task = (task or "").strip()
+        if not key or not task:
+            raise ValueError("loop_bump requires key and task")
+        cmd = " ".join((command or "").split())
+        fp = (fp or "")[:80]
+        artifact = (artifact or "")[:128]
+        reason = (reason or "")[:80]
+        now = utc_ts()
+        existing = self.loop_get(key, task)
+        history: list = list((existing or {}).get("history") or [])
+        event = "bump"
+        reset_reason = ""
+        if unkeyable or key == UNKEYABLE:
+            event = "unkeyable"
+            reset_reason = reason or "timeout"
+            tries = int((existing or {}).get("tries") or 0) + 1
+            state = UNKEYABLE
+            first_seen = str((existing or {}).get("first_seen") or now)
+        elif existing:
+            state = "open"
+            first_seen = str(existing.get("first_seen") or now)
+            old_fp = str(existing.get("fp") or "")
+            old_art = str(existing.get("artifact") or "")
+            if existing.get("state") == "closed":
+                event = "reopen"
+                tries = int(existing.get("tries") or 0) + 1
+                reset_reason = str(existing.get("reset_reason") or "")
+            elif fp and old_fp and fp != old_fp:
+                event = "reset"
+                reset_reason = "fingerprint-changed"
+                tries = 1
+            elif artifact and old_art and artifact != old_art:
+                event = "reset"
+                reset_reason = "artifact-changed"
+                tries = 1
+            else:
+                tries = int(existing.get("tries") or 0) + 1
+                reset_reason = str(existing.get("reset_reason") or "")
+        else:
+            event = "open"
+            tries = 1
+            state = "open"
+            first_seen = now
+        history.append({"event": event, "ts": now, "tries": tries, "reason": reset_reason or reason, "fp": fp, "artifact": artifact})
+        history = history[-40:]
+        with self._conn() as con:
+            con.execute(
+                """
+                INSERT INTO loop_entries(key, task, fp, command, first_seen, last_seen, tries, state, artifact, reset_reason, history_json)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(key, task) DO UPDATE SET
+                    fp=excluded.fp,
+                    command=excluded.command,
+                    last_seen=excluded.last_seen,
+                    tries=excluded.tries,
+                    state=excluded.state,
+                    artifact=excluded.artifact,
+                    reset_reason=excluded.reset_reason,
+                    history_json=excluded.history_json
+                """,
+                (
+                    key,
+                    task,
+                    fp or None,
+                    cmd or None,
+                    first_seen,
+                    now,
+                    tries,
+                    state,
+                    artifact or None,
+                    reset_reason or None,
+                    json.dumps(history, ensure_ascii=False),
+                ),
+            )
+        row = self.loop_get(key, task)
+        assert row is not None
+        row["event"] = event
+        return row
+
+    def loop_close(self, key: str, *, task: str, artifact: str = "", reason: str = "") -> dict | None:
+        """Mark an entry closed and record the artifact / reason. Missing keys are a no-op."""
+        from .session import utc_ts
+
+        existing = self.loop_get(key, task)
+        if not existing:
+            return None
+        now = utc_ts()
+        art = (artifact or existing.get("artifact") or "")[:128]
+        reason = (reason or "artifact-changed")[:80]
+        history = list(existing.get("history") or [])
+        history.append({"event": "close", "ts": now, "tries": existing["tries"], "reason": reason, "artifact": art})
+        history = history[-40:]
+        with self._conn() as con:
+            con.execute(
+                """
+                UPDATE loop_entries
+                SET state='closed', last_seen=?, artifact=?, reset_reason=?, history_json=?
+                WHERE key=? AND task=?
+                """,
+                (now, art or None, reason, json.dumps(history, ensure_ascii=False), key, task),
+            )
+        return self.loop_get(key, task)
 
     def log(self, kind: str, actor: str, claim_id: str = "", detail: dict | None = None) -> None:
         self._event(claim_id, kind, actor, detail)

@@ -453,6 +453,36 @@ def near_tie(a: float, b: float) -> bool:
     return round(a, 3) == round(b, 3) or abs(a - b) <= 0.01
 
 
+def _attach_loop(store, out: dict, raw: str, *, fp: str = "", err: str = "") -> dict:
+    """Add loop / stop fields to a hook sensor payload. Fail-open."""
+    try:
+        from .loopkey import apply_failure, format_stop_line, public_loop
+
+        ctx = extract_hook_context(raw or "")
+        hook_rc = extract_hook_exit(raw or "")
+        entry = apply_failure(
+            store,
+            command=ctx.get("command") or "",
+            rc=1 if hook_rc is None else hook_rc,
+            output=ctx.get("body") or err,
+            cwd=ctx.get("cwd") or None,
+            fp=fp,
+        )
+        if not entry:
+            return out
+        view = public_loop(entry)
+        if view:
+            out["loop"] = view
+        if entry.get("stop"):
+            out["stop"] = True
+            note = format_stop_line(entry)
+            existing = str(out.get("note") or "")
+            out["note"] = (existing + "\n" + note).strip() if existing else note
+    except Exception:
+        return out
+    return out
+
+
 def sensor(
     store,
     raw: str,
@@ -512,21 +542,27 @@ def sensor(
                 cwd=extract_hook_context(raw or "").get("cwd") or None,
             )
         )
-        return miss
+        return _attach_loop(store, miss, raw or "", fp=fp, err=err)
     chosen = hits
     if event:
         chosen = hits[:2] if len(hits) > 1 and near_tie(hits[0][1], hits[1][1]) else hits[:1]
-    return {
-        "verdict": verdict_for(q, hits),
-        "hit": True,
-        "apply_fix": False,
-        "event": event,
-        "err": normalize_error(err),
-        "fp": fp,
-        "cls": cls,
-        "claims": [hit_compact(q, c, s) for c, s in chosen],
-        "note": note,
-    }
+    return _attach_loop(
+        store,
+        {
+            "verdict": verdict_for(q, hits),
+            "hit": True,
+            "apply_fix": False,
+            "event": event,
+            "err": normalize_error(err),
+            "fp": fp,
+            "cls": cls,
+            "claims": [hit_compact(q, c, s) for c, s in chosen],
+            "note": note,
+        },
+        raw or "",
+        fp=fp,
+        err=err,
+    )
 
 
 def _same_command(a: str, b: str) -> bool:
@@ -547,6 +583,12 @@ def success_nudge(raw: str, store) -> str | None:
     cmd = ctx.get("command", "")
     if not _same_command(cmd, str(rec.get("command") or "")):
         return None
+    try:
+        from .loopkey import apply_success
+
+        apply_success(store, command=cmd, cwd=ctx.get("cwd") or rec.get("cwd") or None)
+    except Exception:
+        pass
     body = ctx.get("body", "")
     if _first_err_line(body) and _ERR_LINE.search(body):
         return None  # still failing
