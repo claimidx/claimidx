@@ -137,9 +137,11 @@ def _ask_hits(store: Store, ns: argparse.Namespace, err: str):
 
 
 def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidates: list | None = None, cwd: str | None = None) -> int:
+    from .fingerprint import normalization_risk
     from .impact import path_b_cta
 
     path_b = path_b_cta(store, resolve_owner(None)) if store is not None else None
+    risks = normalization_risk(q.get("err") or "")
     if not hits:
         out: dict[str, Any] = {
             "verdict": verdict_for(q, []),
@@ -149,6 +151,7 @@ def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidate
             "err": normalize_error(q["err"]),
             "n": 0,
             "claims": [],
+            "normalization_risk": risks,
         }
         if path_b is not None:
             out["path_b"] = path_b
@@ -173,12 +176,15 @@ def _print_ask(q: dict, hits, fmt: str, *, store: Store | None = None, candidate
             "fp": q["fp"],
             "n": len(hits),
             "claims": [hit_row(q, c, s) for c, s in hits],
+            "normalization_risk": risks,
         }
         if path_b is not None:
             body["path_b"] = path_b
         print(json.dumps(body, default=str))
     else:
         print(f"# verdict {verdict['action']} {verdict['id']} - {verdict['why']}; next: {verdict['next']}")
+        if risks:
+            print("# normalization_risk " + ",".join(risks))
         if path_b is not None:
             line = _path_b_line(path_b)
             if line:
@@ -708,8 +714,13 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
             )
             # The eval passed but nothing was recorded: `held` (top level and nested) means a recorded hold.
             replay_info = _refused_replay(replay_info)
+            body = {"held": False, "eval_passed": True, "replay": replay_info, "recorded": False, "lights": lights, **refusal}
+            from .claim import attach_weak_pass
+            from .team import resolve_owner as _ro
+
+            attach_weak_pass(store, ns.id, body, actor=_ro(ns.own), result=result)
+            lights = body.get("lights") or lights
             if ns.fmt == "json":
-                body = {"held": False, "eval_passed": True, "replay": replay_info, "recorded": False, "lights": lights, **refusal}
                 print(json.dumps(body, default=str))
             else:
                 print(json.dumps(replay_info), file=sys.stderr)
@@ -1302,7 +1313,7 @@ def cmd_verify(ns: argparse.Namespace) -> int:
     if unenforced:
         print(f"claimidx: ERROR: {UNENFORCED_MESSAGE} (claims: {', '.join(str(i) for i in unenforced[:8])})", file=sys.stderr)
         return 2
-    if report["counts"].get("fail"):
+    if report["counts"].get("fail") or report["counts"].get("fail-precondition"):
         return 2
     return 0
 

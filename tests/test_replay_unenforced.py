@@ -152,7 +152,7 @@ def test_batch_verify_unenforced_exits_nonzero_and_mints_no_nr(tmp_path: Path, c
     assert rc != 0, cap.out
     report = json.loads(cap.out)
     row = next(r for r in report["results"] if r["id"] == cid)
-    assert row["action"] == "skip" and row["reason"].startswith("replay-net-unenforced")
+    assert row["action"] == "fail-precondition" and row["reason"].startswith("replay-net-unenforced")
     assert "OFFLINE REPLAY IS NOT ENFORCED" in cap.err
     c = Store(db).get(cid)
     assert c.nr == 0 and c.nc == 0

@@ -318,7 +318,7 @@ def test_decide_skips_builtin_and_tree(tmp_path: Path):
     g.eco = "go"
     assert decide(t, scratch=scratch)["action"] == "skip"
     d = decide(g, scratch=scratch)
-    assert d["action"] == "skip"
+    assert d["action"] == "fail-precondition"
     assert "precondition" in (d.get("reason") or "")
 
 
@@ -327,7 +327,7 @@ def test_decide_skips_pytest_without_tree(tmp_path: Path):
     scratch.mkdir()
     p = _claim("TypeError: x", "python3 -m pytest -q", fix_k="patch", fix_b="assert x")
     d = decide(p, scratch=scratch)
-    assert d["action"] == "skip"
+    assert d["action"] == "fail-precondition"
     assert "precondition" in (d.get("reason") or "") or "missing" in (d.get("reason") or "")
 
 
@@ -370,7 +370,7 @@ def test_decide_skips_local_pip_without_pyproject(tmp_path: Path):
         fix_b="[tool.setuptools.packages.find]",
     )
     d = decide(c, scratch=scratch)
-    assert d["action"] == "skip"
+    assert d["action"] == "fail-precondition"
     assert "precondition" in (d.get("reason") or "") or "missing" in (d.get("reason") or "")
 
 

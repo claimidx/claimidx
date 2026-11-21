@@ -22,6 +22,7 @@ from typing import Any
 
 from .env import infer_env, installed_version, last_failure, tree_eval
 from .fingerprint import classify, fingerprint, normalize_error
+from .models import utcnow
 from .public import eval_is_proof, ingest_warnings, refine_eval
 from .target import claim_target, suggest_eval
 
@@ -582,6 +583,63 @@ def claim_unenforced_warning(claim_id: str) -> str:
     )
 
 
+def rerun_horizon(now=None):
+    """now + CLAIMIDX_RERUN_DAYS (default 7, must be a positive int)."""
+    import os
+    from datetime import timedelta
+
+    days = 7
+    raw = (os.environ.get("CLAIMIDX_RERUN_DAYS") or "7").strip()
+    try:
+        n = int(raw)
+        if n > 0:
+            days = n
+    except ValueError:
+        pass
+    return (now or utcnow()) + timedelta(days=days)
+
+
+def record_weak_pass(store, claim_id: str, *, actor: str = "", reason: str = "", result=None, now=None):
+    """Log a weak-pass event and set Claim.rb. Never touches nr/nc."""
+    instant = now or utcnow()
+    rb = rerun_horizon(instant)
+    detail = {"rerun_by": rb.isoformat(), "reason": reason or ""}
+    if result is not None:
+        try:
+            from .gate import condition_strength, required_conditions
+
+            claim = store.get(claim_id)
+            detail["cond"] = condition_strength(result, required=required_conditions(claim))
+        except Exception:
+            pass
+    store.log("weak-pass", actor or "", claim_id, detail=detail)
+    claim = store.get(claim_id)
+    if claim is not None:
+        claim.rb = rb
+        store.put(claim)
+    return rb
+
+
+def attach_weak_pass(store, claim_id: str, out: dict, *, actor: str = "", result=None, now=None) -> dict:
+    """If this confirm result is a weak pass (eval passed, nothing recorded), stamp rb."""
+    if out.get("recorded"):
+        return out
+    ev = out.get("eval_passed")
+    if ev is None:
+        ev = bool((out.get("replay") or {}).get("held"))
+    if not ev:
+        return out
+    rb = record_weak_pass(store, claim_id, actor=actor, reason=str(out.get("reason") or ""), result=result, now=now)
+    out["rerun_by"] = rb.isoformat()
+    lights = out.get("lights")
+    if isinstance(lights, dict) and lights.get("recovery") == "unrecorded":
+        from .match import _past_rerun_by
+
+        if _past_rerun_by(rb, now):
+            lights["recovery"] = "unchecked"
+    return out
+
+
 def _replay_now(
     claim_id: str,
     *,
@@ -642,8 +700,9 @@ def _replay_now(
         # (held means a recorded hold); `eval_passed` keeps what the eval itself did.
         from .sandbox import refused_replay_info
 
-        return {"held": False, "recorded": False, "eval_passed": True, **decision.refusal(), "replay": refused_replay_info(info)}
-    detail = {
+        weak = {"held": False, "recorded": False, "eval_passed": True, **decision.refusal(), "replay": refused_replay_info(info)}
+        return attach_weak_pass(store, claim_id, weak, actor=resolve_owner(own), result=result)
+    detail: dict[str, Any] = {
         "ms": int(result.ms or 0),
         "held": True,
         "env": {"rt": result.env} if result.env else {},
@@ -651,6 +710,16 @@ def _replay_now(
         "net": result.net or "",
         "net_how": result.net_how or "",
     }
+    try:
+        from .gate import condition_strength, flatten_cond, required_conditions
+
+        cond = condition_strength(result, required=required_conditions(c))
+        detail["cond"] = cond
+        env = detail["env"] if isinstance(detail.get("env"), dict) else {}
+        env.update(flatten_cond(cond))
+        detail["env"] = env
+    except Exception:
+        pass
     if detail_extra:
         detail.update(detail_extra)
     confirmed = store.confirm(claim_id, resolve_owner(own), replayed=True, detail=detail)
@@ -704,4 +773,15 @@ def render_draft(draft: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-__all__ = ["draft_claim", "getting_started", "GETTING_STARTED_HINT", "QUICKSTART_LOOP", "publish_draft", "render_draft", "infer_fix_kind"]
+__all__ = [
+    "draft_claim",
+    "getting_started",
+    "GETTING_STARTED_HINT",
+    "QUICKSTART_LOOP",
+    "publish_draft",
+    "render_draft",
+    "infer_fix_kind",
+    "utcnow",
+    "record_weak_pass",
+    "attach_weak_pass",
+]

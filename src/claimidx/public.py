@@ -425,6 +425,20 @@ def projection_preview(claim: Claim) -> dict:
         transformed.append("eval.cmd")
     if original["err"] != public["err"]:
         transformed.append("err")
+    context: dict = {}
+    for key in removed:
+        context[key] = original.get(key)
+    for key in transformed:
+        if key == "fix.b":
+            context["fix.b"] = (original.get("fix") or {}).get("b")
+        elif key == "eval.cmd":
+            context["eval.cmd"] = (original.get("eval") or {}).get("cmd")
+        else:
+            context[key] = original.get(key)
+    from .security import redact_obj
+
+    public = redact_obj(public)
+    context = redact_obj(context)
     encoded = json.dumps(public, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return {
         "safe": True,
@@ -434,4 +448,5 @@ def projection_preview(claim: Claim) -> dict:
         "transformed": sorted(set(transformed)),
         "public_bytes": len(encoded.encode("utf-8")),
         "projection": public,
+        "context": context,
     }

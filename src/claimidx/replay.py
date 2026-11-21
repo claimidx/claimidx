@@ -491,18 +491,21 @@ def decide(c: Claim, *, scratch: Path, trust: str = "local", store: Store | None
     if head in _SKIP_HEADS_WITHOUT_TREE:
         result = replay(cmd, c.eval.expect, cwd=str(scratch))
         if (result.reason or "").startswith("eval-precondition"):
-            return {"action": "skip", "reason": result.reason, "id": c.id, "replay": result.as_dict()}
+            return {"action": "fail-precondition", "reason": result.reason, "id": c.id, "replay": result.as_dict()}
     pin = _apply_pin_and_replay(c, scratch)
     if pin:
         return pin
     result = replay(cmd, c.eval.expect, cwd=str(scratch))
     info = result.as_dict()
     if not result.ran:
+        if (result.reason or "").startswith("eval-precondition"):
+            return {"action": "fail-precondition", "reason": result.reason, "id": c.id, "replay": info}
         return {"action": "skip", "reason": result.reason, "id": c.id, "replay": info}
     if result.held:
         decision = graduation_gate(c, result, cwd=str(scratch), store=store)
         if not decision.mint_nr:
-            return {"action": "skip", **decision.refusal(), "id": c.id, "replay": refused_replay_info(info)}
+            action = "fail-precondition" if decision.unenforced else "skip"
+            return {"action": action, **decision.refusal(), "id": c.id, "replay": refused_replay_info(info)}
         if decision.warns:
             return {"action": "confirm", "reason": "held", "id": c.id, "replay": info, "warn": list(decision.warns)}
         return {"action": "confirm", "reason": "held", "id": c.id, "replay": info}
@@ -511,7 +514,7 @@ def decide(c: Claim, *, scratch: Path, trust: str = "local", store: Store | None
 
     unenforced = unenforced_miss_refusal(result)
     if unenforced:
-        return {"action": "skip", **unenforced, "id": c.id, "replay": info}
+        return {"action": "fail-precondition", **unenforced, "id": c.id, "replay": info}
     blocked = offline_refusal(result)
     if blocked:
         return {"action": "skip", **blocked, "id": c.id, "replay": info}

@@ -338,6 +338,8 @@ def ask_home(query: dict, k: int = 5, url: str | None = None, db: str | None = N
         cid,
         detail={"hit": bool(hits), "n": len(hits), "via": "home-ask", "pool": len(claims)},
     )
+    from .fingerprint import normalization_risk
+
     return {
         "url": target,
         "hit": bool(hits),
@@ -346,6 +348,7 @@ def ask_home(query: dict, k: int = 5, url: str | None = None, db: str | None = N
         "skipped_n": len(skipped),
         "claims": [{**hit_compact(query, c, s), "own": c.own, "src": "home"} for c, s in hits],
         "path_b": path_b_cta(store, actor),
+        "normalization_risk": normalization_risk((query.get("err") if isinstance(query, dict) else getattr(query, "err", None)) or ""),
     }
 
 
@@ -464,8 +467,24 @@ def format_commons_review(claim: Claim, replay: dict | None = None) -> str:
             + ". eco=other or empty is always weak, even with a held replay (nr). "
             "Share only if you mean to; a countable claim needs a held replay (nr>=1) and a real ecosystem.\n"
         )
+    from .public import PublicSkip, projection_preview
     from .security import redact
 
+    payload_lines: list[str] = []
+    try:
+        preview = projection_preview(claim)
+    except (PublicSkip, Exception):
+        preview = None
+    if preview:
+        payload_lines.append("#   full redacted public payload (this is what leaves if you opt in):")
+        blob = json.dumps(preview.get("projection") or {}, indent=2, ensure_ascii=False, default=str)
+        payload_lines.extend("#   " + line for line in blob.splitlines())
+        ctx = preview.get("context") or {}
+        if ctx:
+            payload_lines.append("#   context stripped from the share (redacted; does not leave the machine):")
+            cblob = json.dumps(ctx, indent=2, ensure_ascii=False, default=str)
+            payload_lines.extend("#   " + line for line in cblob.splitlines())
+    extra = ("\n" + "\n".join(payload_lines) + "\n") if payload_lines else ""
     return redact(
         f"# commons review — destination=commons\n"
         f"{warn}"
@@ -473,7 +492,10 @@ def format_commons_review(claim: Claim, replay: dict | None = None) -> str:
         f"#   err={r['err'] or '-'}\n"
         f"#   dep={deps}\n"
         f"#   fix={r['fix_k'] or '-'}: {r['fix_b'] or '-'}\n"
-        f"# confirm with --share-yes / share --yes (agents) or interactive y; decline keeps local/private (not countable)"
+        f"#   eval={getattr(claim.eval, 'cmd', '') or '-'}\n"
+        f"{extra}"
+        f"# confirm with --share-yes / share --yes (agents) or interactive y; decline keeps local/private (not countable). "
+        f"The human preview is the real safeguard for hostnames, ticket text, and names that secret rules miss."
     )
 
 
@@ -754,6 +776,15 @@ def share_claim(
                 out["status"] = "needs_confirm"
                 out["hint"] = skipped["hint"]
             return out
+        try:
+            from .claim import record_weak_pass
+            from .impact import weak_share_reasons
+
+            if weak_share_reasons(claim) and not getattr(claim, "rb", None):
+                record_weak_pass(store, claim.id, actor=claim.own or "", reason="weak-share")
+                claim = store.get(claim.id) or claim
+        except Exception:
+            pass
         commons = push_commons(store, claim, force=force, timeout=timeout, channel=channel, source=source)
         out["commons"] = commons
         if commons.get("status") in {"commons", "outbox"} and out["status"] in {"already", "needs_confirm"}:

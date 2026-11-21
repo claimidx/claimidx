@@ -177,6 +177,9 @@ def ask(
     hits, candidates = retrieve(store, q, k=k, actor=actor)
     session = store.session_summary(fp=q["fp"])
     path_b = path_b_cta(store, actor)
+    from .fingerprint import normalization_risk
+
+    risks = normalization_risk(err)
     if not hits:
         miss = {
             "verdict": verdict_for(q, []),
@@ -188,6 +191,7 @@ def ask(
             "claims": [],
             "session": session,
             "path_b": path_b,
+            "normalization_risk": risks,
         }
         miss.update(miss_enrichment(store, q, candidates, k=k, cwd=cwd))
         return miss
@@ -201,6 +205,7 @@ def ask(
         "claims": [hit_row(q, c, s) for c, s in hits],
         "session": session,
         "path_b": path_b,
+        "normalization_risk": risks,
     }
 
 

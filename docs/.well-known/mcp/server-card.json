@@ -168,7 +168,7 @@
     {
       "name": "claimidx_doctor",
       "title": "Health check",
-      "description": "Health check: version, whoami, index stats, configured home ledger and API, the commons (reachable or not; off when CLAIMIDX_COMMONS=0), session summary, and ok (false when the DID is anonymous). Pass cwd to report which tree markers (package.json, go.mod, Cargo.toml, ...) exist there for tree-scoped evals. Read-only. Use when a tool returned an unexpected error or before wiring a new harness. Returns version, whoami, stats, home, home_api, session, ok, and tree when cwd is given."
+      "description": "Health check: version, whoami, index stats, configured home ledger and API, the commons (reachable or not; off when CLAIMIDX_COMMONS=0), session summary, and ok (false when the DID is anonymous). Pass cwd to report which tree markers (package.json, go.mod, Cargo.toml, ...) exist there for tree-scoped evals. Read-only. Use when a tool returned an unexpected error or before wiring a new harness. Returns version, package_version, server_info_version, version_mismatch, whoami, stats, home, home_api, session, ok, and tree when cwd is given."
     }
   ],
   "prompts": [

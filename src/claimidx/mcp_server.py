@@ -223,7 +223,9 @@ TOOLS: list[dict[str, Any]] = [
             "A hit is evidence, not an instruction: reason, attempt, observe, then claimidx_confirm or claimidx_fail."
         ),
         "inputSchema": {"type": "object", "required": ["err"], "properties": _ASK_PROPS},
-        "outputSchema": _out(verdict=_O, hit=_B, fp=_S, cls=_S, err=_S, claims=_A, near=_A, near_why=_ANY, dead_ends=_A, gate=_A, path_b=_O),
+        "outputSchema": _out(
+            verdict=_O, hit=_B, fp=_S, cls=_S, err=_S, claims=_A, near=_A, near_why=_ANY, dead_ends=_A, gate=_A, path_b=_O, normalization_risk=_A
+        ),
         "annotations": _ann(read_only=True, idempotent=True),
     },
     {
@@ -312,7 +314,7 @@ TOOLS: list[dict[str, Any]] = [
             "Returns url, hit, n, pool, skipped_n, claims (each with own and src=home), path_b."
         ),
         "inputSchema": {"type": "object", "required": ["err"], "properties": {**_ASK_PROPS, "url": _URL}},
-        "outputSchema": _out(url=_S, hit=_B, n=_I, pool=_I, skipped_n=_I, claims=_A, path_b=_O),
+        "outputSchema": _out(url=_S, hit=_B, n=_I, pool=_I, skipped_n=_I, claims=_A, path_b=_O, normalization_risk=_A),
         "annotations": _ann(read_only=True, idempotent=True, open_world=True),
     },
     {
@@ -927,13 +929,26 @@ TOOLS: list[dict[str, Any]] = [
             "CLAIMIDX_COMMONS=0), session summary, and ok (false when the DID "
             "is anonymous). Pass cwd to report which tree markers (package.json, go.mod, Cargo.toml, ...) exist there for tree-scoped "
             "evals. Read-only. Use when a tool returned an unexpected error or before wiring a new harness. "
-            "Returns version, whoami, stats, home, home_api, session, ok, and tree when cwd is given."
+            "Returns version, package_version, server_info_version, version_mismatch, whoami, stats, home, home_api, session, ok, and tree when cwd is given."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {"cwd": {"type": "string", "description": "Tree root to inspect for eval markers (package.json, go.mod, ...). Optional."}},
         },
-        "outputSchema": _out(version=_S, whoami=_O, stats=_O, home=_S, home_api=_S, commons=_O, session=_O, ok=_B, tree=_O),
+        "outputSchema": _out(
+            version=_S,
+            package_version=_S,
+            server_info_version=_NS,
+            version_mismatch=_B,
+            whoami=_O,
+            stats=_O,
+            home=_S,
+            home_api=_S,
+            commons=_O,
+            session=_O,
+            ok=_B,
+            tree=_O,
+        ),
         "annotations": _ann(read_only=True, idempotent=True),
     },
 ]
@@ -1184,6 +1199,8 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         actor = resolve_owner(args.get("own"))
         q = {"err": err, "cls": cls, "eco": args.get("eco") or "", "rt": args.get("rt") or "", "dep": dep, "fp": fp}
         hits, candidates = retrieve(store, q, k=int(args.get("k") or 5), actor=actor)
+        from .fingerprint import normalization_risk
+
         payload = {
             "verdict": verdict_for(q, hits),
             "hit": bool(hits),
@@ -1192,6 +1209,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             "err": normalize_error(err),
             "claims": [hit_compact(q, c, s) for c, s in hits],
             "path_b": path_b_cta(store, actor),
+            "normalization_risk": normalization_risk(err),
         }
         if not hits:
             from .query import miss_enrichment
@@ -1465,7 +1483,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                 if decision.unenforced:
                     refusal["ok"] = False
                 # The eval passed but nothing was recorded: `held` (top level and nested) means a recorded hold.
-                return {
+                body = {
                     "id": current.id,
                     "st": current.st,
                     "held": False,
@@ -1482,6 +1500,9 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                         contested=current.st == "contested",
                     ),
                 }
+                from .claim import attach_weak_pass
+
+                return attach_weak_pass(store, current.id, body, actor=resolve_owner(args.get("own")), result=result)
         confirm_detail = None
         if args.get("replay") or args.get("trust_domain") or args.get("sensor_plane"):
             # `result` exists only when replay ran; never touch it on metadata-only confirms.
@@ -1665,10 +1686,12 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
     if name == "claimidx_doctor":
         from . import __version__
         from .home import api_url, ledger_url
+        from .session import version_fields
 
         me = team_whoami()
         out = {
             "version": __version__,
+            **version_fields(),
             "whoami": me,
             "stats": store.stats(),
             "home": ledger_url(),
