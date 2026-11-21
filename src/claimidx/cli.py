@@ -302,6 +302,27 @@ def cmd_hook(ns: argparse.Namespace) -> int:
     if prev and not prev.get("nudged") and prev.get("fp") == q["fp"] and prev.get("err") == err[:280] and int(time.time()) - int(prev.get("ts") or 0) <= 3:
         return 0
     remember_failure(err, command=ctx.get("command", ""), cwd=ctx.get("cwd", ""), eco=q["eco"], rt=q["rt"], event=event or "", fp=q["fp"])
+    loop_entry = None
+    try:
+        from .hook import extract_hook_exit
+        from .loopkey import apply_failure, format_stop_line
+
+        hook_rc = extract_hook_exit(raw)
+        loop_entry = apply_failure(
+            store,
+            command=ctx.get("command", ""),
+            rc=1 if hook_rc is None else hook_rc,
+            output=ctx.get("body") or err,
+            cwd=ctx.get("cwd") or None,
+            fp=q["fp"],
+        )
+    except Exception:
+        loop_entry = None
+    loop_note = ""
+    if loop_entry and loop_entry.get("stop"):
+        from .loopkey import format_stop_line
+
+        loop_note = format_stop_line(loop_entry)
     if not hits:
         from .query import miss_enrichment
 
@@ -330,6 +351,8 @@ def cmd_hook(ns: argparse.Namespace) -> int:
         brief = take_pending_brief()
         if brief:
             miss = brief + "\n" + miss
+        if loop_note:
+            miss = miss + "\n" + loop_note
         if event:
             print(claude_context(event, miss))
         else:
@@ -364,6 +387,8 @@ def cmd_hook(ns: argparse.Namespace) -> int:
         brief = take_pending_brief()
         if brief:
             body = brief + "\n" + body
+        if loop_note:
+            body = body + "\n" + loop_note
         print(claude_context(event, body))
         return 0
     return _print_ask(q, hits, ns.fmt, store=store, candidates=candidates, cwd=ctx.get("cwd") or None)
@@ -958,7 +983,9 @@ def _destination_line(share: dict, claim_id: str) -> str:
 
 def cmd_run(ns: argparse.Namespace) -> int:
     """Run a command; on failure ask and remember, on the fix say `claim --yes`. Exit status is the command's."""
+    from .loopkey import format_stop_line, refuse_entry, run_raw_requested
     from .runwrap import after_run, run_command
+    from .security import redact_credentials
 
     argv = list(ns.argv or [])
     if argv and argv[0] == "--":
@@ -967,9 +994,18 @@ def cmd_run(ns: argparse.Namespace) -> int:
         print("usage: claimidx run -- <command> [args...]", file=sys.stderr)
         return 2
     timeout = getattr(ns, "timeout", None)
-    rc, output = run_command(argv, cwd=ns.cwd, timeout=timeout)
+    raw = bool(getattr(ns, "raw", False)) or run_raw_requested()
+    force = bool(getattr(ns, "force_retry", False))
+    store = _store(ns)
+    cmd = redact_credentials(shlex_join(argv))
+    if not force:
+        blocked = refuse_entry(store, command=cmd, cwd=ns.cwd)
+        if blocked:
+            print(format_stop_line(blocked), file=sys.stderr)
+            return 75
+    rc, output = run_command(argv, cwd=ns.cwd, timeout=timeout, raw=raw)
     try:
-        after_run(_store(ns), argv, rc, output, cwd=ns.cwd, k=ns.k)
+        after_run(store, argv, rc, output, cwd=ns.cwd, k=ns.k)
     except Exception as e:  # the wrapper must never change the command's outcome
         print(f"claimidx run: {e}", file=sys.stderr)
     return rc
@@ -2092,6 +2128,16 @@ def build_parser() -> argparse.ArgumentParser:
     rn.add_argument("--cwd")
     rn.add_argument("-k", type=int, default=5)
     rn.add_argument("--timeout", type=float, default=None, help="seconds to wait before killing the process (exit 124). Default: wait forever")
+    rn.add_argument(
+        "--force-retry",
+        action="store_true",
+        help="run even if the loop limit would refuse this command (also CLAIMIDX_LOOP_LIMIT=0)",
+    )
+    rn.add_argument(
+        "--raw",
+        action="store_true",
+        help="pass command output to the terminal unredacted (default: redact credential URLs and secret-shaped tokens; also CLAIMIDX_RUN_RAW=1)",
+    )
     rn.add_argument("argv", nargs=argparse.REMAINDER, help="-- <command> [args...]")
     rn.set_defaults(func=cmd_run)
     ap = sub.add_parser("apply", help="apply a pin or patch remedy in --cwd, then confirm --replay; prints the plan without --yes")

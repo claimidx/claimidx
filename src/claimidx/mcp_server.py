@@ -237,7 +237,8 @@ TOOLS: list[dict[str, Any]] = [
             "Fail-open: it never raises and never applies fix.b, so a hook wired to it cannot break the harness. "
             "Wire it from PostToolUseFailure or an equivalent hook; when you already hold the error text call claimidx_ask instead. "
             "Writes only an ask event. Returns hit, apply_fix (always false), event, err, fp, cls, claims, note; "
-            "optionally delivered and reason when absence telemetry fires."
+            "optionally delivered and reason when absence telemetry fires; stop and loop when the same "
+            "failure has been retried up to the loop limit (hooks cannot block the retry themselves)."
         ),
         "inputSchema": {
             "type": "object",
@@ -260,7 +261,7 @@ TOOLS: list[dict[str, Any]] = [
                 },
             },
         },
-        "outputSchema": _out(hit=_B, apply_fix=_B, event=_ANY, err=_S, fp=_S, cls=_S, claims=_A, note=_S, delivered=_B, reason=_S),
+        "outputSchema": _out(hit=_B, apply_fix=_B, event=_ANY, err=_S, fp=_S, cls=_S, claims=_A, note=_S, delivered=_B, reason=_S, stop=_B, loop=_NO),
         "annotations": _ann(read_only=True, idempotent=True),
     },
     {
@@ -272,7 +273,8 @@ TOOLS: list[dict[str, Any]] = [
             "Output is captured, not streamed, so this is safe on the MCP stdio pipe. Use when the harness has no "
             "PostToolUse hooks (plain MCP, CI, a subagent). Prefer the installed harness hook where one is wired; "
             "do not wrap every command if the hook is already firing. Never applies fix.b. "
-            "Returns rc, output (tail), advice, and verdict when the command failed."
+            "Returns rc, output (tail, redacted), advice, verdict when the command failed, and loop when a retry is recorded. "
+            "The 3rd identical try is refused with rc 75 unless force_retry is true or CLAIMIDX_LOOP_LIMIT=0."
         ),
         "inputSchema": {
             "type": "object",
@@ -289,9 +291,13 @@ TOOLS: list[dict[str, Any]] = [
                     "type": "number",
                     "description": "Seconds to wait before killing the process (default 300). Exit 124 if it times out. MCP must not hang the stdio pipe.",
                 },
+                "force_retry": {
+                    "type": "boolean",
+                    "description": "Run even if the loop limit would refuse this command (same as CLI --force-retry).",
+                },
             },
         },
-        "outputSchema": _out(rc=_I, output=_S, advice=_S, verdict=_O, command=_S, nudge=_B),
+        "outputSchema": _out(rc=_I, output=_S, advice=_S, verdict=_O, command=_S, nudge=_B, loop=_NO),
         "annotations": _ann(read_only=False, destructive=False, idempotent=False),
     },
     {
@@ -343,10 +349,11 @@ TOOLS: list[dict[str, Any]] = [
         "title": "Session retry-loop check",
         "description": (
             "Summarize this local session: asks and fails per fingerprint, recent ingests and drafts, last disposition, and "
-            "must_ask (true once the same fingerprint failed twice, meaning ask before another retry). Pass fp to focus on one "
-            "fingerprint. Read-only and never shared. Use to check whether you are in a retry loop. "
+            "must_ask (true once the same fingerprint failed twice, meaning ask before another retry). Also returns loop "
+            "({key, tries, stop}, plus state and reset_reason when set) from the persistent cross-process retry table. "
+            "Pass fp to focus on one fingerprint. Read-only and never shared. Use to check whether you are in a retry loop. "
             "Returns session_id, asks, asks_by_fp, fails_by_fp, ingests, drafts, last_disposition, must_ask, focus_fp, asks_focus, fails_focus, "
-            "package_version, server_info_version, version_mismatch."
+            "loop, package_version, server_info_version, version_mismatch."
         ),
         "inputSchema": {
             "type": "object",
@@ -363,6 +370,7 @@ TOOLS: list[dict[str, Any]] = [
             focus_fp=_NS,
             asks_focus=_I,
             fails_focus=_I,
+            loop=_NO,
             package_version=_S,
             server_info_version=_NS,
             version_mismatch=_B,
@@ -1774,7 +1782,11 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             own=resolve_owner(args.get("own")),
         )
     if name == "claimidx_run":
+        import shlex
+
+        from .loopkey import format_stop_line, refuse_entry
         from .runwrap import after_run, run_command
+        from .security import redact, redact_credentials
 
         argv = args.get("argv") or []
         if isinstance(argv, str):
@@ -1785,9 +1797,23 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         cwd = (args.get("cwd") or "").strip() or os.getcwd()
         timeout = args.get("timeout")
         timeout_s = 300.0 if timeout is None or timeout == "" else float(timeout)
+        force = bool(args.get("force_retry"))
+        cmd = redact_credentials(shlex.join(argv))
+        if not force:
+            blocked = refuse_entry(store, command=cmd, cwd=cwd)
+            if blocked:
+                from .loopkey import public_loop
+
+                return {
+                    "rc": 75,
+                    "output": "",
+                    "command": cmd,
+                    "advice": format_stop_line(blocked),
+                    "loop": public_loop(blocked),
+                }
         rc, output = run_command(argv, cwd=cwd, stream=False, timeout=timeout_s)
         rec = after_run(store, argv, rc, output, cwd=cwd, k=int(args.get("k") or 5), emit=False)
-        rec["output"] = output
+        rec["output"] = redact(output)
         return rec
     raise ValueError(f"unknown tool {name}")
 

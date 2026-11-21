@@ -33,12 +33,12 @@
     {
       "name": "claimidx_hook",
       "title": "Harness failure sensor",
-      "description": "Harness sensor: turn a failed-tool JSON event or raw stderr into a claimidx_ask. Extracts the error from raw (falls back to err), fingerprints it, and ranks claims; with no extractable error it returns hit=false silently unless absence telemetry is on (absence=true or CLAIMIDX_HOOK_ABSENCE=1), which adds delivered=false and reason in {no_envelope, empty_extract, parse_incomplete} — sensor telemetry only, not a fourth light. Fail-open: it never raises and never applies fix.b, so a hook wired to it cannot break the harness. Wire it from PostToolUseFailure or an equivalent hook; when you already hold the error text call claimidx_ask instead. Writes only an ask event. Returns hit, apply_fix (always false), event, err, fp, cls, claims, note; optionally delivered and reason when absence telemetry fires."
+      "description": "Harness sensor: turn a failed-tool JSON event or raw stderr into a claimidx_ask. Extracts the error from raw (falls back to err), fingerprints it, and ranks claims; with no extractable error it returns hit=false silently unless absence telemetry is on (absence=true or CLAIMIDX_HOOK_ABSENCE=1), which adds delivered=false and reason in {no_envelope, empty_extract, parse_incomplete} — sensor telemetry only, not a fourth light. Fail-open: it never raises and never applies fix.b, so a hook wired to it cannot break the harness. Wire it from PostToolUseFailure or an equivalent hook; when you already hold the error text call claimidx_ask instead. Writes only an ask event. Returns hit, apply_fix (always false), event, err, fp, cls, claims, note; optionally delivered and reason when absence telemetry fires; stop and loop when the same failure has been retried up to the loop limit (hooks cannot block the retry themselves)."
     },
     {
       "name": "claimidx_run",
       "title": "Run a command through the sensor",
-      "description": "Run argv exactly as given (no shell) and return the command's exit status plus one CLAIMIDX advice line: a verdict on failure, or `claimidx claim --yes` when the same command now passes after a remembered failure. Output is captured, not streamed, so this is safe on the MCP stdio pipe. Use when the harness has no PostToolUse hooks (plain MCP, CI, a subagent). Prefer the installed harness hook where one is wired; do not wrap every command if the hook is already firing. Never applies fix.b. Returns rc, output (tail), advice, and verdict when the command failed."
+      "description": "Run argv exactly as given (no shell) and return the command's exit status plus one CLAIMIDX advice line: a verdict on failure, or `claimidx claim --yes` when the same command now passes after a remembered failure. Output is captured, not streamed, so this is safe on the MCP stdio pipe. Use when the harness has no PostToolUse hooks (plain MCP, CI, a subagent). Prefer the installed harness hook where one is wired; do not wrap every command if the hook is already firing. Never applies fix.b. Returns rc, output (tail, redacted), advice, verdict when the command failed, and loop when a retry is recorded. The 3rd identical try is refused with rc 75 unless force_retry is true or CLAIMIDX_LOOP_LIMIT=0."
     },
     {
       "name": "claimidx_home_ask",
@@ -58,7 +58,7 @@
     {
       "name": "claimidx_session",
       "title": "Session retry-loop check",
-      "description": "Summarize this local session: asks and fails per fingerprint, recent ingests and drafts, last disposition, and must_ask (true once the same fingerprint failed twice, meaning ask before another retry). Pass fp to focus on one fingerprint. Read-only and never shared. Use to check whether you are in a retry loop. Returns session_id, asks, asks_by_fp, fails_by_fp, ingests, drafts, last_disposition, must_ask, focus_fp, asks_focus, fails_focus, package_version, server_info_version, version_mismatch."
+      "description": "Summarize this local session: asks and fails per fingerprint, recent ingests and drafts, last disposition, and must_ask (true once the same fingerprint failed twice, meaning ask before another retry). Also returns loop ({key, tries, stop}, plus state and reset_reason when set) from the persistent cross-process retry table. Pass fp to focus on one fingerprint. Read-only and never shared. Use to check whether you are in a retry loop. Returns session_id, asks, asks_by_fp, fails_by_fp, ingests, drafts, last_disposition, must_ask, focus_fp, asks_focus, fails_focus, loop, package_version, server_info_version, version_mismatch."
     },
     {
       "name": "claimidx_ingest",
