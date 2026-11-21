@@ -1577,32 +1577,36 @@ def cmd_init(ns: argparse.Namespace) -> int:
     from . import config
     from .home import HomeError, pull
     from .seed_data import materialize
-    from .team import agent_slug, did_for_agent
 
-    raw_agent = (ns.agent or os.environ.get("CLAIMIDX_AGENT") or "").strip()
-    agent = agent_slug(raw_agent) if raw_agent else ""
-    if ns.own:
-        own = ns.own.strip()
-        if not ns.agent and ":" in own:
-            agent = agent_slug(own.split(":")[-1])
-    elif ns.agent:
-        own = did_for_agent(ns.agent)
-        agent = agent_slug(ns.agent)
-    else:
-        own = (os.environ.get("CLAIMIDX_OWNER") or "").strip()
-        if not own and not agent:
-            from .team import default_agent_name
-
-            agent = default_agent_name()
-            print(
-                f"# no --agent given; auto-naming you {agent} "
-                f"(did:claimidx:{agent} would appear on a later commons share). "
-                "Pass --agent <your-name> to choose a name, or rename later with claimidx init --agent <name>.",
-                file=sys.stderr,
-            )
-        own = own or did_for_agent(agent)
-    data = {"owner": own, "agent": agent, "share": True}
-    key_path = config.config_path().parent / "identity.json"
+    names = config.resolve_init_names(
+        agent_flag=(ns.agent or "").strip(),
+        own_flag=(ns.own or "").strip(),
+        env_agent=(os.environ.get("CLAIMIDX_AGENT") or "").strip(),
+        env_owner=(os.environ.get("CLAIMIDX_OWNER") or "").strip(),
+    )
+    own = names["owner"]
+    agent = names["agent"]
+    for line in names["warnings"]:
+        print(line, file=sys.stderr)
+    if names["source"] == "auto":
+        print(
+            f"# no --agent given; auto-naming you {agent} "
+            f"(did:claimidx:{agent} would appear on a later commons share). "
+            "Pass --agent <your-name> to choose a name, or rename later with claimidx init --agent <name>.",
+            file=sys.stderr,
+        )
+    elif names["renamed"]:
+        old_agent = names["previous_agent"] or "-"
+        old_own = names["previous_owner"] or "-"
+        print(
+            f"# renamed {old_agent} → {agent or '-'} ({old_own} → {own})",
+            file=sys.stderr,
+        )
+    # Re-init keeps existing keys (including share). First install defaults share on.
+    data: dict[str, Any] = {"owner": own, "agent": agent}
+    if not config.load():
+        data["share"] = True
+    key_path = config.identity_path()
     if not key_path.exists():
         from .identity import generate_identity
 
@@ -2507,7 +2511,7 @@ def build_parser() -> argparse.ArgumentParser:
     ini.add_argument("--own")
     ini.add_argument(
         "--agent",
-        help="name your DID; omit this and you are auto-named agent-<hex> (a bare name that will show on a later commons share). Rename any time with init --agent <name>",
+        help="name your DID; omit this on a first install and you are auto-named agent-<hex> (a bare name that will show on a later commons share). Re-running init without --agent keeps the existing name. Rename any time with init --agent <name>",
     )
     ini.add_argument("--home-api")
     ini.add_argument("--home")
