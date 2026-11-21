@@ -181,6 +181,16 @@ def format_close_line(entry: dict[str, Any]) -> str:
     return f"CLAIMIDX loop closed key={short_key(str(entry.get('key') or ''))} tries={int(entry.get('tries') or 0)} reason={reason}"
 
 
+def close_line_visible(entry: dict[str, Any]) -> bool:
+    """Print the close line only after a second try (tries>=2).
+
+    A single failure that then passes closes the loop in the store and on
+    MCP claimidx_session.loop, but stays off stderr so a later quiet pass
+    (claimidx run after apply) has no CLAIMIDX output.
+    """
+    return int(entry.get("tries") or 0) >= 2
+
+
 def artifact_allows_retry(entry: dict[str, Any], current_artifact: str) -> bool:
     """True when the tree changed enough that the hard stop should not fire."""
     stored = str(entry.get("artifact") or "")

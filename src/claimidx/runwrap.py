@@ -118,7 +118,7 @@ def _emit_loop(out: dict[str, Any], entry: dict[str, Any] | None, *, emit: bool)
 def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None = None, k: int = 5, emit: bool = True) -> dict[str, Any]:
     """The hook logic, given a finished command. Returns what was printed."""
     from .fingerprint import classify, fingerprint
-    from .loopkey import apply_failure, apply_success, format_close_line, is_unkeyable_timeout, public_loop
+    from .loopkey import apply_failure, apply_success, close_line_visible, format_close_line, is_unkeyable_timeout, public_loop
     from .match import verdict_for
     from .query import retrieve
     from .security import redact, redact_credentials
@@ -180,7 +180,7 @@ def after_run(store, argv: list[str], rc: int, output: str, *, cwd: str | None =
             out["loop"] = view
             out["loop_closed"] = True
         line = format_close_line(closed)
-        if line:
+        if line and close_line_visible(closed):
             out["loop_line"] = line
             if emit:
                 sys.stderr.write(line + "\n")
