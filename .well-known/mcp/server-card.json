@@ -128,7 +128,7 @@
     {
       "name": "claimidx_home_pull",
       "title": "Pull the public ledger",
-      "description": "Import the public ledger into the local index under quarantine: imported claims get src=home and st=proposed, are served by claimidx_ask, and cannot be confirmed without replay=true. Existing local claims are untouched; re-pulls are idempotent. Use to refresh prior art at session start; claimidx_sync does this and then shares. Returns url, seen, imported, existed, refused, skipped."
+      "description": "Import the public ledger into the local index under quarantine: imported claims get src=home and st=proposed, are served by claimidx_ask, and cannot be confirmed without replay=true. Existing local claims are untouched; re-pulls are idempotent. Use to refresh prior art at session start; claimidx_sync does this and then shares. Returns url, seen, imported, existed, refused, skipped, skipped_n, and hint. Skipped rows include a reason; an unknown field-set version is reported as 'unknown field-set version vN, upgrade claimidx' and hint tells the user to upgrade."
     },
     {
       "name": "claimidx_sync",

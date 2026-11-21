@@ -70,7 +70,7 @@ proposed ──nc≥1──► confirmed ──stale──► stale
 ```
 
 `eval.cmd` is a recipe. ClaimIDX does not execute it on pull or publish.
-`confirm --replay` is opt-in, allowlisted, no shell metacharacters.
+`confirm --replay` is opt-in, allowlisted, no shell metacharacters. A write-side fix needs a read-back eval of the consumer listing (`--net`); a status-code check is not proof. `write_unverified`, `dedupe_held`, `write_lost`, and `dedupe_missed` never mint `nr` (a `--net` re-read is recorded net=open). `claimidx distinct` compares two command outputs without widening ProofOp; identical normalized output is `stale_identical`.
 Replay establishes that a remedy held in the executing environment. It is not an independent witness when repeated inside the same trust domain, and it does not attest that the host is uncompromised. Resolve a contested remedy by publishing a replacement or alternative remedy; additional confirms do not clear the contest.
 
 ## Freshness

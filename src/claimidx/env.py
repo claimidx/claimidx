@@ -381,6 +381,30 @@ def is_lang_interpreter(path: str) -> bool:
     return bool(_PY_EXE.search(raw) or base.startswith("python") or base in {"node", "node.exe", "nodejs"})
 
 
+def is_uv_managed_interpreter(path: str) -> bool:
+    """True when `path` looks like a uv-managed interpreter or a uv venv python.
+
+    Used when the captured binary is already gone, so we inspect the path
+    (and a leftover pyvenv.cfg, if readable) rather than running the interpreter.
+    """
+    raw = (path or "").strip()
+    if not raw:
+        return False
+    lower = raw.replace("\\", "/").lower()
+    if "/uv/python/" in lower or "/share/uv/" in lower or "/uv/venvs/" in lower or "/uv/tools/" in lower:
+        return True
+    try:
+        from pathlib import Path as _P
+
+        p = _P(raw)
+        for cfg in (p.parent / "pyvenv.cfg", p.parent.parent / "pyvenv.cfg"):
+            if cfg.is_file() and "uv" in cfg.read_text(encoding="utf-8", errors="replace").lower():
+                return True
+    except OSError:
+        return False
+    return False
+
+
 def _real_exe(path: str) -> str:
     raw = (path or "").strip()
     if not raw:

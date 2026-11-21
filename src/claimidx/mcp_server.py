@@ -768,10 +768,12 @@ TOOLS: list[dict[str, Any]] = [
             "Import the public ledger into the local index under quarantine: imported claims get src=home and st=proposed, are served "
             "by claimidx_ask, and cannot be confirmed without replay=true. Existing local claims are untouched; re-pulls are idempotent. "
             "Use to refresh prior art at session start; claimidx_sync does this and then shares. "
-            "Returns url, seen, imported, existed, refused, skipped."
+            "Returns url, seen, imported, existed, refused, skipped, skipped_n, and hint. "
+            "Skipped rows include a reason; an unknown field-set version is reported as "
+            "'unknown field-set version vN, upgrade claimidx' and hint tells the user to upgrade."
         ),
         "inputSchema": {"type": "object", "properties": {"url": _URL}},
-        "outputSchema": _out(url=_S, seen=_I, imported=_I, existed=_I, refused=_I, skipped=_A),
+        "outputSchema": _out(url=_S, seen=_I, imported=_I, existed=_I, refused=_I, skipped=_A, skipped_n=_I, hint=_S),
         "annotations": _ann(read_only=False, destructive=False, idempotent=True, open_world=True),
     },
     {
@@ -1451,30 +1453,47 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
                 actor=resolve_owner(args.get("own")),
             )
             gate_warns = list(decision.warns)
-            if not decision.mint_nr and decision.record_net:
+            from .gate import records_without_nr
+
+            if records_without_nr(decision):
                 from .gate import net_open_detail
                 from .match import confirm_lights
+                from .writeout import outcome_for_cls
 
-                netted = store.confirm(
+                detail = {**eval_detail}
+                if decision.record_net:
+                    detail = net_open_detail(result, {**detail, "mode": "net"})
+                else:
+                    detail.setdefault("mode", "replay")
+                tag = outcome_for_cls(getattr(current, "cls", "") or "")
+                if tag:
+                    detail["write_outcome"] = tag
+                recorded = store.confirm(
                     args["id"],
                     resolve_owner(args.get("own")),
                     replayed=False,
-                    detail=net_open_detail(result, {**eval_detail, "mode": "net"}),
+                    detail=detail,
                 )
-                return {
-                    "id": netted.id,
-                    "st": netted.st,
-                    "nc": netted.nc,
-                    "nf": netted.nf,
-                    "nr": netted.nr,
+                body = {
+                    "id": recorded.id,
+                    "st": recorded.st,
+                    "nc": recorded.nc,
+                    "nf": recorded.nf,
+                    "nr": recorded.nr,
                     "held": True,
                     "recorded": True,
                     "nr_minted": False,
-                    "net": result.net or "open",
                     "reason": decision.reason,
                     "replay": replay_body,
-                    "lights": confirm_lights(held=True, recorded=True, warns=gate_warns, contested=netted.st == "contested"),
+                    "lights": confirm_lights(held=True, recorded=True, warns=gate_warns, contested=recorded.st == "contested"),
                 }
+                if decision.record_net:
+                    body["net"] = result.net or "open"
+                if tag:
+                    body["write_outcome"] = tag
+                if gate_warns:
+                    body["warn"] = list(gate_warns)
+                return body
             if not decision.mint_nr:
                 from .match import confirm_lights
                 from .sandbox import refused_replay_info

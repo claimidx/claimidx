@@ -43,6 +43,7 @@ class GateDecision:
     warns: list[str] = field(default_factory=list)
     suggest: dict[str, str] = field(default_factory=dict)  # the passing form, when a refusal has one
     record_net: bool = False  # --net hold: record the confirm with net=open, never mint nr
+    record: bool = False  # record the confirm without minting nr (write outcomes)
 
     def as_tuple(self) -> tuple[bool, str]:
         return self.mint_nr, self.reason
@@ -62,6 +63,21 @@ class GateDecision:
         if self.warns:
             out["warn"] = list(self.warns)
         return out
+
+
+def records_without_nr(decision: GateDecision) -> bool:
+    """True when the eval held but nr must not be minted (net=open or a write outcome)."""
+    return (not decision.mint_nr) and (decision.record_net or decision.record)
+
+
+def status_only_eval(cmd: str | None) -> bool:
+    """True when eval.cmd only inspects an HTTP status code (curl -w %{http_code} / -o /dev/null)."""
+    raw = cmd or ""
+    if re.search(r"%\{http_code\}", raw, re.I):
+        return True
+    if re.search(r"\bcurl\b", raw, re.I) and re.search(r"-o\s+/dev/null", raw):
+        return True
+    return False
 
 
 def _proof_steps(store: Store | None, claim_id: str) -> list[dict]:
@@ -379,6 +395,13 @@ def graduation_gate(
             warns.append(msg)
     if (result.net_how or "") == "interpreter":
         warns.append(_INTERPRETER_WARN)
+    ev_cmd = claim.eval.cmd if claim.eval else ""
+    from .writeout import STATUS_EVAL_CLASSES, STATUS_EVAL_WARN, WRITE_NOT_PROOF, WRITE_OUTCOME_CLASSES
+
+    if (claim.cls or "") in STATUS_EVAL_CLASSES and status_only_eval(ev_cmd):
+        warns.append(STATUS_EVAL_WARN)
+    if (claim.cls or "") in WRITE_OUTCOME_CLASSES:
+        return GateDecision(False, WRITE_NOT_PROOF, warns=warns, record=True)
     return GateDecision(True, "held", warns=warns)
 
 

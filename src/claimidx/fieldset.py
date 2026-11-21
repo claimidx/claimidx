@@ -70,6 +70,16 @@ def receipt_kind(payload: dict[str, Any]) -> str | None:
     return None
 
 
+UPGRADE_HINT = "field-set versions only bump on purpose; older clients skip newer rows — upgrade claimidx to read them"
+
+
+def unknown_fieldset_reason(ver: int, *, kind: str | None = None) -> str:
+    """Skip reason for a declared field-set version this client does not know."""
+    if kind and kind not in {"claim", ""}:
+        return f"unknown field-set version v{ver} for {kind}, upgrade claimidx"
+    return f"unknown field-set version v{ver}, upgrade claimidx"
+
+
 def fieldset_rejection(payload: dict[str, Any], *, kind: str | None = None) -> str | None:
     """Reason to skip this payload on pull, or None if the declared field-set is complete."""
     if not isinstance(payload, dict):
@@ -84,7 +94,7 @@ def fieldset_rejection(payload: dict[str, Any], *, kind: str | None = None) -> s
             ver = 1
         required = sets.get(ver)
         if required is None:
-            return f"unknown field-set version {ver}"
+            return unknown_fieldset_reason(ver)
     else:
         sets_for_kind = RECEIPT_FIELD_SETS.get(kind) or {}
         if ver is None:
@@ -93,7 +103,7 @@ def fieldset_rejection(payload: dict[str, Any], *, kind: str | None = None) -> s
             return f"unknown field-set for {kind}"
         required = sets_for_kind.get(ver)
         if required is None:
-            return f"unknown field-set version {ver} for {kind}"
+            return unknown_fieldset_reason(ver, kind=kind)
     missing = [key for key in sorted(required) if key not in payload or payload.get(key) is None]
     if kind == "claim":
         fix = payload.get("fix")

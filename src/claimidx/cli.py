@@ -667,34 +667,49 @@ def cmd_confirm(ns: argparse.Namespace) -> int:
             actor=resolve_owner(ns.own),
         )
         gate_warns = list(decision.warns)
-        if not decision.mint_nr and decision.record_net:
-            # --net: the network was allowed on purpose. Record the confirm with net=open on its detail; no nr.
+        from .gate import records_without_nr
+
+        if records_without_nr(decision):
+            # --net or a write outcome: record the confirm without minting nr.
             from .gate import net_open_detail
             from .match import confirm_lights
+            from .writeout import outcome_for_cls
 
-            netted = store.confirm(
+            detail = {**eval_detail}
+            if decision.record_net:
+                detail = net_open_detail(result, {**detail, "mode": "net"})
+            else:
+                detail.setdefault("mode", "replay")
+            tag = outcome_for_cls(getattr(c, "cls", "") or "")
+            if tag:
+                detail["write_outcome"] = tag
+            recorded = store.confirm(
                 ns.id,
                 resolve_owner(ns.own),
                 replayed=False,
-                detail=net_open_detail(result, {**eval_detail, "mode": "net"}),
+                detail=detail,
             )
-            lights = confirm_lights(held=True, recorded=True, warns=gate_warns, contested=netted.st == "contested")
+            lights = confirm_lights(held=True, recorded=True, warns=gate_warns, contested=recorded.st == "contested")
             body = {
                 "held": True,
                 "replay": replay_info,
                 "recorded": True,
                 "nr_minted": False,
-                "net": result.net or "open",
                 "reason": decision.reason,
                 "lights": lights,
-                "claim": json.loads(netted.model_dump_json()),
+                "claim": json.loads(recorded.model_dump_json()),
             }
+            if decision.record_net:
+                body["net"] = result.net or "open"
+            if tag:
+                body["write_outcome"] = tag
             if ns.fmt == "json":
                 print(json.dumps(body, default=str))
             else:
                 print(json.dumps(replay_info), file=sys.stderr)
-                print(f"recorded with net=open (nr not minted): {decision.reason}", file=sys.stderr)
-                print(_dumps(netted, ns.fmt))
+                how = "net=open" if decision.record_net else "write outcome"
+                print(f"recorded with {how} (nr not minted): {decision.reason}", file=sys.stderr)
+                print(_dumps(recorded, ns.fmt))
             return 0
         if not decision.mint_nr:
             from .match import confirm_lights
@@ -1384,13 +1399,15 @@ def cmd_serve(ns: argparse.Namespace) -> int:
 
 
 def cmd_home_pull(ns: argparse.Namespace) -> int:
-    from .home import HomeError, pull
+    from .home import HomeError, pull, pull_skip_lines
 
     try:
         result = pull(_store(ns), url=ns.url)
     except HomeError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+    for line in pull_skip_lines(result):
+        print(line, file=sys.stderr)
     print(json.dumps(result, indent=2) if ns.fmt == "json" else json.dumps(result))
     return 0
 
@@ -2053,6 +2070,54 @@ def _claim_write_args(p: argparse.ArgumentParser) -> None:
     )
 
 
+def cmd_write_outcome(ns: argparse.Namespace) -> int:
+    """Classify a write that returned 201/OK by how many copies a re-read finds."""
+    from .fingerprint import classify, fingerprint
+    from .writeout import write_outcome
+
+    body = write_outcome(int(ns.copies))
+    err = (getattr(ns, "err", None) or "").strip()
+    if err:
+        body["classify"] = classify(err)
+        body["fp"] = fingerprint(err=err, cls=body["cls"], eco=getattr(ns, "eco", "") or "")
+        body["fp_unverified"] = fingerprint(err=err, cls="write_unverified", eco=getattr(ns, "eco", "") or "")
+    print(json.dumps(body, default=str))
+    return 0
+
+
+def cmd_distinct(ns: argparse.Namespace) -> int:
+    """Exit 0 when two commands' normalized outputs differ; 1 if identical; 2 if empty."""
+    from .distinct import compare, split_argv
+    from .session import session_id
+
+    argv = list(getattr(ns, "argv", None) or [])
+    parts = split_argv(argv)
+    if not parts:
+        print("usage: claimidx distinct -- <command A> ::: <command B>", file=sys.stderr)
+        return 2
+    left, right = parts
+    body = compare(left, right, cwd=getattr(ns, "cwd", None), timeout=getattr(ns, "timeout", 30.0))
+    try:
+        store = _store(ns)
+        store.session_record(
+            session_id(),
+            kind="distinct",
+            detail={
+                "result": body.get("result"),
+                "stale_identical": bool(body.get("stale_identical")),
+                "empty": body.get("empty") or "",
+            },
+        )
+    except Exception:
+        pass
+    print(json.dumps(body, default=str))
+    if body.get("stale_identical"):
+        print("claimidx: stale_identical: normalized outputs are the same", file=sys.stderr)
+    elif body.get("result") == "empty-result":
+        print(f"claimidx: empty-result: {body.get('empty')}", file=sys.stderr)
+    return int(body.get("exit") or 0)
+
+
 def build_parser() -> argparse.ArgumentParser:
     from .claim import QUICKSTART_LOOP
 
@@ -2151,6 +2216,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rn.add_argument("argv", nargs=argparse.REMAINDER, help="-- <command> [args...]")
     rn.set_defaults(func=cmd_run)
+    ds = sub.add_parser(
+        "distinct",
+        help="compare two command outputs: exit 0 if they differ, 1 if identical, 2 if either is empty",
+    )
+    ds.add_argument("--cwd")
+    ds.add_argument("--timeout", type=float, default=30.0, help="seconds to wait for each command (default 30)")
+    ds.add_argument("argv", nargs=argparse.REMAINDER, help="-- <command A> ::: <command B>")
+    ds.set_defaults(func=cmd_distinct)
+    wo = sub.add_parser(
+        "write-outcome",
+        help="classify a write that returned 201/OK by how many copies a re-read finds (0=write-lost, 1=dedupe-held, 2+=dedupe-missed)",
+    )
+    wo.add_argument("--copies", type=int, required=True, help="copies found on a wait-and-re-read")
+    wo.add_argument("--err", default="", help="optional 201/OK line to fingerprint under the outcome class")
+    wo.add_argument("--eco", default="")
+    wo.set_defaults(func=cmd_write_outcome)
     ap = sub.add_parser("apply", help="apply a pin or patch remedy in --cwd, then confirm --replay; prints the plan without --yes")
     ap.add_argument("id")
     ap.add_argument("--cwd", help="tree to apply in (default: current directory)")
@@ -2306,7 +2387,7 @@ def build_parser() -> argparse.ArgumentParser:
     ing = sub.add_parser("ingest", help="same as publish; the owner is your DID from CLAIMIDX_OWNER")
     _claim_write_args(ing)
     ing.set_defaults(func=cmd_ingest)
-    hp = sub.add_parser("home-pull", help="pull the home ledger into the local index")
+    hp = sub.add_parser("home-pull", aliases=["pull"], help="pull the home ledger into the local index")
     hp.add_argument("--url")
     hp.set_defaults(func=cmd_home_pull)
     ha = sub.add_parser("home-ask", help="ask the home ledger directly for prior art")

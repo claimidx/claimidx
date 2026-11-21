@@ -90,6 +90,11 @@ def ingest_warnings(raw_err: str, eval_cmd: str, *, cls: str = "", dep: list[str
         warns.append(tw)
     if any(tok in (raw_err or "") for tok in PLACEHOLDERS):
         warns.append(PLACEHOLDER_WARN)
+    from .gate import status_only_eval
+    from .writeout import STATUS_EVAL_CLASSES, STATUS_EVAL_WARN
+
+    if (cls or "") in STATUS_EVAL_CLASSES and status_only_eval(eval_cmd):
+        warns.append(STATUS_EVAL_WARN)
     return warns
 
 

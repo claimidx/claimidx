@@ -692,6 +692,33 @@ def _replay_now(
         }
     decision = graduation_gate(c, result, cwd=cwd or None, store=store, actor=resolve_owner(own), clean_room=(mode == "clean-room"))
     if not decision.mint_nr:
+        from .gate import records_without_nr
+
+        if records_without_nr(decision):
+            from .gate import net_open_detail
+            from .writeout import outcome_for_cls
+
+            extra: dict[str, Any] = dict(detail_extra or {})
+            if decision.record_net:
+                extra = net_open_detail(result, {**extra, "mode": "net"})
+            tag = outcome_for_cls(getattr(c, "cls", "") or "")
+            if tag:
+                extra["write_outcome"] = tag
+            confirmed = store.confirm(claim_id, resolve_owner(own), replayed=False, detail=extra or {"mode": "replay"})
+            out_rec: dict[str, Any] = {
+                "held": True,
+                "recorded": True,
+                "nr": confirmed.nr,
+                "nr_minted": False,
+                "st": confirmed.st,
+                "reason": decision.reason,
+                "replay": info,
+            }
+            if decision.warns:
+                out_rec["warn"] = list(decision.warns)
+            if tag:
+                out_rec["write_outcome"] = tag
+            return out_rec
         if decision.unenforced:
             from .gate import UNENFORCED_MESSAGE
 

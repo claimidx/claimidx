@@ -311,7 +311,9 @@ def pull(store, url: str | None = None) -> dict[str, Any]:
         except (PolicyError, SecretError, ValueError):
             refused += 1
     store.log("home-pull", os.environ.get("CLAIMIDX_OWNER") or "did:claimidx:anon")
-    return {
+    from .fieldset import UPGRADE_HINT
+
+    out: dict[str, Any] = {
         "url": target,
         "seen": len(claims),
         "imported": imported,
@@ -320,6 +322,27 @@ def pull(store, url: str | None = None) -> dict[str, Any]:
         "skipped": skipped[:20],
         "skipped_n": len(skipped),
     }
+    if any("upgrade claimidx" in s for s in skipped):
+        out["hint"] = UPGRADE_HINT
+    return out
+
+
+def pull_skip_lines(result: dict[str, Any]) -> list[str]:
+    """Human-visible skip lines for `claimidx pull` / home-pull (stderr)."""
+    from .fieldset import UPGRADE_HINT
+
+    skipped = list(result.get("skipped") or [])
+    n = int(result.get("skipped_n") or len(skipped))
+    if n <= 0:
+        return []
+    noun = "row" if n == 1 else "rows"
+    lines = [f"claimidx: skipped {n} {noun} on pull"]
+    for reason in skipped:
+        lines.append(f"claimidx: skipped: {reason}")
+    hint = str(result.get("hint") or "")
+    if hint or any("upgrade claimidx" in str(s) for s in skipped):
+        lines.append(f"claimidx: {hint or UPGRADE_HINT}")
+    return lines
 
 
 def ask_home(query: dict, k: int = 5, url: str | None = None, db: str | None = None) -> dict[str, Any]:
