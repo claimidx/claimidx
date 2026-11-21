@@ -92,11 +92,12 @@ def sha256_path(path: Path) -> str | None:
 def _rel_tokens(parts: list[str], root: Path) -> list[str]:
     out: list[str] = []
     for tok in parts[1:]:
-        if tok.startswith("-") or not _REL.match(tok) or ".." in tok.replace("\\", "/").split("/"):
+        norm = tok.replace("\\", "/")
+        if tok.startswith("-") or not _REL.match(tok) or ".." in norm.split("/"):
             continue
-        cand = root / tok
+        cand = root / norm
         if cand.exists() and (cand.is_file() or cand.is_dir()):
-            out.append(tok.replace("\\", "/"))
+            out.append(norm)
     return out
 
 

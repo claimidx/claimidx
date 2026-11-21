@@ -18,8 +18,8 @@ DEFAULT_LOOP_LIMIT = 3
 _ISO_TS = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?")
 _EPOCH = re.compile(r"\b(?:1[0-9]{9}|2[0-9]{9})(?:\.\d+)?\b")
 _TEMP = re.compile(
-    r"(?i)(?:(?:/var)?/tmp/|/var/folders/|%TEMP%\\|%TMP%\\|\$TMPDIR/"
-    r"|C:\\Users\\[^\\]+\\AppData\\Local\\Temp\\)\S+"
+    r"(?i)(?:(?:/var)?/tmp/|/var/folders/|%TEMP%[/\\]|%TMP%[/\\]|\$TMPDIR/"
+    r"|(?<![A-Za-z0-9])[A-Za-z]:[/\\]Users[/\\][^/\\]+[/\\]AppData[/\\]Local[/\\]Temp[/\\])\S+"
 )
 _PID = re.compile(r"(?i)\b(?:pid[=: ]+)\d+\b")
 _TIMEOUT_TAIL = re.compile(r"(?i)\b(?:timed out|timeout|deadline exceeded)\b")
@@ -115,6 +115,8 @@ def _git_artifact(cwd: str) -> str:
             ["git", "-C", cwd, "rev-parse", "HEAD"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=3,
             check=False,
         )
@@ -124,6 +126,8 @@ def _git_artifact(cwd: str) -> str:
             ["git", "-C", cwd, "diff", "--stat", "HEAD"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=3,
             check=False,
         )

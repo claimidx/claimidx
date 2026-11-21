@@ -7,7 +7,8 @@ from typing import Any
 from .security import redact_credentials
 
 _PATH = re.compile(
-    r"(?:[A-Za-z]:\\|\\\\|~[/\\]|/(?:home|Users|usr|var|tmp|opt|root|etc|app|src|private|workspace)|(?:\./|\.\./))[^\s:\'\"]+"
+    # Lookbehind keeps claimidx:// (and other letter-scheme URLs) from matching as C:/.
+    r"(?:(?<![A-Za-z0-9])[A-Za-z]:[/\\]|\\\\|~[/\\]|/(?:home|Users|usr|var|tmp|opt|root|etc|app|src|private|workspace)|(?:\./|\.\./|\.\\|\.\.\\))[^\s:\'\"]+"
     r"|(?:(?<=\s)|^)/(?:[^\s:\'\"]+/)+(?:bin/python[\w.]*|bin/node|Scripts/python(?:\.exe)?)"
 )
 _URL = re.compile(r"https?://[^\s]+")

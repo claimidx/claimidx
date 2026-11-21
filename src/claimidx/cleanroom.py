@@ -28,7 +28,9 @@ from .models import Claim
 
 def git_top(cwd: str) -> str | None:
     try:
-        proc = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=cwd, capture_output=True, text=True, timeout=10, check=False)
+        proc = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"], cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10, check=False
+        )
     except (OSError, subprocess.TimeoutExpired):
         return None
     top = (proc.stdout or "").strip()
@@ -50,7 +52,9 @@ def _venv_for(room: str) -> str | None:
     """A Python pin needs an interpreter in the room; the working tree's venv is not the room's."""
     venv = os.path.join(room, ".venv")
     try:
-        proc = subprocess.run([sys.executable, "-m", "venv", venv], capture_output=True, text=True, timeout=180, check=False)
+        proc = subprocess.run(
+            [sys.executable, "-m", "venv", venv], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180, check=False
+        )
     except (OSError, subprocess.TimeoutExpired) as e:
         return f"venv failed: {e}"
     return None if proc.returncode == 0 else f"venv failed: {(proc.stderr or proc.stdout)[-200:]}"
@@ -73,7 +77,15 @@ def clean_room(claim: Claim, cwd: str, *, db, own: str | None, trust_eval: bool 
     clone = os.path.join(tmp, "tree")
     try:
         try:
-            proc = subprocess.run(["git", "clone", "-q", "--no-hardlinks", top, clone], capture_output=True, text=True, timeout=120, check=False)
+            proc = subprocess.run(
+                ["git", "clone", "-q", "--no-hardlinks", top, clone],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=120,
+                check=False,
+            )
         except (OSError, subprocess.TimeoutExpired) as e:
             out["reason"] = f"clone failed: {e}"
             return out
