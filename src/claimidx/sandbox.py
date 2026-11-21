@@ -10,6 +10,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from .fingerprint import runtime_proof_key
 from .policy import _LOCAL_PIP, _norm_head, eval_allowed, split_eval
@@ -136,9 +137,10 @@ class ReplayResult:
     net: str = ""  # offline | open | unenforced
     net_how: str = ""  # bwrap | interpreter | docker | python-flags | cargo-net-offline | head
     interpreter: str = ""  # resolved python/node used to run a python/node eval
+    interp_verified: bool | None = None  # False when the python binary is not a verified CPython
 
     def as_dict(self) -> dict:
-        return {
+        out: dict[str, Any] = {
             "allowed": self.allowed,
             "ran": self.ran,
             "rc": self.rc,
@@ -153,6 +155,15 @@ class ReplayResult:
             "net_how": self.net_how,
             "interpreter": self.interpreter,
         }
+        if self.interp_verified is not None:
+            out["interp_verified"] = self.interp_verified
+        try:
+            from .gate import condition_strength
+
+            out["cond"] = condition_strength(self)
+        except Exception:
+            pass
+        return out
 
     def is_hint(self) -> bool:
         """true/false builtins, version tautologies, and unmet trees cannot mint nc."""
@@ -239,15 +250,26 @@ def observe_env(argv: list[str]) -> str:
 
 
 def _observe_py(exe: str) -> str:
+    env, _verified = _observe_py_detail(exe)
+    return env
+
+
+def _observe_py_detail(exe: str) -> tuple[str, bool]:
+    """Return (py@X.Y, interp_verified). verified is true only for CPython.
+
+    The binary is asked to print `sys.implementation.name` and the version.
+    A wrapper that only echoes a version number (for example `9.9`) still
+    yields py@9.9, but interp_verified is false.
+    """
     try:
         if os.path.exists(exe) and os.path.exists(sys.executable) and os.path.samefile(exe, sys.executable):
             v = sys.version_info
-            return f"py@{v.major}.{v.minor}"
+            return f"py@{v.major}.{v.minor}", sys.implementation.name == "cpython"
     except OSError:
         pass
     try:
         proc = subprocess.run(
-            [exe, "-c", "import sys; print('%d.%d' % sys.version_info[:2])"],
+            [exe, "-c", "import sys; print('%s %d.%d' % (sys.implementation.name, sys.version_info[0], sys.version_info[1]))"],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -257,11 +279,14 @@ def _observe_py(exe: str) -> str:
             stdin=subprocess.DEVNULL,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return ""
+        return "", False
     ver = (proc.stdout or "").strip()
+    m = re.fullmatch(r"(\S+) (\d+\.\d+)", ver)
+    if m:
+        return f"py@{m.group(2)}", m.group(1).lower() == "cpython"
     if re.fullmatch(r"\d+\.\d+", ver):
-        return f"py@{ver}"
-    return ""
+        return f"py@{ver}", False
+    return "", False
 
 
 def _observe_node(exe: str) -> str:
@@ -773,7 +798,11 @@ def replay(
                 os.environ.pop("CLAIMIDX_PYTHON", None)
             else:
                 os.environ["CLAIMIDX_PYTHON"] = token
-    observed = observe_env(argv)
+    interp_verified = None
+    if argv and _PY_BASE.fullmatch(exe_basename(argv[0])):
+        observed, interp_verified = _observe_py_detail(argv[0])
+    else:
+        observed = observe_env(argv)
     used = ""
     if argv and _norm_head(argv[0]) in _ENV_HEADS or (argv and os.path.basename(argv[0]).lower().startswith("python")):
         used = argv[0]
@@ -787,10 +816,25 @@ def replay(
         proc = _run_captured(argv, timeout, cwd, env)
     except subprocess.TimeoutExpired:
         ms = int((time.monotonic() - t0) * 1000)
-        return ReplayResult(True, True, 124, expect, False, "timeout", env=observed, ms=ms, net=net_state, net_how=net_how, interpreter=used)
+        return ReplayResult(
+            True, True, 124, expect, False, "timeout", env=observed, ms=ms, net=net_state, net_how=net_how, interpreter=used, interp_verified=interp_verified
+        )
     except OSError as e:
         ms = int((time.monotonic() - t0) * 1000)
-        return ReplayResult(True, False, None, expect, False, f"exec-error:{e}", env=observed, ms=ms, net=net_state, net_how=net_how, interpreter=used)
+        return ReplayResult(
+            True,
+            False,
+            None,
+            expect,
+            False,
+            f"exec-error:{e}",
+            env=observed,
+            ms=ms,
+            net=net_state,
+            net_how=net_how,
+            interpreter=used,
+            interp_verified=interp_verified,
+        )
     held = proc.returncode == expect
     ms = int((time.monotonic() - t0) * 1000)
     return ReplayResult(
@@ -807,4 +851,5 @@ def replay(
         net_state,
         net_how,
         interpreter=used,
+        interp_verified=interp_verified,
     )

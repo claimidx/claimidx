@@ -71,6 +71,10 @@ class Claim(BaseModel):
     exp: datetime | None = None
     note: str = Field(default="", max_length=240)
     src: str = "local"  # local | seed | home
+    # Rerun-by for a weak pass / weak share. After this instant the claim reads as unchecked.
+    rb: datetime | None = None
+    # Required replay conditions, e.g. ["net=off"]. None means the implied default ["net=off"].
+    req: list[str] | None = None
 
     @field_validator("id")
     @classmethod

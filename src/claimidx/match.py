@@ -399,6 +399,8 @@ def annotate(query: Claim | dict, claim: Claim, sim: float) -> dict:
         recovery = "contested"
     else:
         recovery = evidence
+        if recovery == "retrieved" and _past_rerun_by(getattr(claim, "rb", None)):
+            recovery = "unchecked"
     ann = {
         "sim": round(sim, 4),
         "score": round(claim.score(), 4),
@@ -624,6 +626,23 @@ def dead_end_claims(query: Claim | dict, claims: list[Claim], *, k: int = 5) -> 
     return out
 
 
+def _past_rerun_by(rerun_by, now=None) -> bool:
+    """True when `now` is at or after a claim's rerun-by stamp."""
+    if rerun_by is None:
+        return False
+    from datetime import UTC, datetime
+
+    instant = now if now is not None else datetime.now(UTC)
+    if getattr(instant, "tzinfo", None) is None:
+        instant = instant.replace(tzinfo=UTC)
+    stamp = rerun_by
+    if isinstance(stamp, str):
+        stamp = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    if getattr(stamp, "tzinfo", None) is None:
+        stamp = stamp.replace(tzinfo=UTC)
+    return instant >= stamp
+
+
 def confirm_lights(
     *,
     held: bool,
@@ -632,6 +651,8 @@ def confirm_lights(
     reason: str = "",
     contested: bool = False,
     eval_passed: bool | None = None,
+    rerun_by=None,
+    now=None,
 ) -> dict[str, str]:
     """Three independent statuses after confirm --replay (same shape as ask lights).
 
@@ -654,7 +675,7 @@ def confirm_lights(
     elif recorded and held:
         recovery = "reproduced"
     elif passed and not recorded:
-        recovery = "unrecorded"
+        recovery = "unchecked" if _past_rerun_by(rerun_by, now) else "unrecorded"
     else:
         recovery = "miss"
     return {
@@ -687,4 +708,6 @@ def hit_compact(query: Claim | dict, claim: Claim, sim: float) -> dict:
             "eval": claim.eval.model_dump(),
         }
     )
+    if claim.rb is not None:
+        row["rerun_by"] = claim.rb.isoformat()
     return row

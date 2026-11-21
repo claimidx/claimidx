@@ -452,3 +452,76 @@ def offline_refusal(result: ReplayResult) -> dict | None:
     if not network_blocked(result):
         return None
     return flag_refusal("offline-block")
+
+
+DEFAULT_REQUIRED = ["net=off"]
+
+
+def required_conditions(claim=None) -> list[str]:
+    """Claim.req, or the implied default `net=off`."""
+    req = list(getattr(claim, "req", None) or []) if claim is not None else []
+    return [str(x) for x in req if str(x).strip()] or list(DEFAULT_REQUIRED)
+
+
+def condition_strength(result: ReplayResult, *, required: list[str] | None = None) -> dict:
+    """Claimed vs actual replay-condition block: required, actual, strength.
+
+    strength is one of enforced, best-effort, open, unenforced.
+    A fake or non-CPython interpreter (interp_verified=false) is at most best-effort.
+    """
+    req = [str(x) for x in required] if required is not None else list(DEFAULT_REQUIRED)
+    if not req:
+        req = list(DEFAULT_REQUIRED)
+    net = (result.net or "").strip()
+    how = (result.net_how or "").strip()
+    verified = getattr(result, "interp_verified", None)
+    if net == "open":
+        strength = "open"
+    elif net == "unenforced":
+        strength = "unenforced"
+    elif how == "interpreter":
+        strength = "best-effort"
+    elif net == "offline" and how in {"bwrap", "docker", "cargo-net-offline"}:
+        strength = "enforced"
+    elif net == "offline":
+        strength = "enforced" if how else "best-effort"
+    else:
+        strength = "unenforced"
+    if verified is False and strength == "enforced":
+        strength = "best-effort"
+    return {
+        "required": {"net": "off"} if "net=off" in req else {k.split("=", 1)[0]: (k.split("=", 1)[1] if "=" in k else "true") for k in req},
+        "actual": {"net": net, "net_how": how, "interp_verified": verified},
+        "strength": strength,
+    }
+
+
+def flatten_cond(cond: dict | None) -> dict[str, str]:
+    """Observation.environment is dict[str, str]; flatten a cond block into it."""
+    if not cond:
+        return {}
+    actual = cond.get("actual") or {}
+    required = cond.get("required") or {}
+    out = {
+        "cond.strength": str(cond.get("strength") or ""),
+        "cond.required": ",".join(f"{k}={v}" for k, v in required.items()),
+        "cond.actual.net": str(actual.get("net") or ""),
+        "cond.actual.net_how": str(actual.get("net_how") or ""),
+    }
+    verified = actual.get("interp_verified")
+    if verified is not None:
+        out["cond.actual.interp_verified"] = "true" if verified else "false"
+    return out
+
+
+def missing_required_condition(result: ReplayResult, *, required: list[str] | None = None, claim=None) -> bool:
+    """True when a required condition (default net=off) is not actually met, or a tree precondition is missing."""
+    if (result.reason or "").startswith("eval-precondition"):
+        return True
+    req = required if required is not None else required_conditions(claim)
+    if "net=off" in req:
+        if (result.net or "") == "open":
+            return True
+        if net_is_unenforced(result):
+            return True
+    return False
