@@ -34,6 +34,8 @@ def _run(argv: list[str], *, cwd: str | None = None, timeout: float | None = 30.
             cwd=cwd or None,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             check=False,
         )
