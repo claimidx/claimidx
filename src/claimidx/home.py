@@ -169,6 +169,8 @@ def _post(url: str, payload: dict[str, Any], token: str = "", timeout: float = 2
 
 def parse_ledger(text: str) -> tuple[list[Claim], list[str]]:
     """Parse jsonl. Returns (accepted, skip_reasons). Does not persist."""
+    from .fieldset import fieldset_rejection
+
     accepted: list[Claim] = []
     skipped: list[str] = []
     for i, line in enumerate(text.splitlines(), 1):
@@ -177,6 +179,13 @@ def parse_ledger(text: str) -> tuple[list[Claim], list[str]]:
             continue
         try:
             raw = json.loads(line)
+            if not isinstance(raw, dict):
+                skipped.append(f"L{i}: field-set: not an object")
+                continue
+            reason = fieldset_rejection(raw)
+            if reason:
+                skipped.append(f"L{i}: {reason}")
+                continue
             raw["src"] = "home"
             claim = Claim.model_validate(raw)
             if not fingerprint_accepted(claim.fp, err=claim.err, cls=claim.cls, eco=claim.eco, rt=claim.rt, dep=claim.dep):

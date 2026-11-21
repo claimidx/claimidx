@@ -1,0 +1,37 @@
+{
+  "ruff": {
+    "PLR1701": {"to": "SIM101", "since": "0.5.0"},
+    "PLW0130": {"to": "B033", "since": "0.0.241"},
+    "PLW0117": {"to": "PLW0177", "since": "0.6.0"},
+    "RUF004": {"to": "B026", "since": "0.0.241"},
+    "RUF011": {"to": "B035", "since": "0.0.241"},
+    "RUF025": {"to": "C420", "since": "0.7.0"},
+    "RUF035": {"to": "S704", "since": "0.6.0"},
+    "TRY200": {"to": "B904", "since": "0.0.241"},
+    "TRY302": {"to": "TRY203", "since": "0.8.0"},
+    "PIE802": {"to": "C419", "since": "0.0.241"},
+    "PGH001": {"to": "S307", "since": "0.0.241"},
+    "PGH002": {"to": "G010", "since": "0.0.241"},
+    "TCH001": {"to": "TC001", "since": "0.4.5"},
+    "TCH002": {"to": "TC002", "since": "0.4.5"},
+    "TCH003": {"to": "TC003", "since": "0.4.5"},
+    "TCH004": {"to": "TC004", "since": "0.4.5"},
+    "TCH005": {"to": "TC005", "since": "0.4.5"},
+    "TCH006": {"to": "TC010", "since": "0.4.5"},
+    "TCH010": {"to": "TC010", "since": "0.4.5"},
+    "U001": {"to": "UP001", "since": "0.0.6"},
+    "U003": {"to": "UP003", "since": "0.0.6"},
+    "U004": {"to": "UP004", "since": "0.0.6"},
+    "U007": {"to": "UP007", "since": "0.0.6"},
+    "U008": {"to": "UP008", "since": "0.0.6"}
+  },
+  "eslint": {
+    "no-native-reassign": {"to": "no-global-assign", "since": "3.3.0"},
+    "no-negated-in-lhs": {"to": "no-unsafe-negation", "since": "3.3.0"},
+    "no-catch-shadow": {"to": "no-shadow", "since": "5.1.0"},
+    "no-spaced-func": {"to": "func-call-spacing", "since": "3.3.0"},
+    "indent-legacy": {"to": "indent", "since": "4.0.0"},
+    "no-new-object": {"to": "no-object-constructor", "since": "8.50.0"},
+    "no-new-symbol": {"to": "no-new-native-nonconstructor", "since": "8.27.0"}
+  }
+}

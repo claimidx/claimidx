@@ -127,6 +127,20 @@ class Store:
                 """
             )
             con.execute("CREATE INDEX IF NOT EXISTS idx_loop_task ON loop_entries(task, last_seen)")
+            con.execute(
+                """
+                CREATE TABLE IF NOT EXISTS fp_alias (
+                    alias_fp TEXT NOT NULL,
+                    canonical_fp TEXT NOT NULL,
+                    algo_from TEXT NOT NULL,
+                    algo_to TEXT NOT NULL,
+                    created TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    PRIMARY KEY (alias_fp, canonical_fp)
+                )
+                """
+            )
+            con.execute("CREATE INDEX IF NOT EXISTS idx_fp_alias_canonical ON fp_alias(canonical_fp)")
             self._migrate_events_detail(con)
             self._init_v2(con)
 
@@ -379,6 +393,62 @@ class Store:
             (claim.id, claim.fp, claim.cls, claim.eco, payload, claim.nc, claim.nf, claim.st, claim.ts.isoformat()),
         )
         self._sync_v2_claim(con, claim)
+        self._record_fp_aliases(con, claim, source="store")
+
+    def _record_fp_aliases(self, con: sqlite3.Connection, claim: Claim, *, source: str = "store") -> None:
+        """Write v1→current equivalence edges when fingerprints() yields more than one hash."""
+        from .fingerprint import fingerprint_algorithms
+        from .models import utcnow
+
+        pairs = fingerprint_algorithms(err=claim.err, cls=claim.cls, eco=claim.eco, rt=claim.rt, dep=list(claim.dep or []))
+        if not pairs:
+            return
+        canonical_fp, canonical_algo = pairs[0]
+        created = utcnow().isoformat()
+        for alias_fp, algo_from in pairs:
+            if alias_fp == canonical_fp:
+                continue
+            con.execute(
+                """
+                INSERT OR IGNORE INTO fp_alias(alias_fp, canonical_fp, algo_from, algo_to, created, source)
+                VALUES(?,?,?,?,?,?)
+                """,
+                (alias_fp, canonical_fp, algo_from, canonical_algo, created, source),
+            )
+        stored = (claim.fp or "").strip()
+        if stored and stored != canonical_fp:
+            con.execute(
+                """
+                INSERT OR IGNORE INTO fp_alias(alias_fp, canonical_fp, algo_from, algo_to, created, source)
+                VALUES(?,?,?,?,?,?)
+                """,
+                (stored, canonical_fp, "stored", canonical_algo, created, source),
+            )
+
+    def expand_fp_aliases(self, fps: tuple[str, ...] | list[str]) -> list[str]:
+        """Follow fp_alias edges in both directions (one hop is enough: aliases point at current)."""
+        found: list[str] = []
+        seen: set[str] = set()
+        seeds = [fp for fp in fps if fp]
+        if not seeds:
+            return found
+        with self._conn() as con:
+            pending = list(seeds)
+            while pending:
+                fp = pending.pop()
+                if not fp or fp in seen:
+                    continue
+                seen.add(fp)
+                found.append(fp)
+                rows = con.execute(
+                    "SELECT alias_fp, canonical_fp FROM fp_alias WHERE alias_fp=? OR canonical_fp=?",
+                    (fp, fp),
+                ).fetchall()
+                for row in rows:
+                    for other in (row["alias_fp"], row["canonical_fp"]):
+                        if other and other not in seen:
+                            pending.append(other)
+        return found
 
     def _insert_event(
         self,
@@ -476,10 +546,10 @@ class Store:
         return [c for r in rows if (c := self._claim_from_json(r["json"]))]
 
     def by_fingerprints(self, fps: tuple[str, ...] | list[str]) -> list[Claim]:
-        """Rows whose stored fp is any of the current or legacy hashes."""
+        """Rows whose stored fp is any of the current, legacy, remapped, or aliased hashes."""
         found: list[Claim] = []
         seen: set[str] = set()
-        for fp in fps:
+        for fp in self.expand_fp_aliases(fps):
             if not fp:
                 continue
             for c in self.by_fp(fp):
@@ -771,11 +841,17 @@ class Store:
         }
 
     def import_protocol_events(self, events: list) -> dict[str, int]:
+        from .fieldset import fieldset_rejection
         from .graph import ProtocolEvent
 
-        accepted = duplicate = 0
+        accepted = duplicate = skipped = 0
         with self._conn() as con:
             for raw in events[:2000]:
+                if not isinstance(raw, ProtocolEvent) and isinstance(raw, dict):
+                    reason = fieldset_rejection(raw)
+                    if reason:
+                        skipped += 1
+                        continue
                 event = raw if isinstance(raw, ProtocolEvent) else ProtocolEvent.model_validate(raw)
                 cur = con.execute(
                     "INSERT OR IGNORE INTO protocol_events_v2(id,kind,object_id,actor,json,created) VALUES(?,?,?,?,?,?)",
@@ -785,7 +861,10 @@ class Store:
                     accepted += 1
                 else:
                     duplicate += 1
-        return {"accepted": accepted, "duplicate": duplicate}
+        out = {"accepted": accepted, "duplicate": duplicate}
+        if skipped:
+            out["skipped"] = skipped
+        return out
 
     def _record_claim_observation(
         self,
