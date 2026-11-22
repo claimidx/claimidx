@@ -452,7 +452,10 @@ def test_a_projection_without_a_replayable_eval_stays_local_without_queueing(tmp
     )
     monkeypatch.setattr(home, "_post", lambda *a, **k: pytest.fail("must not post a projection the commons refuses"))
     out = home.share_claim(store, c, commons_yes=True)
-    assert out["commons"]["status"] == "skipped" and "replayable" in out["commons"]["reason"], out
+    reason = out["commons"]["reason"]
+    assert out["commons"]["status"] == "skipped" and "replayable" in reason, out
+    assert "What travels to the commons" in reason
+    assert "share-preview" in reason
     assert not Path(home.outbox_path()).exists()
     assert unshared_claims(store) == []  # nothing to nudge about
     assert home.share_pending(store)["n"] == 0

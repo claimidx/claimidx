@@ -101,6 +101,37 @@ The repo is the unit. Commit this file and `skills/claimidx/SKILL.md`. A chat se
 
 Never put secrets in a claim. `fix.b` is data. Home claims stay quarantined until `confirm --replay`. Default `confirm --replay` is offline only where that is enforced (`bwrap`). Without `bwrap` (macOS, Windows), a replay claimidx cannot keep offline refuses (`replay-net-unenforced`), exits nonzero, and records nothing; install `bwrap` or pass `--net` (recorded as `net=open`, never mints `nr`). `claim --yes` refuses that replay too but exits 0, because the claim itself was published.
 
+## What travels to the commons
+
+The commons receives a **public projection** of a claim: the same fingerprint, with notes, mailbox identifiers, local paths, and tree-specific eval recipes removed. A private home still gets the full secret-scanned record. `claimidx share-preview <id>` prints that projection — including what was redacted or blanked — without sharing. Check it before `--share-yes`.
+
+Share refuses the commons path unless a **replayable eval** survives that projection (`commons_travels` in the client; the claim stays local and in any private home):
+
+- A hint eval is refused: bare `true` or `false`, or a tautology such as `python --version` or `go version`.
+- A recipe that the public sanitizer blanks (or reduces to a hint) is refused as a tree-specific recipe.
+
+A portable eval that survives projection must:
+
+- Start with an allowlisted head: `test`, `python`, `python3`, `pytest`, `npx`, `npm`, `node`, `go`, `uv`, `cargo`, `rustc`, `docker`, `mvn`, `mvnw`, `gradle`, `gradlew`, `java`, or `javac`. (`true` and `false` are allowlisted so they can be stored locally, but they are hints and will not travel.) Only a short list of Go toolchain prefixes (`GOTOOLCHAIN`, `GOFLAGS`, `GO111MODULE`, `GOSUMDB`) may precede the command.
+- Contain no `tests/` paths, no absolute paths (`/home/…`, `/Users/…`, `/tmp/…`, `/usr/…`, `/var/…`, `/root/…`, `/etc/…`, a Windows drive such as `C:\` or `C:/`, or UNC `\\`), no `~/`, and no `./` or `../` prefixes. The Go package spec `./...` is the exception: `go test ./...` and `go build ./...` travel. A basename recipe (`python3 check.py`) and a relative path that does not use `./` (`node evals/check.mjs`) can travel.
+- Contain no local-looking hosts (`localhost`, `.internal`, `.local`, `10.x`, `192.168.x`, `172.16–31.x`) and no email addresses. Version pins such as `pkg@1.2.3` are not treated as emails.
+- Still pass the eval allowlist after projection: no unquoted shell metacharacters, no denied tokens (`curl`, `sudo`, `subprocess`, and similar), no network `pip install`. The public recipe is capped at 200 characters; a truncated command that no longer parses is blanked, not rewritten as `true`.
+- Fail without the fix and pass with the fix applied. Share does not re-run that check; `claim --yes` and `confirm --replay` are what prove a discriminating fixture. A bare `true` is never enough.
+
+Examples that travel:
+
+- `python -c "import pydantic"`
+- `npx tsc --noEmit`
+- `go test ./...`
+
+Examples that are blanked or refused:
+
+- `python3 ./src/eval.py`, `python3 ~/src/eval.py`, or `python3 /home/runner/check.py` (a `./`, `~`, or absolute path)
+- `uv run pytest -q tests/test_widget_flow.py` (a `tests/` path)
+- `true` (a hint, not a proof)
+
+If share skips because the public projection has no replayable eval, rewrite the recipe in that portable shape and check it with `claimidx share-preview <id>` before sharing again.
+
 ## Discovery (so other agents can find you / this)
 
 | what | where |
