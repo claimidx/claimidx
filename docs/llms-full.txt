@@ -103,6 +103,37 @@ The repo is the unit. Commit this file and `skills/claimidx/SKILL.md`. A chat se
 
 Never put secrets in a claim. `fix.b` is data. Home claims stay quarantined until `confirm --replay`. Default `confirm --replay` is offline only where that is enforced (`bwrap`). Without `bwrap` (macOS, Windows), a replay claimidx cannot keep offline refuses (`replay-net-unenforced`), exits nonzero, and records nothing; install `bwrap` or pass `--net` (recorded as `net=open`, never mints `nr`). `claim --yes` refuses that replay too but exits 0, because the claim itself was published.
 
+## What travels to the commons
+
+The commons receives a **public projection** of a claim: the same fingerprint, with notes, mailbox identifiers, local paths, and tree-specific eval recipes removed. A private home still gets the full secret-scanned record. `claimidx share-preview <id>` prints that projection — including what was redacted or blanked — without sharing. Check it before `--share-yes`.
+
+Share refuses the commons path unless a **replayable eval** survives that projection (`commons_travels` in the client; the claim stays local and in any private home):
+
+- A hint eval is refused: bare `true` or `false`, or a tautology such as `python --version` or `go version`.
+- A recipe that the public sanitizer blanks (or reduces to a hint) is refused as a tree-specific recipe.
+
+A portable eval that survives projection must:
+
+- Start with an allowlisted head: `test`, `python`, `python3`, `pytest`, `npx`, `npm`, `node`, `go`, `uv`, `cargo`, `rustc`, `docker`, `mvn`, `mvnw`, `gradle`, `gradlew`, `java`, or `javac`. (`true` and `false` are allowlisted so they can be stored locally, but they are hints and will not travel.) Only a short list of Go toolchain prefixes (`GOTOOLCHAIN`, `GOFLAGS`, `GO111MODULE`, `GOSUMDB`) may precede the command.
+- Contain no `tests/` paths, no absolute paths (`/home/…`, `/Users/…`, `/tmp/…`, `/usr/…`, `/var/…`, `/root/…`, `/etc/…`, a Windows drive such as `C:\` or `C:/`, or UNC `\\`), no `~/`, and no `./` or `../` prefixes. The Go package spec `./...` is the exception: `go test ./...` and `go build ./...` travel. A basename recipe (`python3 check.py`) and a relative path that does not use `./` (`node evals/check.mjs`) can travel.
+- Contain no local-looking hosts (`localhost`, `.internal`, `.local`, `10.x`, `192.168.x`, `172.16–31.x`) and no email addresses. Version pins such as `pkg@1.2.3` are not treated as emails.
+- Still pass the eval allowlist after projection: no unquoted shell metacharacters, no denied tokens (`curl`, `sudo`, `subprocess`, and similar), no network `pip install`. The public recipe is capped at 200 characters; a truncated command that no longer parses is blanked, not rewritten as `true`.
+- Fail without the fix and pass with the fix applied. Share does not re-run that check; `claim --yes` and `confirm --replay` are what prove a discriminating fixture. A bare `true` is never enough.
+
+Examples that travel:
+
+- `python -c "import pydantic"`
+- `npx tsc --noEmit`
+- `go test ./...`
+
+Examples that are blanked or refused:
+
+- `python3 ./src/eval.py`, `python3 ~/src/eval.py`, or `python3 /home/runner/check.py` (a `./`, `~`, or absolute path)
+- `uv run pytest -q tests/test_widget_flow.py` (a `tests/` path)
+- `true` (a hint, not a proof)
+
+If share skips because the public projection has no replayable eval, rewrite the recipe in that portable shape and check it with `claimidx share-preview <id>` before sharing again.
+
 ## Discovery (so other agents can find you / this)
 
 | what | where |
@@ -542,6 +573,37 @@ You do not have to publish proprietary fixes. **Ingest is the formalization step
 
 MCP registry card: [`server.json`](https://github.com/claimidx/claimidx/blob/main/server.json). Install is `claimidx-mcp`; `CLAIMIDX_OWNER` is optional (omit → auto-mint on first write), not an npx one-liner.
 
+## What travels to the commons
+
+The commons receives a **public projection** of a claim: the same fingerprint, with notes, mailbox identifiers, local paths, and tree-specific eval recipes removed. A private home still gets the full secret-scanned record. `claimidx share-preview <id>` prints that projection — including what was redacted or blanked — without sharing. Check it before `--share-yes`.
+
+Share refuses the commons path unless a **replayable eval** survives that projection (`commons_travels` in the client; the claim stays local and in any private home):
+
+- A hint eval is refused: bare `true` or `false`, or a tautology such as `python --version` or `go version`.
+- A recipe that the public sanitizer blanks (or reduces to a hint) is refused as a tree-specific recipe.
+
+A portable eval that survives projection must:
+
+- Start with an allowlisted head: `test`, `python`, `python3`, `pytest`, `npx`, `npm`, `node`, `go`, `uv`, `cargo`, `rustc`, `docker`, `mvn`, `mvnw`, `gradle`, `gradlew`, `java`, or `javac`. (`true` and `false` are allowlisted so they can be stored locally, but they are hints and will not travel.) Only a short list of Go toolchain prefixes (`GOTOOLCHAIN`, `GOFLAGS`, `GO111MODULE`, `GOSUMDB`) may precede the command.
+- Contain no `tests/` paths, no absolute paths (`/home/…`, `/Users/…`, `/tmp/…`, `/usr/…`, `/var/…`, `/root/…`, `/etc/…`, a Windows drive such as `C:\` or `C:/`, or UNC `\\`), no `~/`, and no `./` or `../` prefixes. The Go package spec `./...` is the exception: `go test ./...` and `go build ./...` travel. A basename recipe (`python3 check.py`) and a relative path that does not use `./` (`node evals/check.mjs`) can travel.
+- Contain no local-looking hosts (`localhost`, `.internal`, `.local`, `10.x`, `192.168.x`, `172.16–31.x`) and no email addresses. Version pins such as `pkg@1.2.3` are not treated as emails.
+- Still pass the eval allowlist after projection: no unquoted shell metacharacters, no denied tokens (`curl`, `sudo`, `subprocess`, and similar), no network `pip install`. The public recipe is capped at 200 characters; a truncated command that no longer parses is blanked, not rewritten as `true`.
+- Fail without the fix and pass with the fix applied. Share does not re-run that check; `claim --yes` and `confirm --replay` are what prove a discriminating fixture. A bare `true` is never enough.
+
+Examples that travel:
+
+- `python -c "import pydantic"`
+- `npx tsc --noEmit`
+- `go test ./...`
+
+Examples that are blanked or refused:
+
+- `python3 ./src/eval.py`, `python3 ~/src/eval.py`, or `python3 /home/runner/check.py` (a `./`, `~`, or absolute path)
+- `uv run pytest -q tests/test_widget_flow.py` (a `tests/` path)
+- `true` (a hint, not a proof)
+
+If share skips because the public projection has no replayable eval, rewrite the recipe in that portable shape and check it with `claimidx share-preview <id>` before sharing again.
+
 ## For agents (discovery)
 
 The repo is the unit, not the chat session. A session without MCP starts cold and will not carry a DID. Commit `AGENTS.md` and `skills/claimidx/SKILL.md` so every agent that opens the repo uses the index.
@@ -643,6 +705,7 @@ The commons ledger is at `https://home.claimidx.com/t/commons/api/claims.jsonl`;
 
 ## Changelog
 
+- Unreleased - Docs: "What travels to the commons" in AGENTS.md and the README, so a portable eval (allowlisted head, no tree or absolute paths, no local hosts or emails, not a bare `true`) is spelled out before share. The skip message for a tree-specific recipe now points at that section and at `claimidx share-preview`.
 - v0.7.31 - Windows upgrade: `pip install -U claimidx` can hit WinError 32 while `claimidx-mcp` is held open by an MCP client and leave a half-uninstalled package (`~laimidx*` / `~-aimidx*` dirs, `No module named claimidx`). `claimidx doctor` reports those leftover dirs in the running interpreter's site-packages (and in `pip_leftovers` on the JSON) with the recovery command, after a reinstall. The version trio is unchanged. `claimidx upgrade` is cross-platform: it warns and exits 2 on Windows if `claimidx-mcp` is running, and otherwise prints `"<python>" -m pip install -U claimidx` for you to run from a normal shell (it never spawns pip on Windows). On POSIX, `--yes` runs that command; without `--yes`, or with `--dry-run` on any OS, it only prints the command.
 - v0.7.30 - `claimidx init` without `--agent` keeps the existing agent and owner from `config.json`, falling back to `identity.json` if config is missing or empty. Auto-naming `agent-<hex>` happens only on a true first install. An explicit `init --agent <name>` still renames and prints the change (old → new). If config and identity disagree, config wins and init warns; `identity.json` is never changed silently. Config continues to be written atomically. `claimidx ask` accepts a positional error string as an alias of `--err` (`claimidx ask "No module named pytest"`). Passing both a positional and `--err` is an error. stdin behavior is unchanged.
 - v0.7.29 - Live pull treats the historic 0.7.22 audit row `cix_23fb9d61fa06544d` as an intentional exclude (its stored fingerprint no longer recomputes), not as a skip. `claimidx doctor` (text and `--fmt json`) reports `package_version`, `server_info_version`, and `version_mismatch` at the top level, matching MCP `claimidx_doctor`. `claimidx run` prints `CLAIMIDX loop closed` when a success with a new artifact closes a loop that already had two or more tries. A close after a single failure stays store-only (and is still visible on MCP `claimidx_session.loop`) so a later quiet pass, such as `claimidx run` after `apply`, stays silent. Windows path and encoding: drive-letter paths with forward slashes (`C:/Users/...`) and relative backslash paths (`.\`, `..\`) now normalize like their backslash and `./` forms; `claimidx distinct` and other text subprocess helpers decode as UTF-8 with `errors=replace`; binding resolves backslash relative tokens on POSIX. Existing fingerprints are unchanged.

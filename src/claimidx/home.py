@@ -657,7 +657,10 @@ def commons_travels(claim: Claim) -> tuple[bool, str]:
     if not eval_is_proof(claim.eval.cmd):
         return False, "eval is a hint; the commons keeps claims that can be replayed"
     if not eval_is_proof(public_eval(claim.eval.cmd)):
-        return False, "the public projection has no replayable eval (a tree-specific recipe); the claim stays local and in any private home"
+        return (
+            False,
+            'the public projection has no replayable eval (a tree-specific recipe); the claim stays local and in any private home. Use a portable eval — see "What travels to the commons" in AGENTS.md — and check with claimidx share-preview <id> first',
+        )
     return True, ""
 
 
