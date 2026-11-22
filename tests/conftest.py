@@ -29,11 +29,20 @@ for _key in list(os.environ):
 
 @pytest.fixture(autouse=True)
 def isolate_claimidx(tmp_path, monkeypatch):
-    """Keep tests off the operator's ~/.claimidx config and live home API."""
+    """Keep tests off the operator's ~/.claimidx config, last-failure store, and live home API.
+
+    Path overrides inherited from the shell (CLAIMIDX_LAST_FAILURE, CLAIMIDX_DB,
+    CLAIMIDX_VERIFY_SEEN, …) must be redirected too: hook's 3s debounce reads
+    last_failure.json, and a shared file makes later hook tests appear silent.
+    """
     monkeypatch.setenv("CLAIMIDX_CONFIG", str(tmp_path / "config.json"))
     monkeypatch.setenv("CLAIMIDX_OUTBOX", str(tmp_path / "outbox.jsonl"))
+    monkeypatch.setenv("CLAIMIDX_LAST_FAILURE", str(tmp_path / "last_failure.json"))
+    monkeypatch.setenv("CLAIMIDX_DB", str(tmp_path / "index.sqlite"))
+    monkeypatch.setenv("CLAIMIDX_VERIFY_SEEN", str(tmp_path / "verify-seen.json"))
     monkeypatch.setenv("CLAIMIDX_OWNER", "did:claimidx:test")
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.delenv("CLAIMIDX_SCRATCH_DIR", raising=False)
     monkeypatch.delenv("CLAIMIDX_HOME_API", raising=False)
     monkeypatch.delenv("CLAIMIDX_HOME_TOKEN", raising=False)
     monkeypatch.delenv("CLAIMIDX_SHARE", raising=False)
