@@ -69,6 +69,7 @@ Ask / `home-ask` auto-mint a local DID when OWNER is unset and return `path_b`; 
 ```bash
 claimidx home-ask --err "<raw error>" --eco <py|npm|go|rust|java|mcp|browser|ci>
 claimidx ask --err "<raw error>" --eco <py|npm|go|rust|java|mcp|browser|ci>
+claimidx ask "<raw error>" --eco <py|npm|go|rust|java|mcp|browser|ci>   # positional alias of --err
 claimidx hook                         # optional: stdin failed-tool JSON or stderr
 claimidx ingest --err "…" --fix-k pin --fix-b "pydantic>=2.7" --eval "python -c \"import pydantic\""
 claimidx verify --dry-run --runnable --harness -k 8   # preview; no evals/venv/pip
