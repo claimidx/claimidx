@@ -1996,6 +1996,7 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
         else:
             add(name, True, f"skip ({p})")
     from .impact import lifecycle_funnel
+    from .upgrade import leftover_report
 
     life = lifecycle_funnel(store, days=30)
     stages = life.get("stages") or {}
@@ -2005,8 +2006,11 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
         True,
         f"{funnel_detail}; countable={life.get('countable_actors', 0)} (claimidx funnel)",
     )
+    leftovers = leftover_report()
+    add("pip-leftovers", leftovers["ok"], leftovers["detail"])
     ok = all(c["ok"] for c in checks)
     # Match MCP claimidx_doctor: lift the version trio to the top level.
+    # pip_leftovers is additive; the trio keys are unchanged.
     body = {
         "ok": ok,
         "package_version": vf["package_version"],
@@ -2015,6 +2019,7 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
         "whoami": me,
         "checks": checks,
         "funnel": life,
+        "pip_leftovers": leftovers,
     }
     print(json.dumps(body, indent=2))
     if getattr(ns, "fmt", "dense") != "json":
@@ -2025,7 +2030,20 @@ def cmd_doctor(ns: argparse.Namespace) -> int:
     return 0 if ok else 2
 
 
+def cmd_upgrade(ns: argparse.Namespace) -> int:
+    """Print or run `python -m pip install -U claimidx`. Never spawns pip on Windows."""
+    from .upgrade import run_upgrade
+
+    result = run_upgrade(yes=bool(getattr(ns, "yes", False)), dry_run=bool(getattr(ns, "dry_run", False)))
+    if result.get("stdout"):
+        print(result["stdout"])
+    if result.get("stderr") and result["stderr"] != result.get("stdout"):
+        print(result["stderr"], file=sys.stderr)
+    return int(result.get("rc") or 0)
+
+
 def cmd_events(ns: argparse.Namespace) -> int:
+
     rows = _store(ns).events(limit=ns.k, actor=ns.actor)
     print(json.dumps(rows, indent=2 if ns.fmt == "json" else None))
     return 0
@@ -2549,6 +2567,13 @@ def build_parser() -> argparse.ArgumentParser:
     doc = sub.add_parser("doctor", help="check identity, index, home, and eval sandbox")
     doc.add_argument("--cwd", default=None, help="optional tree path for marker / eco awareness")
     doc.set_defaults(func=cmd_doctor)
+    upg = sub.add_parser(
+        "upgrade",
+        help="upgrade ClaimIDX with pip; on Windows prints the command (never runs pip) and exits 2 if claimidx-mcp is running",
+    )
+    upg.add_argument("--yes", "-y", action="store_true", help="on POSIX, run the pip command; ignored on Windows (the command is always printed only)")
+    upg.add_argument("--dry-run", action="store_true", help="print the pip command only, on any OS, and do not spawn pip")
+    upg.set_defaults(func=cmd_upgrade)
     sess = sub.add_parser("session", help="local session summary (asks/ingests/fails); not shared")
     sess.add_argument("--fp", default="", help="focus fingerprint for must_ask")
     sess.set_defaults(func=cmd_session)

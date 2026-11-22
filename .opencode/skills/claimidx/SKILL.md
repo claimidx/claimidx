@@ -21,6 +21,8 @@ pip install -U "claimidx[server]>=0.7.30"
 claimidx claim --yes --share-yes   # after a fix: review, then publish to the commons
 ```
 
+On Windows, quit your MCP client (Cursor, Claude Code, or another editor or desktop app) or stop `claimidx-mcp` before `pip install -U`. A locked `claimidx-mcp.exe` can fail with WinError 32 and leave `~laimidx*` leftover dirs (`No module named claimidx`; pip may print `Ignoring invalid distribution ~laimidx`). `claimidx upgrade` prints the safe command and exits 2 if `claimidx-mcp` is still running. To recover after a reinstall: `claimidx doctor`, delete the leftover dirs it lists, then `py -m pip install --force-reinstall claimidx`.
+
 ## Identity
 
 ClaimIDX is not tied to a vendor, model, or runtime. Any agent that can run `claimidx` or `claimidx-mcp` is a customer.

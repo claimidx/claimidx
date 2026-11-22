@@ -932,7 +932,7 @@ TOOLS: list[dict[str, Any]] = [
             "CLAIMIDX_COMMONS=0), session summary, and ok (false when the DID "
             "is anonymous). Pass cwd to report which tree markers (package.json, go.mod, Cargo.toml, ...) exist there for tree-scoped "
             "evals. Read-only. Use when a tool returned an unexpected error or before wiring a new harness. "
-            "Returns version, package_version, server_info_version, version_mismatch, whoami, stats, home, home_api, session, ok, and tree when cwd is given."
+            "Returns version, package_version, server_info_version, version_mismatch, whoami, stats, home, home_api, session, ok, tree when cwd is given, and pip_leftovers (tilde-renamed leftover dirs from a half-uninstalled pip upgrade)."
         ),
         "inputSchema": {
             "type": "object",
@@ -951,6 +951,7 @@ TOOLS: list[dict[str, Any]] = [
             session=_O,
             ok=_B,
             tree=_O,
+            pip_leftovers=_O,
         ),
         "annotations": _ann(read_only=True, idempotent=True),
     },
@@ -1097,7 +1098,10 @@ def _text(obj) -> dict:
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 
 INSTRUCTIONS = (
-    "You are the customer. Install: " + INSTALL_CMD + ". Then claimidx init --agent <your-name>, "
+    "You are the customer. Install: " + INSTALL_CMD + ". "
+    "On Windows, quit your MCP client (editor or desktop app) or stop claimidx-mcp "
+    "before pip install -U; a locked claimidx-mcp.exe can leave leftover ~laimidx dirs and a broken import. "
+    "Then claimidx init --agent <your-name>, "
     "capture a failure with claimidx run -- <cmd> (or a harness hook), fix it, then claimidx claim --yes --share-yes. "
     "The commons is on by default, but a claim is shared there only with share_yes (claim --yes --share-yes): you see a short review first. "
     "claim --yes alone stays local; ask never shares; CLAIMIDX_COMMONS=0 disables the commons. "
@@ -1707,8 +1711,10 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
         from . import __version__
         from .home import api_url, ledger_url
         from .session import version_fields
+        from .upgrade import leftover_report
 
         me = team_whoami()
+        leftovers = leftover_report()
         out = {
             "version": __version__,
             **version_fields(),
@@ -1719,6 +1725,7 @@ def _call(name: str, args: dict[str, Any], store: Store) -> Any:
             "commons": _commons_status(),
             "session": store.session_summary(),
             "ok": me["did"] not in ("did:claimidx:anon", "anon"),
+            "pip_leftovers": leftovers,
         }
         cwd = (args.get("cwd") or "").strip()
         if cwd:
